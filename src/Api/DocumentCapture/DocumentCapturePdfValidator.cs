@@ -45,11 +45,19 @@ public static class DocumentCapturePdfValidator
         CancellationToken cancellationToken = default)
         => await ValidateAsync(bytes, parseSlots, TimeProvider.System, cancellationToken).ConfigureAwait(false);
 
-    internal static async Task<DocumentCapturePdfValidationResult> ValidateAsync(
+    internal static Task<DocumentCapturePdfValidationResult> ValidateAsync(
         ReadOnlyMemory<byte> bytes,
         int parseSlots,
         TimeProvider clock,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        ValidateWithDeadlineAsync(bytes, parseSlots, clock, DocumentCapturePdfLimits.ParseDeadline, cancellationToken);
+
+    internal static async Task<DocumentCapturePdfValidationResult> ValidateWithDeadlineAsync(
+        ReadOnlyMemory<byte> bytes,
+        int parseSlots,
+        TimeProvider clock,
+        TimeSpan deadline,
+        CancellationToken cancellationToken)
     {
         if (bytes.Length == 0)
             return Invalid("DOCUMENT_EMPTY");
@@ -72,7 +80,7 @@ public static class DocumentCapturePdfValidator
         {
             cancellationToken.ThrowIfCancellationRequested();
             var decodeBudget = new PdfDecodeBudget(DocumentCapturePdfLimits.MaxAggregateDecodedBytes,
-                DocumentCapturePdfLimits.MaxDecodedBytesPerStream, DocumentCapturePdfLimits.ParseDeadline, clock);
+                DocumentCapturePdfLimits.MaxDecodedBytesPerStream, deadline, clock);
             budget = decodeBudget;
             var options = new ParsingOptions
             {
@@ -105,9 +113,9 @@ public static class DocumentCapturePdfValidator
         {
             return Invalid("DOCUMENT_UNSUPPORTED_TYPE");
         }
-        catch (Exception) when (budget?.IsExpired == true)
+        catch (Exception) when (budget?.DeadlineExceeded == true)
         {
-            return Invalid("DOCUMENT_UNSUPPORTED_TYPE");
+            return Invalid("DOCUMENT_BUSY");
         }
         catch (PdfDocumentEncryptedException)
         {
@@ -392,6 +400,8 @@ public static class DocumentCapturePdfValidator
 
 internal sealed class PdfDecodeLimitException(string message) : Exception(message);
 
+internal sealed class PdfParseDeadlineException : Exception;
+
 internal sealed class PdfDecodeBudget
 {
     private readonly int _maxAggregate;
@@ -401,6 +411,7 @@ internal sealed class PdfDecodeBudget
     private readonly ConditionalWeakTable<DictionaryToken, StreamCounter> _streams = new();
     private long _aggregateBytes;
     private int _limitExceeded;
+    private bool _deadlineExceeded;
 
     public PdfDecodeBudget(int maxAggregate, int maxPerStream, TimeSpan deadline, TimeProvider clock)
     {
@@ -412,14 +423,15 @@ internal sealed class PdfDecodeBudget
 
     public void ThrowIfExpired()
     {
-        if (IsExpired)
+        if (_clock.GetTimestamp() >= _deadlineTimestamp)
         {
-            MarkLimitExceeded();
-            throw new PdfDecodeLimitException("PDF parsing exceeded its bounded deadline.");
+            _deadlineExceeded = true;
+            throw new PdfParseDeadlineException();
         }
     }
 
-    public bool IsExpired => _clock.GetTimestamp() > _deadlineTimestamp;
+    // PdfPig can swallow exceptions thrown from a filter while searching for an xref.
+    public bool DeadlineExceeded => _deadlineExceeded;
     public bool LimitExceeded => Volatile.Read(ref _limitExceeded) != 0;
     public void MarkLimitExceeded() => Volatile.Write(ref _limitExceeded, 1);
 

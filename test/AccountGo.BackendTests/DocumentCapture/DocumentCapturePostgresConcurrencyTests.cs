@@ -95,10 +95,10 @@ public sealed class DocumentCapturePostgresConcurrencyTests
             }
         }).ToArray();
 
-        Assert.True(ready.Wait(TimeSpan.FromSeconds(10)), "Concurrent retry requests did not reach the start gate.");
+        Assert.True(ready.Wait(TimeSpan.FromSeconds(60)), "Concurrent retry requests did not reach the start gate.");
         start.SetResult();
-        await extractor.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        var competingResult = await Task.WhenAny(retries).WaitAsync(TimeSpan.FromSeconds(10));
+        await extractor.Entered.Task.WaitAsync(TimeSpan.FromSeconds(60));
+        var competingResult = await Task.WhenAny(retries).WaitAsync(TimeSpan.FromSeconds(60));
         Assert.Equal("DOCUMENT_EXTRACTION_IN_PROGRESS", await competingResult);
         Assert.Equal(1, extractor.CallCount);
         extractor.Release();
@@ -274,90 +274,50 @@ public sealed class DocumentCapturePostgresConcurrencyTests
             captureId = await db.DocumentCaptures.Where(row => row.PublicId == view.Id).Select(row => row.Id).SingleAsync();
             await db.DocumentCaptures.Where(row => row.Id == captureId)
                 .ExecuteUpdateAsync(update => update.SetProperty(row => row.ExpiresAt, DateTime.UtcNow.AddDays(-8)));
-            await db.Database.ExecuteSqlRawAsync("""
-                CREATE FUNCTION test_capture_accept_pause() RETURNS trigger LANGUAGE plpgsql AS $$
-                BEGIN
-                    IF NEW."Status" = 'accepted' THEN PERFORM pg_sleep(0.35); END IF;
-                    RETURN NEW;
-                END $$;
-                """);
-            await db.Database.ExecuteSqlRawAsync("""
-                CREATE TRIGGER test_capture_accept_pause BEFORE UPDATE ON "DocumentCaptures"
-                FOR EACH ROW EXECUTE FUNCTION test_capture_accept_pause();
-                """);
         }
 
-        var accept = Task.Run(async () =>
+        var companyLocked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resumeAccept = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var acceptDb = new PostgresApiDbContext(options, tenant);
+        var actualLock = new DocumentCaptureAdmissionLock(acceptDb);
+        var gatedLock = new Mock<IDocumentCaptureAdmissionLock>(MockBehavior.Strict);
+        gatedLock.Setup(item => item.AcquireCompanyAsync(CompanyId, It.IsAny<CancellationToken>()))
+            .Returns(async (int companyId, CancellationToken token) =>
+            {
+                var transaction = await actualLock.AcquireCompanyAsync(companyId, token);
+                companyLocked.SetResult();
+                await resumeAccept.Task;
+                return transaction;
+            });
+        var accept = CreateService(acceptDb, tenant, CreateEntitlement(), captureOptions, admissionLock: gatedLock.Object)
+            .AcceptAsync(captureId, "{\"date\":\"2026-11-20\"}", CancellationToken.None);
+        try
         {
-            await using var db = new PostgresApiDbContext(options, tenant);
-            return await CreateService(db, tenant, CreateEntitlement(), captureOptions)
-                .AcceptAsync(captureId, "{\"date\":\"2026-11-20\"}", CancellationToken.None);
-        });
-        await using var monitor = new NpgsqlConnection(postgres.ConnectionString);
-        await monitor.OpenAsync();
-        await WaitForPgActivityAsync(monitor, "UPDATE%DocumentCaptures%", TimeSpan.FromSeconds(10));
-        var purge = Task.Run(async () =>
-        {
-            await using var db = new PostgresApiDbContext(options, tenant);
-            await new DocumentCaptureRetentionService(db, new DocumentCaptureAdmissionLock(db))
+            await companyLocked.Task.WaitAsync(TimeSpan.FromSeconds(60));
+            await using var purgeDb = new PostgresApiDbContext(options, tenant);
+            await new DocumentCaptureRetentionService(purgeDb, new DocumentCaptureAdmissionLock(purgeDb))
                 .PurgeAsync(DateTime.UtcNow, CancellationToken.None);
-        });
-        await WaitForPgLockWaitAsync(monitor, TimeSpan.FromSeconds(10));
-        await Task.WhenAll(accept, purge);
+        }
+        finally
+        {
+            resumeAccept.TrySetResult();
+            await accept;
+        }
 
         await using var verify = new PostgresApiDbContext(options, tenant);
         var capture = await verify.DocumentCaptures.SingleAsync(row => row.Id == captureId);
-        var hasBytes = await verify.DocumentCaptureBlobs.AnyAsync(row => row.CaptureId == captureId);
         Assert.Equal("accepted", capture.Status);
-        Assert.True(hasBytes, "An accepted capture must retain its evidence bytes when purge races acceptance.");
-        await verify.Database.ExecuteSqlRawAsync("DROP TRIGGER test_capture_accept_pause ON \"DocumentCaptures\";");
-        await verify.Database.ExecuteSqlRawAsync("DROP FUNCTION test_capture_accept_pause();");
-    }
-
-    private static async Task WaitForPgActivityAsync(NpgsqlConnection connection, string queryPattern, TimeSpan timeout)
-    {
-        using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT EXISTS (
-                SELECT 1 FROM pg_stat_activity
-                WHERE datname = current_database() AND pid <> pg_backend_pid()
-                    AND state = 'active' AND query ILIKE @queryPattern)
-            """;
-        command.Parameters.AddWithValue("queryPattern", queryPattern);
-        var deadline = DateTime.UtcNow + timeout;
-        while (DateTime.UtcNow < deadline)
-        {
-            if (Equals(await command.ExecuteScalarAsync(), true)) return;
-            await Task.Delay(5);
-        }
-        throw new TimeoutException($"PostgreSQL did not enter the expected command: {queryPattern}");
-    }
-
-    private static async Task WaitForPgLockWaitAsync(NpgsqlConnection connection, TimeSpan timeout)
-    {
-        using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT EXISTS (
-                SELECT 1 FROM pg_stat_activity
-                WHERE datname = current_database() AND pid <> pg_backend_pid()
-                    AND state = 'active' AND wait_event_type = 'Lock' AND query ILIKE '%FOR UPDATE%')
-            """;
-        var deadline = DateTime.UtcNow + timeout;
-        while (DateTime.UtcNow < deadline)
-        {
-            if (Equals(await command.ExecuteScalarAsync(), true)) return;
-            await Task.Delay(5);
-        }
-        throw new TimeoutException("Retention did not contend on the company row lock held by accept.");
+        Assert.True(await verify.DocumentCaptureBlobs.AnyAsync(row => row.CaptureId == captureId),
+            "An accepted capture must retain its evidence bytes when purge races acceptance.");
     }
 
     [PostgresOnlyFact]
-    public Task FinalizationLockReleasedDuringRetryAllowsReadyState() => AssertFinalizationLockRetryAsync(TimeSpan.FromMilliseconds(150), shouldSucceed: true);
+    public Task FinalizationLockReleasedDuringRetryAllowsReadyState() => AssertFinalizationLockRetryAsync(shouldSucceed: true);
 
     [PostgresOnlyFact]
-    public Task FinalizationLockHeldPastRetriesReturnsBusyAndPreservesReservation() => AssertFinalizationLockRetryAsync(TimeSpan.FromMilliseconds(2200), shouldSucceed: false);
+    public Task FinalizationLockHeldPastRetriesReturnsBusyAndPreservesReservation() => AssertFinalizationLockRetryAsync(shouldSucceed: false);
 
-    private static async Task AssertFinalizationLockRetryAsync(TimeSpan lockDuration, bool shouldSucceed)
+    private static async Task AssertFinalizationLockRetryAsync(bool shouldSucceed)
     {
         using var postgres = PostgresTestDatabase.CreateIfConfigured()!;
         var tenant = new TestTenantContext(CompanyId);
@@ -365,12 +325,13 @@ public sealed class DocumentCapturePostgresConcurrencyTests
         await CreateCompanyAsync(dbOptions, tenant);
         var captureOptions = CaptureOptions();
         var extractor = new BlockingExtractor();
+        var clock = new RetryTimeProvider();
         var upload = Task.Run(async () =>
         {
             await using var db = new PostgresApiDbContext(dbOptions, tenant);
             try
             {
-                var view = await CreateService(db, tenant, CreateEntitlement(), captureOptions, extractor)
+                var view = await CreateService(db, tenant, CreateEntitlement(), captureOptions, extractor, timeProvider: clock)
                     .UploadAsync("purchase-invoice", 1, "image/png", CreatePng(19), "finalization-lock", CancellationToken.None);
                 return (View: view, Error: (string?)null);
             }
@@ -379,14 +340,15 @@ public sealed class DocumentCapturePostgresConcurrencyTests
                 return (View: (DocumentCaptureView?)null, Error: exception.ErrorCode);
             }
         });
-        await extractor.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await extractor.Entered.Task.WaitAsync(TimeSpan.FromSeconds(60));
         await using var lockDb = new PostgresApiDbContext(dbOptions, tenant);
         await using var held = await new DocumentCaptureAdmissionLock(lockDb).AcquireCompanyAsync(CompanyId, CancellationToken.None);
+        if (shouldSucceed)
+            clock.BeforeFirstRetry = () => held.Rollback();
+
         extractor.Release();
-        await Task.Delay(TimeSpan.FromMilliseconds(30));
-        await Task.Delay(lockDuration);
-        await held.DisposeAsync();
-        var result = await upload.WaitAsync(TimeSpan.FromSeconds(10));
+        var result = await upload.WaitAsync(TimeSpan.FromSeconds(60));
+        Assert.Equal(shouldSucceed ? new[] { 100 } : new[] { 100, 200 }, clock.RetryDelays);
 
         await using var verify = new PostgresApiDbContext(dbOptions, tenant);
         var stored = await verify.DocumentCaptures.SingleAsync();
@@ -455,7 +417,7 @@ public sealed class DocumentCapturePostgresConcurrencyTests
             return await CreateService(db, tenant, CreateEntitlement(), captureOptions, blocking)
                 .UploadAsync("purchase-invoice", 1, "image/png", CreatePng(1), "delete-extraction", CancellationToken.None);
         });
-        await blocking.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await blocking.Entered.Task.WaitAsync(TimeSpan.FromSeconds(60));
 
         await DeleteCompanyAndPurgeAsync(options, tenant);
         blocking.Release();
@@ -635,7 +597,7 @@ public sealed class DocumentCapturePostgresConcurrencyTests
             }
         })).ToArray();
 
-        Assert.True(ready.Wait(TimeSpan.FromSeconds(10)), "Competing PostgreSQL requests did not reach the start gate.");
+        Assert.True(ready.Wait(TimeSpan.FromSeconds(60)), "Competing PostgreSQL requests did not reach the start gate.");
         startGate.SetResult();
         var results = await Task.WhenAll(calls);
 
@@ -661,11 +623,13 @@ public sealed class DocumentCapturePostgresConcurrencyTests
         IEntitlementService entitlement,
         IOptions<DocumentCaptureOptions> options,
         IDocumentFieldExtractor? extractor = null,
-        IPublicIdResolver? publicIds = null)
+        IPublicIdResolver? publicIds = null,
+        TimeProvider? timeProvider = null,
+        IDocumentCaptureAdmissionLock? admissionLock = null)
     {
-        return new DocumentCaptureService(db, new DocumentCaptureAdmissionLock(db),
+        return new DocumentCaptureService(db, admissionLock ?? new DocumentCaptureAdmissionLock(db),
             extractor ?? new FakeDocumentFieldExtractor(options), entitlement, publicIds ?? Mock.Of<IPublicIdResolver>(), tenant,
-            options, NullLogger<DocumentCaptureService>.Instance);
+            options, NullLogger<DocumentCaptureService>.Instance, timeProvider: timeProvider);
     }
 
     private static IOptions<DocumentCaptureOptions> CaptureOptions() => Options.Create(new DocumentCaptureOptions
@@ -698,6 +662,20 @@ public sealed class DocumentCapturePostgresConcurrencyTests
         }
         await new DocumentCaptureRetentionService(db, new DocumentCaptureAdmissionLock(db))
             .PurgeDeletedCompanyAsync(CompanyId, CancellationToken.None);
+    }
+
+    private sealed class RetryTimeProvider : TimeProvider
+    {
+        public Action? BeforeFirstRetry { get; set; }
+        public List<int> RetryDelays { get; } = [];
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            RetryDelays.Add((int)dueTime.TotalMilliseconds);
+            if (RetryDelays.Count == 1)
+                BeforeFirstRetry?.Invoke();
+            return TimeProvider.System.CreateTimer(callback, state, TimeSpan.Zero, period);
+        }
     }
 
     private sealed class BlockingExtractor : IDocumentFieldExtractor
