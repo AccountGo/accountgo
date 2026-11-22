@@ -23,6 +23,7 @@ using Xunit;
 
 namespace AccountGo.BackendTests.DocumentCapture;
 
+[Collection(DocumentCaptureResourceCollection.Name)]
 public sealed class DocumentCaptureServiceTests
 {
     [Fact]

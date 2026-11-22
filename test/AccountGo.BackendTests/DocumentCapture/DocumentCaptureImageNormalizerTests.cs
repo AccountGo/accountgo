@@ -8,6 +8,7 @@ using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests.DocumentCapture;
 
+[Collection(DocumentCaptureResourceCollection.Name)]
 public sealed class DocumentCaptureImageNormalizerTests
 {
     private readonly ITestOutputHelper _output;

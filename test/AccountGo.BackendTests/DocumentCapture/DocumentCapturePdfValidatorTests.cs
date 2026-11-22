@@ -9,6 +9,7 @@ using Xunit;
 
 namespace AccountGo.BackendTests.DocumentCapture;
 
+[Collection(DocumentCaptureResourceCollection.Name)]
 public sealed class DocumentCapturePdfValidatorTests
 {
     private const long MaxParserAllocatedBytesPerOperation = 220_000_000;
