@@ -107,6 +107,85 @@ public sealed class DocumentCaptureControllerHttpTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task LocalOcrQueueRejectsFifthWaiterBeforeReservingQuotaAndRetriesImmediately()
+    {
+        var json = JsonSerializer.SerializeToUtf8Bytes(new Api.DocumentCaptures.CaptureWorkerResult([], [1], [], []),
+            Api.DocumentCaptures.CaptureWorkerProtocol.Json);
+        var firstWorker = new LocalOcrWorkerLimitsTests.FakeWorker(json);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var workerCount = 0;
+        using var extractor = new Api.DocumentCaptures.LocalOcrDocumentFieldExtractor(
+            Microsoft.Extensions.Options.Options.Create(new Api.DocumentCaptures.DocumentCaptureOptions()),
+            TimeProvider.System,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<Api.DocumentCaptures.LocalOcrDocumentFieldExtractor>.Instance,
+            _ =>
+            {
+                if (Interlocked.Increment(ref workerCount) == 1)
+                {
+                    started.TrySetResult();
+                    return firstWorker;
+                }
+                var worker = new LocalOcrWorkerLimitsTests.FakeWorker(json);
+                worker.Complete();
+                return worker;
+            });
+        using var factory = _factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<Api.DocumentCaptures.IDocumentFieldExtractor>();
+            services.AddSingleton<Api.DocumentCaptures.IDocumentFieldExtractor>(extractor);
+        }));
+        using var client = factory.CreateClient();
+        using var watchdog = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+
+        var first = UploadAsync(0);
+        Task<HttpResponseMessage>[] queued = [];
+        try
+        {
+            await started.Task.WaitAsync(watchdog.Token);
+            queued = Enumerable.Range(1, 4).Select(UploadAsync).ToArray();
+            while (extractor.WaitingCount < 4)
+                await Task.Delay(10, watchdog.Token);
+
+            Assert.Equal((1, 1), await CountRowsAsync());
+            using var rejected = await UploadAsync(5);
+            Assert.Equal(HttpStatusCode.TooManyRequests, rejected.StatusCode);
+            Assert.Equal("DOCUMENT_DECODE_BUSY", await ReadProblemCodeAsync(rejected));
+            Assert.Equal((1, 1), await CountRowsAsync());
+        }
+        finally
+        {
+            firstWorker.Complete();
+            foreach (var pending in queued.Prepend(first))
+            {
+                using var completed = await pending;
+                Assert.Equal(HttpStatusCode.OK, completed.StatusCode);
+            }
+        }
+
+        Assert.Equal((5, 5), await CountRowsAsync());
+        using var retry = await UploadAsync(5);
+        Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+        Assert.Equal((6, 6), await CountRowsAsync());
+
+        async Task<HttpResponseMessage> UploadAsync(int number)
+        {
+            using var request = NewRequest(HttpMethod.Post, "/api/document-captures");
+            request.Headers.Add("Idempotency-Key", $"ocr-queue-{number}");
+            request.Content = CreateUploadForm("purchase-invoice", CreatePng(0xFFCCDD00u + (uint)number), "image/png");
+            return await client.SendAsync(request, watchdog.Token);
+        }
+
+        async Task<(int Attempts, int Captures)> CountRowsAsync()
+        {
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            var attempts = await db.DocumentCaptureAttempts.IgnoreQueryFilters().CountAsync(row => row.CompanyId == _companyId);
+            var captures = await db.DocumentCaptures.IgnoreQueryFilters().CountAsync(row => row.CompanyId == _companyId);
+            return (attempts, captures);
+        }
+    }
+
+    [Fact]
     public async Task RoutesUsePublicIdsAndRoundTripRealJsonThroughMvc()
     {
         var acceptLimit = System.Reflection.CustomAttributeData.GetCustomAttributes(

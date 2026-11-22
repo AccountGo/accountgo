@@ -57,14 +57,21 @@ internal sealed class CaptureWorkerProcess(Process process) : ICaptureWorkerProc
     public void Dispose() => process.Dispose();
 }
 
+internal sealed class CaptureWorkerMetrics
+{
+    internal int? ExitCode { get; set; }
+    internal long PeakRssBytes { get; set; }
+}
+
 internal static class CaptureWorkerRunner
 {
     internal static readonly TimeSpan Deadline = TimeSpan.FromSeconds(20);
     private static readonly TimeSpan MemorySampleInterval = TimeSpan.FromMilliseconds(100);
 
     internal static async Task<byte[]> RunAsync(ICaptureWorkerProcess worker, CaptureWorkerHeader header, ReadOnlyMemory<byte> bytes,
-        int maxMemoryMb, TimeProvider clock, CancellationToken requestToken)
+        int maxMemoryMb, TimeProvider clock, CancellationToken requestToken, CaptureWorkerMetrics? metrics = null)
     {
+        metrics ??= new CaptureWorkerMetrics();
         using (worker)
         using (var timeout = new CancellationTokenSource(Deadline, clock))
         using (var stop = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, requestToken))
@@ -75,7 +82,7 @@ internal static class CaptureWorkerRunner
             // Do not retain or report stderr. Native libraries may write to it.
             var errors = worker.Errors.CopyToAsync(Stream.Null, token);
             var exit = worker.WaitForExitAsync(token);
-            var memory = ObserveMemoryAsync(worker, maxMemoryMb * 1024L * 1024L, clock, token);
+            var memory = ObserveMemoryAsync(worker, maxMemoryMb * 1024L * 1024L, clock, token, metrics);
             Task[] tasks = [send, output, errors, exit, memory];
             var pending = tasks.ToList();
 
@@ -88,8 +95,13 @@ internal static class CaptureWorkerRunner
                     pending.Remove(completed);
                 }
 
-                if (worker.ExitCode != 0)
-                    throw new DocumentCaptureServiceException(422, "DOCUMENT_UNREADABLE");
+                switch (worker.ExitCode)
+                {
+                    case 2:
+                        throw new DocumentCaptureServiceException(422, "DOCUMENT_UNREADABLE");
+                    case not 0:
+                        throw new DocumentCaptureServiceException(503, "DOCUMENT_PROVIDER_UNAVAILABLE");
+                }
 
                 return await output.ConfigureAwait(false);
             }
@@ -105,6 +117,7 @@ internal static class CaptureWorkerRunner
                     worker.KillTree();
                     await worker.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
                 }
+                metrics.ExitCode = worker.ExitCode;
 
                 // Observe work on all redirected streams before closing the process handles.
                 try
@@ -147,11 +160,14 @@ internal static class CaptureWorkerRunner
         }
     }
 
-    private static async Task ObserveMemoryAsync(ICaptureWorkerProcess worker, long limitBytes, TimeProvider clock, CancellationToken token)
+    private static async Task ObserveMemoryAsync(ICaptureWorkerProcess worker, long limitBytes, TimeProvider clock,
+        CancellationToken token, CaptureWorkerMetrics metrics)
     {
         while (!worker.HasExited)
         {
-            if (worker.WorkingSetBytes > limitBytes)
+            var workingSet = worker.WorkingSetBytes;
+            metrics.PeakRssBytes = Math.Max(metrics.PeakRssBytes, workingSet);
+            if (workingSet > limitBytes)
                 throw new DocumentCaptureServiceException(422, "DOCUMENT_TOO_COMPLEX");
             await Task.Delay(MemorySampleInterval, clock, token).ConfigureAwait(false);
         }

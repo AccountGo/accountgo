@@ -3,6 +3,8 @@ using System.Text;
 using System.Text.Json;
 using Api.DocumentCaptures;
 using Microsoft.Extensions.Options;
+using SkiaSharp;
+using UglyToad.PdfPig.Core;
 using UglyToad.PdfPig.Writer;
 using Xunit;
 using Xunit.Abstractions;
@@ -14,6 +16,28 @@ namespace AccountGo.BackendTests.DocumentCapture;
 public sealed class LocalOcrSyntheticTests(ITestOutputHelper output)
 {
     private static readonly string[] Variants = ["clean", "skew", "blur", "dark", "lowres"];
+
+    [LocalOcrFact]
+    public async Task ScannedPdfRecognizesThreeSyntheticEnglishDocuments()
+    {
+        using var extractor = CreateExtractor();
+        var (directory, fixtures) = await LoadFixturesAsync();
+        var problems = new List<string>();
+        foreach (var fixture in fixtures.Where(fixture => fixture.Lang == "en").Take(3))
+        {
+            var image = await File.ReadAllBytesAsync(Path.Combine(directory, fixture.Id + "_clean.png"));
+            using var bitmap = SKBitmap.Decode(image);
+            var width = bitmap.Width * 72d / 200;
+            var height = bitmap.Height * 72d / 200;
+            var pdf = new PdfDocumentBuilder();
+            pdf.AddPage(width, height).AddPng(image, new PdfRectangle(0, 0, width, height));
+            var bytes = pdf.Build();
+            using (var parsed = UglyToad.PdfPig.PdfDocument.Open(bytes))
+                Assert.Empty(parsed.GetPage(1).Text);
+            await CheckDocumentAsync(extractor, fixture, fixture.Id + " scanned", "application/pdf", bytes, problems);
+        }
+        Assert.Empty(problems);
+    }
 
     [LocalOcrFact]
     public async Task ScannedPdfSkipsAdditionalPagesWithAReviewWarning()
@@ -74,6 +98,12 @@ public sealed class LocalOcrSyntheticTests(ITestOutputHelper output)
             bytes = normalized.Bytes;
             contentType = normalized.ContentType;
         }
+        await CheckDocumentAsync(extractor, fixture, file, contentType, bytes, problems);
+    }
+
+    private static async Task CheckDocumentAsync(LocalOcrDocumentFieldExtractor extractor, Truth fixture, string file,
+        string contentType, byte[] bytes, List<string> problems)
+    {
         var result = await extractor.ExtractAsync(new DocumentExtractionRequest("purchase-invoice", 1, contentType, bytes, 1),
             CancellationToken.None);
         Assert.Equal("local-ocr", result.ProviderName);

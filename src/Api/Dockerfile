@@ -29,7 +29,7 @@ COPY src/src.ServiceDefaults/ src/src.ServiceDefaults/
 ARG TARGETARCH
 RUN case "$TARGETARCH" in arm64) RID=linux-arm64 ;; *) RID=linux-x64 ;; esac \
     && dotnet publish src/Api/Api.csproj -c Release -r "$RID" --self-contained false -p:PublishReadyToRun=true -o /app/out \
-    && dotnet publish src/Api.CaptureWorker/Api.CaptureWorker.csproj -c Release -r "$RID" --self-contained false -o /app/capture-worker
+    && dotnet publish src/Api.CaptureWorker/Api.CaptureWorker.csproj -c Release -r "$RID" --self-contained false -p:PublishReadyToRun=true -o /app/capture-worker
 
 # Determine BUILD_SHA (fallback to 'dev' if missing)
 RUN if [ -f src/Api/BUILD_SHA ]; then cp src/Api/BUILD_SHA /app/BUILD_SHA; else echo "dev" > /app/BUILD_SHA; fi

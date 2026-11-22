@@ -6,6 +6,8 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Api.DocumentCaptures.Parsing;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Api.DocumentCaptures;
@@ -36,64 +38,179 @@ public sealed class DocumentCaptureOcrWorkerOptions
 
 public sealed class LocalOcrDocumentFieldExtractor : IDocumentFieldExtractor, IDisposable
 {
-    private static readonly TimeSpan GateWait = TimeSpan.FromMilliseconds(500);
+    internal static readonly TimeSpan GateWait = TimeSpan.FromSeconds(15);
     private readonly DocumentCaptureOcrWorkerOptions _options;
     private readonly string _workerPath;
     private readonly SemaphoreSlim _gate;
     private readonly TimeProvider _clock;
+    private readonly ILogger<LocalOcrDocumentFieldExtractor> _logger;
+    private readonly Func<ProcessStartInfo, ICaptureWorkerProcess> _startWorker;
+    private int _waiting;
 
-    public LocalOcrDocumentFieldExtractor(IOptions<DocumentCaptureOptions> options, TimeProvider? clock = null)
+    public LocalOcrDocumentFieldExtractor(IOptions<DocumentCaptureOptions> options, TimeProvider? clock = null,
+        ILogger<LocalOcrDocumentFieldExtractor>? logger = null)
+        : this(options, clock ?? TimeProvider.System, logger ?? NullLogger<LocalOcrDocumentFieldExtractor>.Instance,
+            start => new CaptureWorkerProcess(Process.Start(start) ?? throw new InvalidOperationException()))
+    {
+    }
+
+    internal LocalOcrDocumentFieldExtractor(IOptions<DocumentCaptureOptions> options, TimeProvider clock,
+        ILogger<LocalOcrDocumentFieldExtractor> logger, Func<ProcessStartInfo, ICaptureWorkerProcess> startWorker)
     {
         _options = options.Value.OcrWorker;
         _workerPath = _options.ResolveWorkerPath();
         _gate = new SemaphoreSlim(_options.MaxConcurrency, _options.MaxConcurrency);
-        _clock = clock ?? TimeProvider.System;
+        _clock = clock;
+        _logger = logger;
+        _startWorker = startWorker;
     }
 
     public bool IsConfigured => true;
     public string ProviderName => "local-ocr";
+    internal int WaitingCount => Volatile.Read(ref _waiting);
+
+    internal async Task<Admission> AdmitAsync(int pageCount, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var started = _clock.GetTimestamp();
+        if (_gate.Wait(0))
+            return new Admission(_gate, _clock.GetElapsedTime(started).TotalMilliseconds);
+
+        try
+        {
+            try
+            {
+                if (Interlocked.Increment(ref _waiting) > 4 * _options.MaxConcurrency)
+                    throw Busy();
+                using var queueTimeout = new CancellationTokenSource(GateWait, _clock);
+                using var stop = CancellationTokenSource.CreateLinkedTokenSource(queueTimeout.Token, cancellationToken);
+                try
+                {
+                    await _gate.WaitAsync(stop.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && queueTimeout.IsCancellationRequested)
+                {
+                    throw Busy();
+                }
+
+                return new Admission(_gate, _clock.GetElapsedTime(started).TotalMilliseconds);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _waiting);
+            }
+        }
+        catch (DocumentCaptureServiceException exception)
+        {
+            LogOutcome(exception.ErrorCode, _clock.GetElapsedTime(started).TotalMilliseconds, 0, new(), pageCount, null);
+            throw;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            LogOutcome("cancelled", _clock.GetElapsedTime(started).TotalMilliseconds, 0, new(), pageCount, null);
+            throw;
+        }
+    }
 
     public async Task<DocumentExtractionResult> ExtractAsync(DocumentExtractionRequest request, CancellationToken cancellationToken)
     {
-        if (!await _gate.WaitAsync(GateWait, cancellationToken).ConfigureAwait(false))
-            throw new DocumentCaptureServiceException(429, "DOCUMENT_DECODE_BUSY");
+        using var admission = await AdmitAsync(request.PageCount, cancellationToken).ConfigureAwait(false);
+        return await ExtractAdmittedAsync(request, admission, cancellationToken).ConfigureAwait(false);
+    }
+
+    internal async Task<DocumentExtractionResult> ExtractAdmittedAsync(DocumentExtractionRequest request,
+        Admission admission, CancellationToken cancellationToken)
+    {
+        var started = _clock.GetTimestamp();
+        var metrics = new CaptureWorkerMetrics();
+        CaptureWorkerResult? result = null;
+        var outcome = "DOCUMENT_PROVIDER_UNAVAILABLE";
 
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var start = new ProcessStartInfo
+            ICaptureWorkerProcess worker;
+            try
             {
-                FileName = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet",
-                WorkingDirectory = Path.GetDirectoryName(_workerPath)!,
-                UseShellExecute = false,
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
-            };
-            start.ArgumentList.Add(_workerPath);
+                worker = _startWorker(BuildStartInfo(_workerPath, _options, Environment.ProcessPath, Environment.GetEnvironmentVariable));
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+            {
+                throw new DocumentCaptureServiceException(503, "DOCUMENT_PROVIDER_UNAVAILABLE");
+            }
 
-            // Keep application configuration and credentials out of the parser process.
-            start.Environment.Clear();
-            start.Environment["ACCOUNTGO_CAPTURE_OCR_THREADS"] = _options.IntraOpThreads.ToString(CultureInfo.InvariantCulture);
-            start.Environment["ACCOUNTGO_CAPTURE_OCR_ARENA"] = _options.EnableCpuMemoryArena ? "1" : "0";
-            start.Environment["DOTNET_gcServer"] = "0";
-            start.Environment["DOTNET_TieredPGO"] = "0";
-            var process = Process.Start(start) ?? throw new InvalidOperationException("Local OCR worker could not start.");
             var header = new CaptureWorkerHeader(request.ContentType, request.PageCount, MaxOcrPages: 3);
-            var payload = await CaptureWorkerRunner.RunAsync(new CaptureWorkerProcess(process), header, request.DocumentBytes,
-                _options.MaxWorkerMemoryMb, _clock, cancellationToken).ConfigureAwait(false);
-            var result = ParseWorkerResponse(payload, request.PageCount);
+            var payload = await CaptureWorkerRunner.RunAsync(worker, header, request.DocumentBytes,
+                _options.MaxWorkerMemoryMb, _clock, cancellationToken, metrics).ConfigureAwait(false);
+            result = ParseWorkerResponse(payload, request.PageCount);
             var (lines, rawText) = BoundLines(result.Lines);
             var parsed = DocumentTextFieldParser.Parse(request.Kind, lines);
-            return new DocumentExtractionResult(parsed.FieldsJson, request.Kind, 1,
+            var extraction = new DocumentExtractionResult(parsed.FieldsJson, request.Kind, 1,
                 result.Warnings.Concat(parsed.Warnings).Distinct(StringComparer.Ordinal).Take(32).ToArray(),
                 rawText, ProviderName, CaptureWorkerModels.Version);
+            outcome = "ok";
+            return extraction;
+        }
+        catch (DocumentCaptureServiceException exception)
+        {
+            outcome = exception.ErrorCode;
+            throw;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            outcome = "cancelled";
+            throw;
         }
         finally
         {
-            _gate.Release();
+            LogOutcome(outcome, admission.QueueMilliseconds, _clock.GetElapsedTime(started).TotalMilliseconds,
+                metrics, request.PageCount, result);
         }
+    }
+
+    private void LogOutcome(string outcome, double queueMs, double runMs, CaptureWorkerMetrics metrics,
+        int pageCount, CaptureWorkerResult? result) =>
+        _logger.LogInformation("Local document OCR completed. Outcome={Outcome} ExitCode={ExitCode} QueueMs={QueueMs} RunMs={RunMs} PeakRssBytes={PeakRssBytes} Pages={PageCount} OcrPages={OcrPageCount} Lines={LineCount}",
+            outcome, metrics.ExitCode, (long)Math.Ceiling(queueMs), (long)Math.Ceiling(runMs), metrics.PeakRssBytes,
+            pageCount, result?.OcrPages.Length ?? 0, result?.Lines.Length ?? 0);
+
+    internal static ProcessStartInfo BuildStartInfo(string workerPath, DocumentCaptureOcrWorkerOptions options,
+        string? processPath, Func<string, string?> readEnvironment)
+    {
+        var start = new ProcessStartInfo
+        {
+            FileName = string.Equals(Path.GetFileNameWithoutExtension(processPath), "dotnet", StringComparison.OrdinalIgnoreCase)
+                ? processPath! : "dotnet",
+            WorkingDirectory = Path.GetDirectoryName(workerPath)!,
+            UseShellExecute = false,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        start.ArgumentList.Add(workerPath);
+
+        // The runtime root can be required by a nonstandard .NET install.
+        // Do not inherit any other value from the API process.
+        start.Environment.Clear();
+        foreach (var name in new[] { "DOTNET_ROOT", "DOTNET_ROOT_ARM64", "DOTNET_ROOT_X64", "DOTNET_ROOT_ARM", "DOTNET_ROOT_X86", "DOTNET_ROOT(x86)" })
+            if (readEnvironment(name) is { Length: > 0 } root)
+                start.Environment[name] = root;
+
+        start.Environment["ACCOUNTGO_CAPTURE_OCR_THREADS"] = options.IntraOpThreads.ToString(CultureInfo.InvariantCulture);
+        start.Environment["ACCOUNTGO_CAPTURE_OCR_ARENA"] = options.EnableCpuMemoryArena ? "1" : "0";
+        start.Environment["DOTNET_gcServer"] = "0";
+        start.Environment["DOTNET_TieredPGO"] = "0";
+        return start;
+    }
+
+    private static DocumentCaptureServiceException Busy() => new(429, "DOCUMENT_DECODE_BUSY");
+
+    internal sealed class Admission(SemaphoreSlim gate, double queueMilliseconds) : IDisposable
+    {
+        private SemaphoreSlim? _gate = gate;
+        internal double QueueMilliseconds { get; } = queueMilliseconds;
+        public void Dispose() => Interlocked.Exchange(ref _gate, null)?.Release();
     }
 
     private static CaptureWorkerResult ParseWorkerResponse(byte[] payload, int pageCount)

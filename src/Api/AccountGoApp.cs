@@ -257,7 +257,8 @@ public static class AccountGoApp
             return options.Value.Extractor.ToLowerInvariant() switch
             {
                 "fake" => new Api.DocumentCaptures.FakeDocumentFieldExtractor(options),
-                "local-ocr" => new Api.DocumentCaptures.LocalOcrDocumentFieldExtractor(options, serviceProvider.GetService<TimeProvider>()),
+                "local-ocr" => new Api.DocumentCaptures.LocalOcrDocumentFieldExtractor(options, serviceProvider.GetService<TimeProvider>(),
+                    serviceProvider.GetRequiredService<ILogger<Api.DocumentCaptures.LocalOcrDocumentFieldExtractor>>()),
                 _ => new Api.DocumentCaptures.UnconfiguredDocumentFieldExtractor()
             };
         });

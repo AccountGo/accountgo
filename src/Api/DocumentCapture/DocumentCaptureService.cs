@@ -129,6 +129,11 @@ public sealed class DocumentCaptureService(
         }
 
         var prepared = await PrepareMediaAsync(kind, contentType, sourceBytes, config, cancellationToken).ConfigureAwait(false);
+        // Capacity rejections leave captures and quota untouched. Wait outside the company transaction.
+        using var ocrAdmission = extractor is LocalOcrDocumentFieldExtractor localOcr
+            ? await localOcr.AdmitAsync(prepared.PageCount, cancellationToken).ConfigureAwait(false)
+            : null;
+        now = _timeProvider.GetUtcNow().UtcDateTime;
         var contentHash = Hash(prepared.Bytes);
         var captureId = 0;
         var capturePublicId = string.Empty;
@@ -267,7 +272,8 @@ public sealed class DocumentCaptureService(
         await AuditTransitionAsync("document.capture.reserved", "success", companyId, capturePublicId, kind,
             "extracting", generation, actorId).ConfigureAwait(false);
 
-        var result = await RunExtractionAsync(companyId, captureId, capturePublicId, generation, prepared, cancellationToken).ConfigureAwait(false);
+        var result = await RunExtractionAsync(companyId, captureId, capturePublicId, generation, prepared, ocrAdmission, cancellationToken)
+            .ConfigureAwait(false);
         if (result.Status == "failed")
         {
             var code = result.ErrorCode ?? "DOCUMENT_UNREADABLE";
@@ -584,13 +590,14 @@ public sealed class DocumentCaptureService(
         string capturePublicId,
         int generation,
         PreparedCaptureMedia media,
+        LocalOcrDocumentFieldExtractor.Admission? ocrAdmission,
         CancellationToken cancellationToken)
     {
         try
         {
             var request = new DocumentExtractionRequest(media.Kind, DocumentCaptureFieldSchemas.CurrentSchemaVersion,
                 media.ContentType, media.Bytes, media.PageCount);
-            var extracted = await ExtractAsync(request, cancellationToken).ConfigureAwait(false);
+            var extracted = await ExtractAsync(request, ocrAdmission, cancellationToken).ConfigureAwait(false);
             if (string.IsNullOrEmpty(extracted.FieldsJson)
                 || extracted.FieldsJson.Length > DocumentCaptureFieldSchemas.MaxProviderJsonLength
                 || extracted.Warnings is null
@@ -659,8 +666,9 @@ public sealed class DocumentCaptureService(
         }
         catch (Exception ex)
         {
-            logger.LogWarning("Document capture extraction failed. CaptureId={CaptureId}, Kind={Kind}, FailureType={FailureType}",
-                captureId, media.Kind, ex.GetType().Name);
+            if (ocrAdmission is null)
+                logger.LogWarning("Document capture extraction failed. CaptureId={CaptureId}, Kind={Kind}, FailureType={FailureType}",
+                    captureId, media.Kind, ex.GetType().Name);
             var now = _timeProvider.GetUtcNow().UtcDateTime;
             await using var finalization = await AcquireFinalizationLockAsync(companyId).ConfigureAwait(false);
             var updated = await db.DocumentCaptures.IgnoreQueryFilters()
@@ -689,11 +697,12 @@ public sealed class DocumentCaptureService(
         return await GetAsync(captureId, CancellationToken.None).ConfigureAwait(false);
     }
 
-    private async Task<DocumentExtractionResult> ExtractAsync(DocumentExtractionRequest request, CancellationToken cancellationToken)
+    private async Task<DocumentExtractionResult> ExtractAsync(DocumentExtractionRequest request,
+        LocalOcrDocumentFieldExtractor.Admission? ocrAdmission, CancellationToken cancellationToken)
     {
         // Local OCR owns its deadline so it can kill and reap the worker before returning.
-        if (extractor is LocalOcrDocumentFieldExtractor)
-            return await extractor.ExtractAsync(request, cancellationToken).ConfigureAwait(false);
+        if (extractor is LocalOcrDocumentFieldExtractor localOcr && ocrAdmission is not null)
+            return await localOcr.ExtractAdmittedAsync(request, ocrAdmission, cancellationToken).ConfigureAwait(false);
 
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(ExtractorDeadline);

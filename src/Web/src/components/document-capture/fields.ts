@@ -1025,6 +1025,7 @@ export function describeCaptureError(
     case 'DOCUMENT_PROVIDER_TIMEOUT':
       return { code: normalized, message: 'Extraction timed out. Check status first to see if it finished, or retry manually.', canRetryUpload: true, canCheckStatus: true, canRetryAccept: false };
     case 'DOCUMENT_PROVIDER_UNAVAILABLE':
+      return { code: normalized, message: 'The document reader is temporarily unavailable. Wait a moment and retry, or enter the details manually.', canRetryUpload: true, canCheckStatus: true, canRetryAccept: false };
     case 'DOCUMENT_CAPTURE_UNCONFIGURED':
     case 'DOCUMENT_CAPTURE_DISABLED':
       return { code: normalized, message: 'Document capture is currently unavailable for this workspace.', canRetryUpload: false, canCheckStatus: false, canRetryAccept: false };
