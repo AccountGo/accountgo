@@ -13,6 +13,12 @@ import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { BillTitle, billTitle } from '../lib/billTitle';
 import { useCapabilities } from '../lib/entitlements';
 import { BillStatementSources } from '../components/BillStatementSources';
+import { BillCaptureEvidence } from '../components/BillCaptureEvidence';
+import {
+  computeCaptureDiscrepancy,
+  DocumentCaptureView,
+  VendorCaptureFields,
+} from '../components/document-capture/fields';
 import { RecordHistoryButton, RecordHistoryPanel, useRecordHistory } from '../components/RecordHistoryPanel';
 
 /** One bill: who it is from, its lines and the accounts they are booked to, what is still owed, and its payments. */
@@ -51,6 +57,16 @@ export const BillDetail: React.FC = () => {
     | null
   >(null);
   const [isPaying, setIsPaying] = useState(false);
+  const [linkedCaptures, setLinkedCaptures] = useState<DocumentCaptureView[]>([]);
+  const [detailAckSnapshot, setDetailAckSnapshot] = useState<{
+    captureId: string;
+    sourceGrandTotal: number | null;
+    formTotal: number;
+  } | null>(null);
+
+  const handleCapturesLoaded = useCallback((items: DocumentCaptureView[]) => {
+    setLinkedCaptures(items);
+  }, []);
 
   const currencySymbol = getCurrencySymbol(currentOrg.currency);
   const formatCurrency = useCallback(
@@ -90,18 +106,51 @@ export const BillDetail: React.FC = () => {
 
   const act = async (kind: 'approve', path: string, done: string, confirmDuplicate = false) => {
     if (!bill) return;
+    const primaryDiscrepancyCapture = linkedCaptures.find((c) => {
+      const fields = (c.acceptedFields ?? {}) as VendorCaptureFields;
+      return computeCaptureDiscrepancy(fields.sourceTotals ?? null, bill.total).hasDiscrepancy;
+    });
+    const discrepancy = primaryDiscrepancyCapture
+      ? computeCaptureDiscrepancy(((primaryDiscrepancyCapture.acceptedFields ?? {}) as VendorCaptureFields).sourceTotals ?? null, bill.total)
+      : null;
+    const isAcked = Boolean(
+      primaryDiscrepancyCapture &&
+        discrepancy &&
+        detailAckSnapshot &&
+        detailAckSnapshot.captureId === primaryDiscrepancyCapture.id &&
+        detailAckSnapshot.sourceGrandTotal === discrepancy.sourceGrandTotal &&
+        detailAckSnapshot.formTotal === discrepancy.formTotal
+    );
+
     setBusy(kind);
     setError(null);
     try {
       const url = `${path}?id=${bill.id}${confirmDuplicate ? '&confirmDuplicate=true' : ''}`;
-      const res = await authFetch(url, { method: 'POST' });
+      const res = await authFetch(url, {
+        method: 'POST',
+        ...(primaryDiscrepancyCapture && discrepancy
+          ? {
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                captureId: primaryDiscrepancyCapture.id,
+                sourceGrandTotal: discrepancy.sourceGrandTotal,
+                formTotal: discrepancy.formTotal,
+                discrepancyAcknowledged: isAcked,
+              }),
+            }
+          : {}),
+      });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
         if (res.status === 409 && data?.code === 'possible_duplicate') {
           setDuplicateConfirmApprove(true);
           return;
         }
-        throw new Error(res.status === 403 ? "You don't have permission to do that." : data?.message || `The bill could not be ${kind === 'approve' ? 'approved' : 'voided'}.`);
+        if (res.status === 409 && data?.code === 'DOCUMENT_REVIEW_REQUIRED') {
+          setError(data?.detail || 'The bill total differs from the linked source document total. Acknowledge the difference before approving.');
+          return;
+        }
+        throw new Error(res.status === 403 ? "You don't have permission to do that." : data?.message || data?.detail || `The bill could not be ${kind === 'approve' ? 'approved' : 'voided'}.`);
       }
       setBill(data);
       setNotice(done);
@@ -486,6 +535,49 @@ export const BillDetail: React.FC = () => {
           <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--text-main)]">{bill.notes}</p>
         </section>
       )}
+
+      {isDraft && canApprove && (() => {
+        const discrepant = linkedCaptures.find((c) => {
+          const f = (c.acceptedFields ?? {}) as VendorCaptureFields;
+          return computeCaptureDiscrepancy(f.sourceTotals ?? null, bill.total).hasDiscrepancy;
+        });
+        if (!discrepant) return null;
+        const fields = (discrepant.acceptedFields ?? {}) as VendorCaptureFields;
+        const disc = computeCaptureDiscrepancy(fields.sourceTotals ?? null, bill.total);
+        const checked = Boolean(
+          detailAckSnapshot &&
+            detailAckSnapshot.captureId === discrepant.id &&
+            detailAckSnapshot.sourceGrandTotal === disc.sourceGrandTotal &&
+            detailAckSnapshot.formTotal === disc.formTotal
+        );
+        return (
+          <section aria-label="Reconciliation acknowledgement" className="rounded-xl border border-rose-500/25 bg-rose-500/10 p-4 text-xs text-rose-700 dark:text-rose-300">
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setDetailAckSnapshot({
+                      captureId: discrepant.id,
+                      sourceGrandTotal: disc.sourceGrandTotal,
+                      formTotal: disc.formTotal,
+                    });
+                  } else {
+                    setDetailAckSnapshot(null);
+                  }
+                }}
+                className="mt-0.5 rounded"
+              />
+              <span>
+                Linked source document ({discrepant.id}) total is {fields.sourceTotals?.grandTotal}, while this draft bill total is {formatCurrency(bill.total)}. I have reviewed this difference and acknowledge it for approval.
+              </span>
+            </label>
+          </section>
+        );
+      })()}
+
+      <BillCaptureEvidence billId={bill.id} onCapturesLoaded={handleCapturesLoaded} />
 
       {isPaying && (
         <PayBillDialog
