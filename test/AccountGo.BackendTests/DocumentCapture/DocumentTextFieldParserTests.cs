@@ -294,8 +294,17 @@ public sealed class DocumentTextFieldParserTests
     [InlineData("sales-invoice")]
     [InlineData("bank")]
     [InlineData("assistant-attachment")]
-    public void Parse_HostileInputs_ReturnSchemaValidJsonWithin50Ms(string kind)
+    public void Parse_HostileInputs_ReturnSchemaValidJsonWithin250MsWarmed(string kind)
     {
+        // Warm regexes and JIT once before timing (K1).
+        _ = ParseAndValidate(kind, [Line("Warmup Co"), Line("Date: 2026-11-20"), Line("Total: EUR 10.00")], out _);
+
+        static string RepeatToLength(string chunk, int targetLength)
+        {
+            var count = (targetLength / chunk.Length) + 1;
+            return string.Concat(Enumerable.Repeat(chunk, count))[..targetLength];
+        }
+
         var hostileSets = new TextLine[][]
         {
             Array.Empty<TextLine>(),
@@ -304,15 +313,404 @@ public sealed class DocumentTextFieldParserTests
             [Line(new string('9', 10_000))],
             [Line(new string('[', 2_000) + "Total: 10.00" + new string(']', 2_000))],
             [Line("a: " + new string('x', 5_000))],
+            [Line(RepeatToLength("a 1 1.00 ", 8_000))],
+            [Line(RepeatToLength("a 1 $1.00 ", 8_000))],
         };
 
+        var sw = Stopwatch.StartNew();
         foreach (var set in hostileSets)
         {
-            var sw = Stopwatch.StartNew();
             _ = ParseAndValidate(kind, set, out _);
-            sw.Stop();
-            Assert.True(sw.ElapsedMilliseconds < 50, $"Kind '{kind}' took {sw.ElapsedMilliseconds}ms on hostile input.");
         }
+        sw.Stop();
+        Assert.True(sw.ElapsedMilliseconds <= 250, $"Kind '{kind}' took {sw.ElapsedMilliseconds}ms across hostile inputs (ceiling 250ms).");
+    }
+
+    // --- K2: paymentStatus strong cues, negations, and positive amount due precedence ---
+
+    [Fact]
+    public void Parse_PaymentHints_P2_SubjectToChangeAndAmountDueRemainsUnpaid()
+    {
+        var lines = new[]
+        {
+            Line("Acme Supplies Ltd"),
+            Line("Amount Due: EUR 500.00"),
+            Line("Prices subject to change without notice"),
+        };
+
+        var root = ParseAndValidate("purchase-invoice", lines, out _);
+        var hints = root.GetProperty("paymentHints");
+        Assert.Equal("unpaid", hints.GetProperty("paymentStatus").GetString());
+        Assert.False(hints.TryGetProperty("amountPaid", out _));
+    }
+
+    [Fact]
+    public void Parse_PaymentHints_P3_NotPaidWithin30DaysDoesNotTriggerPaid()
+    {
+        var lines = new[]
+        {
+            Line("Acme Supplies Ltd"),
+            Line("Total: EUR 200.00"),
+            Line("Late fee applies to invoices not paid within 30 days"),
+        };
+
+        var root = ParseAndValidate("purchase-invoice", lines, out _);
+        Assert.Equal("unknown", root.GetProperty("paymentHints").GetProperty("paymentStatus").GetString());
+    }
+
+    [Fact]
+    public void Parse_PaymentHints_PositiveAmountDueWithExplicitAmountPaidIsPartial()
+    {
+        var lines = new[]
+        {
+            Line("Acme Supplies Ltd"),
+            Line("Total: EUR 200.00"),
+            Line("Amount Paid: EUR 50.00"),
+            Line("Amount Due: EUR 150.00"),
+        };
+
+        var root = ParseAndValidate("purchase-invoice", lines, out _);
+        var hints = root.GetProperty("paymentHints");
+        Assert.Equal("partial", hints.GetProperty("paymentStatus").GetString());
+        Assert.Equal("50.00", hints.GetProperty("amountPaid").GetString());
+    }
+
+    [Theory]
+    [InlineData("PAID")]
+    [InlineData("PAID IN FULL")]
+    [InlineData("PAYMENT RECEIVED")]
+    [InlineData("CASH 50.00")]
+    [InlineData("CHANGE 7.50")]
+    [InlineData("Balance Due: EUR 0.00")]
+    public void Parse_PaymentHints_StrongPaidCuesSetPaid(string cueLine)
+    {
+        var root = ParseAndValidate("expense-receipt", [Line("Corner Cafe"), Line("Total: EUR 42.50"), Line(cueLine)], out _);
+        Assert.Equal("paid", root.GetProperty("paymentHints").GetProperty("paymentStatus").GetString());
+    }
+
+    // --- K3: dueDate label strictness and next-line digit guard ---
+
+    [Fact]
+    public void Parse_Date_P1_AmountDueDoesNotTriggerDueDateOnNextLine()
+    {
+        var lines = new[]
+        {
+            Line("Acme Ltd"),
+            Line("Amount Due: 50.00"),
+            Line("Date: 2026-11-20"),
+        };
+
+        var root = ParseAndValidate("purchase-invoice", lines, out _);
+        Assert.Equal("2026-11-20", root.GetProperty("date").GetString());
+        Assert.False(root.TryGetProperty("dueDate", out _));
+    }
+
+    [Fact]
+    public void Parse_Date_DueDateReadsNextLineOnlyWhenLabelLineHasNoDigits()
+    {
+        var withNextLine = ParseAndValidate("purchase-invoice", [
+            Line("Acme Ltd"),
+            Line("Due Date:"),
+            Line("2026-12-20"),
+            Line("Total: EUR 50.00"),
+        ], out _);
+        Assert.Equal("2026-12-20", withNextLine.GetProperty("dueDate").GetString());
+
+        var thaiDue = ParseAndValidate("purchase-invoice", [
+            Line("Acme Ltd"),
+            Line("ครบกำหนด: 20/12/2569"),
+            Line("Total: THB 50.00"),
+        ], out _);
+        Assert.Equal("2026-12-20", thaiDue.GetProperty("dueDate").GetString());
+    }
+
+    // --- K4: tax registration exclusion and next-line digit guard ---
+
+    [Fact]
+    public void Parse_Totals_P5_VatRegNoDoesNotLeakSubtotalIntoTaxTotal()
+    {
+        var lines = new[]
+        {
+            Line("Acme Supplies Ltd"),
+            Line("VAT Reg No: 12345678"),
+            Line("Subtotal: EUR 100.00"),
+            Line("Total: EUR 100.00"),
+        };
+
+        var root = ParseAndValidate("purchase-invoice", lines, out var warnings);
+        var totals = root.GetProperty("sourceTotals");
+        Assert.Equal("100.00", totals.GetProperty("subtotal").GetString());
+        Assert.Equal("100.00", totals.GetProperty("grandTotal").GetString());
+        Assert.False(totals.TryGetProperty("taxTotal", out _));
+        Assert.DoesNotContain("TOTALS_INCONSISTENT", warnings);
+    }
+
+    [Fact]
+    public void Parse_Totals_LabelLineWithDigitsDoesNotFallbackToNextLine()
+    {
+        var lines = new[]
+        {
+            Line("Acme Supplies Ltd"),
+            Line("Tax 10%"),
+            Line("Subtotal: EUR 100.00"),
+            Line("Total: EUR 100.00"),
+        };
+
+        var root = ParseAndValidate("purchase-invoice", lines, out var warnings);
+        var totals = root.GetProperty("sourceTotals");
+        Assert.False(totals.TryGetProperty("taxTotal", out _));
+        Assert.DoesNotContain("TOTALS_INCONSISTENT", warnings);
+    }
+
+    // --- K5 & K6: priceBasis inclusive cues, inclusive-tax total line, and TOTAL_UNLABELED ---
+
+    [Fact]
+    public void Parse_Totals_P8_ServiceChargeIncludedDoesNotSetPriceBasisInclusive()
+    {
+        var lines = new[]
+        {
+            Line("Corner Bistro"),
+            Line("Service charge included"),
+            Line("Total: EUR 100.00"),
+        };
+
+        var root = ParseAndValidate("expense-receipt", lines, out _);
+        var totals = root.GetProperty("sourceTotals");
+        Assert.False(totals.TryGetProperty("priceBasis", out _));
+    }
+
+    [Fact]
+    public void Parse_Totals_P4_TotalInclTaxWithAdditiveSubtotalAndTaxIsNotInclusiveOrUnlabeled()
+    {
+        var lines = new[]
+        {
+            Line("Acme Supplies Ltd"),
+            Line("Subtotal: EUR 100.00"),
+            Line("Tax: EUR 10.00"),
+            Line("Total incl. tax: EUR 110.00"),
+        };
+
+        var root = ParseAndValidate("purchase-invoice", lines, out var warnings);
+        var totals = root.GetProperty("sourceTotals");
+        Assert.Equal("100.00", totals.GetProperty("subtotal").GetString());
+        Assert.Equal("10.00", totals.GetProperty("taxTotal").GetString());
+        Assert.Equal("110.00", totals.GetProperty("grandTotal").GetString());
+        Assert.False(totals.TryGetProperty("priceBasis", out _));
+        Assert.DoesNotContain("TOTAL_UNLABELED", warnings);
+        Assert.DoesNotContain("TOTALS_INCONSISTENT", warnings);
+    }
+
+    [Fact]
+    public void Parse_Totals_TrueTaxInclusiveReceiptSetsPriceBasisInclusiveWithoutInconsistentWarning()
+    {
+        var lines = new[]
+        {
+            Line("Corner Cafe"),
+            Line("Subtotal: EUR 49.80"),
+            Line("VAT 19% (tax included): EUR 7.95"),
+            Line("TOTAL: EUR 49.80"),
+        };
+
+        var root = ParseAndValidate("expense-receipt", lines, out var warnings);
+        var totals = root.GetProperty("sourceTotals");
+        Assert.Equal("49.80", totals.GetProperty("subtotal").GetString());
+        Assert.Equal("7.95", totals.GetProperty("taxTotal").GetString());
+        Assert.Equal("49.80", totals.GetProperty("grandTotal").GetString());
+        Assert.Equal("inclusive", totals.GetProperty("priceBasis").GetString());
+        Assert.DoesNotContain("TOTALS_INCONSISTENT", warnings);
+        Assert.DoesNotContain("TOTAL_UNLABELED", warnings);
+    }
+
+    [Fact]
+    public void Parse_Totals_P9_UnlabeledLargestAmountFallbackEmitsTotalUnlabeledWarning()
+    {
+        var lines = new[]
+        {
+            Line("Corner Cafe"),
+            Line("Balance on card 250.00"),
+        };
+
+        var root = ParseAndValidate("expense-receipt", lines, out var warnings);
+        Assert.Equal("250.00", root.GetProperty("sourceTotals").GetProperty("grandTotal").GetString());
+        Assert.Contains("TOTAL_UNLABELED", warnings);
+    }
+
+    // --- K7: tendered / paid / brought-forward lines excluded from grandTotal ---
+
+    [Fact]
+    public void Parse_Totals_ExcludesTotalPaidAndTenderedFromGrandTotal()
+    {
+        var lines = new[]
+        {
+            Line("Corner Cafe"),
+            Line("TOTAL 42.50"),
+            Line("TOTAL PAID 100.00"),
+            Line("AMOUNT TENDERED 100.00"),
+            Line("CHANGE 57.50"),
+        };
+
+        var root = ParseAndValidate("expense-receipt", lines, out var warnings);
+        Assert.Equal("42.50", root.GetProperty("sourceTotals").GetProperty("grandTotal").GetString());
+        Assert.Equal("paid", root.GetProperty("paymentHints").GetProperty("paymentStatus").GetString());
+        Assert.DoesNotContain("TOTAL_UNLABELED", warnings);
+    }
+
+    // --- K8: currency word boundaries and adjacency to amounts ---
+
+    [Fact]
+    public void Parse_Currency_P7_OrdinaryWordsEndingInRmDoNotTriggerMyr()
+    {
+        var lines = new[]
+        {
+            Line("NORTHWIND PLATFORM FIRM"),
+            Line("ORDER FORM STORM"),
+            Line("Total: 50.00"),
+        };
+
+        var root = ParseAndValidate("purchase-invoice", lines, out _);
+        Assert.False(root.TryGetProperty("currency", out _));
+
+        var myr = ParseAndValidate("purchase-invoice", [Line("Store"), Line("Total: RM 45.00")], out _);
+        Assert.Equal("MYR", myr.GetProperty("currency").GetString());
+
+        var idr = ParseAndValidate("purchase-invoice", [Line("Store"), Line("Total: Rp 10,000.00")], out _);
+        Assert.Equal("IDR", idr.GetProperty("currency").GetString());
+    }
+
+    // --- K9 & K10: bank label variants and bounded value extraction ---
+
+    [Theory]
+    [InlineData("Account No.: 12345678", "12345678")]
+    [InlineData("Account No: 12345678", "12345678")]
+    [InlineData("Account #: 12345678", "12345678")]
+    [InlineData("Account Number: 1234 5678 Branch Sukhumvit", "1234 5678")]
+    public void Parse_Bank_K9_K10_AccountNumberVariantsAndBoundedCapture(string line, string expected)
+    {
+        var root = ParseAndValidate("bank", [Line(line)], out _);
+        Assert.Equal(expected, root.GetProperty("accountNumber").GetString());
+    }
+
+    [Theory]
+    [InlineData("Routing No.: 021000021")]
+    [InlineData("Routing Number: 021000021")]
+    [InlineData("Routing Transit Number: 021000021")]
+    [InlineData("ABA: 021000021")]
+    public void Parse_Bank_K9_RoutingNumberVariants(string line)
+    {
+        var root = ParseAndValidate("bank", [Line(line)], out _);
+        Assert.Equal("021000021", root.GetProperty("routingNumber").GetString());
+    }
+
+    [Theory]
+    [InlineData("SWIFT Code: DEUTDEFF", "DEUTDEFF")]
+    [InlineData("BIC Code: DEUTDEFFXXX", "DEUTDEFFXXX")]
+    [InlineData("SWIFT / BIC: COBADEFFXXX", "COBADEFFXXX")]
+    public void Parse_Bank_K9_SwiftAndBicCodeVariants(string line, string expected)
+    {
+        var root = ParseAndValidate("bank", [Line(line)], out _);
+        Assert.Equal(expected, root.GetProperty("swift").GetString());
+    }
+
+    [Fact]
+    public void Parse_Bank_B5_IbanAndSwiftOnSameLineBothExtractCleanly()
+    {
+        var root = ParseAndValidate("bank", [Line("IBAN: GB82 WEST 1234 5698 7654 32 SWIFT: NWBKGB2L")], out _);
+        Assert.Equal("GB82WEST12345698765432", root.GetProperty("iban").GetString());
+        Assert.Equal("NWBKGB2L", root.GetProperty("swift").GetString());
+    }
+
+    // --- K11: overall parse deadline emits PARSE_TRUNCATED ---
+
+    private sealed class AdvancingTimeProvider : TimeProvider
+    {
+        private long _ticks;
+        private readonly long _stepTicks;
+
+        public AdvancingTimeProvider(TimeSpan step)
+        {
+            _stepTicks = step.Ticks;
+        }
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+        public override long GetTimestamp()
+        {
+            _ticks += _stepTicks;
+            return _ticks;
+        }
+    }
+
+    [Theory]
+    [InlineData("purchase-invoice")]
+    [InlineData("sales-invoice")]
+    [InlineData("bank")]
+    [InlineData("assistant-attachment")]
+    public void Parse_K11_DeadlineExceededEmitsParseTruncatedAndReturnsSchemaValidJson(string kind)
+    {
+        var fakeTime = new AdvancingTimeProvider(TimeSpan.FromMilliseconds(300));
+        var lines = new[]
+        {
+            Line("Acme Supplies Ltd"),
+            Line("Date: 2026-11-20"),
+            Line("Reference: INV-42"),
+            Line("IBAN: DE89 3704 0044 0532 0130 00"),
+            Line("Total: EUR 100.00"),
+        };
+
+        var result = DocumentTextFieldParser.Parse(kind, lines, fakeTime, TimeSpan.FromMilliseconds(500));
+        Assert.Contains("PARSE_TRUNCATED", result.Warnings);
+
+        using var doc = JsonDocument.Parse(result.FieldsJson);
+        Assert.True(
+            DocumentCaptureFieldSchemas.TryValidate(kind, DocumentCaptureFieldSchemas.CurrentSchemaVersion, doc.RootElement, out _, out var err),
+            $"Schema validation failed after deadline truncation for '{kind}': {err}");
+    }
+
+    // --- K12: sales customer label anchoring and phone/ID rejection ---
+
+    [Fact]
+    public void Parse_SalesInvoice_S1_SkipsCustomerServiceAndCustomerIdLabels()
+    {
+        var lines = new[]
+        {
+            Line("Our Seller Company Inc."),
+            Line("Customer Service: 1-800-555-0100"),
+            Line("Customer ID: 987654"),
+            Line("Client #: 4421"),
+            Line("Total: USD 500.00"),
+        };
+
+        var root = ParseAndValidate("sales-invoice", lines, out _);
+        Assert.False(root.TryGetProperty("customerName", out _));
+
+        var valid = ParseAndValidate("sales-invoice", [
+            Line("Our Seller Company Inc."),
+            Line("Customer Service: 1-800-555-0100"),
+            Line("Customer Name: Blue Harbor Retail LLC"),
+            Line("Total: USD 500.00"),
+        ], out _);
+        Assert.Equal("Blue Harbor Retail LLC", valid.GetProperty("customerName").GetString());
+    }
+
+    // --- K13: assistant attachment skips times and URLs ---
+
+    [Fact]
+    public void Parse_AssistantAttachment_A1_SkipsTimesAndUrls()
+    {
+        var lines = new[]
+        {
+            Line("12:30"),
+            Line("https://example.com/inv"),
+            Line("http://example.com/receipt"),
+            Line("mailto:billing@example.com"),
+            Line("Reference: INV-42"),
+        };
+
+        var root = ParseAndValidate("assistant-attachment", lines, out _);
+        var fields = root.GetProperty("fields").EnumerateArray().ToList();
+        Assert.Single(fields);
+        Assert.Equal("Reference", fields[0].GetProperty("label").GetString());
+        Assert.Equal("INV-42", fields[0].GetProperty("value").GetString());
     }
 
     [Fact]
