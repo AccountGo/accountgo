@@ -52,7 +52,7 @@ public sealed record DocumentCaptureLinkView(string TargetType, string TargetId,
 
 public sealed class DocumentCaptureService(
     ApiDbContext db,
-    DocumentCaptureAdmissionLock admissionLock,
+    IDocumentCaptureAdmissionLock admissionLock,
     IDocumentFieldExtractor extractor,
     IEntitlementService entitlements,
     IPublicIdResolver publicIds,
@@ -689,7 +689,7 @@ public sealed class DocumentCaptureService(
         return await GetAsync(captureId, CancellationToken.None).ConfigureAwait(false);
     }
 
-    private static async Task<PreparedCaptureMedia> PrepareMediaAsync(
+    private async Task<PreparedCaptureMedia> PrepareMediaAsync(
         string kind,
         string contentType,
         byte[] source,
@@ -700,7 +700,8 @@ public sealed class DocumentCaptureService(
             throw new DocumentCaptureServiceException(413, "DOCUMENT_TOO_LARGE");
         if (source.AsSpan().StartsWith("%PDF-"u8))
         {
-            var validation = await DocumentCapturePdfValidator.ValidateAsync(source, config.PdfParseSlots, cancellationToken).ConfigureAwait(false);
+            var validation = await DocumentCapturePdfValidator.ValidateAsync(source, config.PdfParseSlots, _timeProvider, cancellationToken)
+                .ConfigureAwait(false);
             if (!validation.IsValid)
                 throw new DocumentCaptureServiceException(StatusForMediaError(validation.ErrorCode), validation.ErrorCode ?? "DOCUMENT_MALFORMED");
             if (!string.Equals(contentType, "application/pdf", StringComparison.OrdinalIgnoreCase))
@@ -734,7 +735,8 @@ public sealed class DocumentCaptureService(
             }
             catch (DocumentCaptureAdmissionBusyException) when (attempt < 2)
             {
-                await Task.Delay(TimeSpan.FromMilliseconds(100 * (attempt + 1)), CancellationToken.None).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromMilliseconds(100 * (attempt + 1)), _timeProvider, CancellationToken.None)
+                    .ConfigureAwait(false);
             }
         }
     }
@@ -848,6 +850,7 @@ public sealed class DocumentCaptureService(
         "DOCUMENT_EMPTY" or "DOCUMENT_MALFORMED" or "DOCUMENT_DIMENSIONS" => 400,
         "DOCUMENT_TOO_LARGE" => 413,
         "DOCUMENT_UNSUPPORTED_TYPE" => 415,
+        "DOCUMENT_BUSY" => 503,
         "DOCUMENT_DECODE_BUSY" or "DOCUMENT_RATE_LIMITED" => 429,
         _ => 422
     };

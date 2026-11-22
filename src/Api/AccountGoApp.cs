@@ -263,6 +263,7 @@ public static class AccountGoApp
             serviceProvider.GetRequiredService<Api.DocumentCaptures.DocumentCaptureAdmissionLock>());
         builder.Services.AddScoped<Api.DocumentCaptures.DocumentCaptureService>();
         builder.Services.AddScoped<Api.DocumentCaptures.DocumentCaptureRetentionService>();
+        builder.Services.AddHostedService<Api.DocumentCaptures.DocumentCapturePdfWarmup>();
         builder.Services.AddHostedService<Api.DocumentCaptures.DocumentCaptureRetentionWorker>();
         builder.Services.AddHostedService<Api.Service.AuditRetentionWorker>();
         builder.Services.AddScoped<Core.Tenancy.ITenantContext, Api.Tenancy.TenantContext>();

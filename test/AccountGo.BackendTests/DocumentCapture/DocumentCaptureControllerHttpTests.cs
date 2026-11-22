@@ -337,6 +337,34 @@ public sealed class DocumentCaptureControllerHttpTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task PdfParseDeadlineReturnsRetryAfterAndDocumentBusyOverHttp()
+    {
+        using var factory = _factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<TimeProvider>();
+            services.AddSingleton<TimeProvider, ExpiringPdfClock>();
+        }));
+        using var client = factory.CreateClient();
+        var pdf = new PdfDocumentBuilder();
+        pdf.AddPage(100, 100);
+        using var request = NewRequest(HttpMethod.Post, "/api/document-captures");
+        request.Content = CreateUploadForm("purchase-invoice", pdf.Build(), "application/pdf");
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal(TimeSpan.FromSeconds(1), response.Headers.RetryAfter?.Delta);
+        Assert.Equal("DOCUMENT_BUSY", await ReadProblemCodeAsync(response));
+    }
+
+    private sealed class ExpiringPdfClock : TimeProvider
+    {
+        private long _timestamp;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => Interlocked.Add(ref _timestamp, TimeSpan.FromSeconds(4).Ticks);
+    }
+
+    [Fact]
     public async Task CompanyLockContentionReturnsRetryAfterAndDocumentBusyOverHttp()
     {
         await using var blocker = new SqliteConnection($"Data Source={_databasePath}");

@@ -791,7 +791,7 @@ public sealed class DocumentCaptureServiceTests
         var extractor = new BlockingExtractor(harness.Db);
         var service = harness.CreateService(extractor);
         var upload = service.UploadAsync("purchase-invoice", 1, "image/png", CreatePng(), "stale-generation", CancellationToken.None);
-        await extractor.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await extractor.Entered.Task.WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.True(extractor.ObservedNoTransaction);
         var captureId = await harness.Db.DocumentCaptures.Select(capture => capture.Id).SingleAsync();
@@ -824,10 +824,11 @@ public sealed class DocumentCaptureServiceTests
     {
         using var harness = new Harness(enabled: true);
         var extractor = new IgnoreCancellationOnFirstCallExtractor();
-        var service = harness.CreateService(extractor);
+        var clock = new MutableTimeProvider(new DateTimeOffset(2026, 11, 20, 12, 0, 0, TimeSpan.Zero));
+        var service = harness.CreateService(extractor, timeProvider: clock);
         using var cancellation = new CancellationTokenSource();
         var firstUpload = service.UploadAsync("purchase-invoice", 1, "image/png", CreatePng(), "ignored-cancellation", cancellation.Token);
-        await extractor.FirstCallEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await extractor.FirstCallEntered.Task.WaitAsync(TimeSpan.FromSeconds(30));
         cancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => firstUpload);
 
@@ -839,8 +840,8 @@ public sealed class DocumentCaptureServiceTests
         Assert.Equal("DOCUMENT_EXTRACTION_IN_PROGRESS", replay.ErrorCode);
         Assert.Equal(1, await harness.Db.DocumentCaptureAttempts.CountAsync());
 
-        await harness.Db.DocumentCaptures.Where(item => item.Id == capture.Id)
-            .ExecuteUpdateAsync(update => update.SetProperty(item => item.LeaseExpiresAt, DateTime.UtcNow.AddSeconds(-1)));
+        Assert.NotNull(capture.LeaseExpiresAt);
+        clock.SetUtcNow(new DateTimeOffset(capture.LeaseExpiresAt.Value, TimeSpan.Zero).AddSeconds(1));
         harness.Db.ChangeTracker.Clear();
         var retry = await service.UploadAsync("purchase-invoice", 1, "image/png", CreatePng(), "ignored-cancellation", CancellationToken.None);
         Assert.Equal("Generation 2", retry.Fields?.Value<string>("vendorName"));

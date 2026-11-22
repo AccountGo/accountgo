@@ -8,10 +8,16 @@ internal static class Probe
 {
     private static async Task<int> Main(string[] args)
     {
-        if (args.Length != 1)
+        if (args.Length is < 1 or > 2 || (args.Length == 2 && args[1] != "--warm"))
             return 2;
 
         var bytes = await File.ReadAllBytesAsync(args[0]);
+        if (args.Length == 2)
+        {
+            var startupTimer = Stopwatch.StartNew();
+            var warmup = await DocumentCapturePdfWarmup.WarmParserAsync(parseSlots: 1, CancellationToken.None);
+            Console.Error.WriteLine($"Warm-up verdict: {warmup.ErrorCode ?? "valid"} in {startupTimer.Elapsed.TotalMilliseconds:F1} ms");
+        }
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();

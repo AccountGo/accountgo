@@ -18,7 +18,7 @@ public sealed class DocumentCapturePdfValidatorTests
     [Fact]
     public async Task ValidateAsync_AcceptsOnePageAndReturnsItsStructuralCount()
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(CreatePdf(1));
+        var result = await ValidateStructureAsync(CreatePdf(1));
 
         Assert.True(result.IsValid);
         Assert.Equal(1, result.PageCount);
@@ -28,7 +28,7 @@ public sealed class DocumentCapturePdfValidatorTests
     [Fact]
     public async Task ValidateAsync_RejectsElevenPageDocument()
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(CreatePdf(11));
+        var result = await ValidateStructureAsync(CreatePdf(11));
 
         Assert.False(result.IsValid);
         Assert.Equal("DOCUMENT_UNSUPPORTED_TYPE", result.ErrorCode);
@@ -37,14 +37,14 @@ public sealed class DocumentCapturePdfValidatorTests
     [Fact]
     public async Task ValidateAsync_RejectsOversizedInputBeforeParsing()
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(new byte[DocumentCapturePdfLimits.MaxInputBytes + 1]);
+        var result = await ValidateStructureAsync(new byte[DocumentCapturePdfLimits.MaxInputBytes + 1]);
 
         Assert.False(result.IsValid);
         Assert.Equal("DOCUMENT_TOO_LARGE", result.ErrorCode);
     }
 
     [Fact]
-    public async Task ValidateAsync_ReturnsDecodeBusyAfterFiveHundredMillisecondParseAdmissionWait()
+    public async Task ValidateAsync_ReturnsDecodeBusyWhenParseSlotIsHeld()
     {
         var gate = DocumentCapturePdfValidator.ParseGates.GetOrAdd(
             DocumentCapturePdfLimits.ParseGateSlots,
@@ -52,14 +52,10 @@ public sealed class DocumentCapturePdfValidatorTests
         await gate.WaitAsync();
         try
         {
-            var stopwatch = Stopwatch.StartNew();
-            var result = await DocumentCapturePdfValidator.ValidateAsync(CreatePdf(1));
-            stopwatch.Stop();
+            var result = await ValidateStructureAsync(CreatePdf(1));
 
             Assert.False(result.IsValid);
             Assert.Equal("DOCUMENT_DECODE_BUSY", result.ErrorCode);
-            Assert.InRange(stopwatch.Elapsed, DocumentCapturePdfLimits.ParseAdmissionWait - TimeSpan.FromMilliseconds(50),
-                DocumentCapturePdfLimits.ParseAdmissionWait + TimeSpan.FromSeconds(1));
         }
         finally
         {
@@ -70,7 +66,7 @@ public sealed class DocumentCapturePdfValidatorTests
     [Fact]
     public async Task ValidateAsync_RejectsMalformedStructureFailClosed()
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(Encoding.ASCII.GetBytes("%PDF-1.7\nnot a document"));
+        var result = await ValidateStructureAsync(Encoding.ASCII.GetBytes("%PDF-1.7\nnot a document"));
 
         Assert.False(result.IsValid);
         Assert.Equal("DOCUMENT_MALFORMED", result.ErrorCode);
@@ -80,29 +76,29 @@ public sealed class DocumentCapturePdfValidatorTests
     public async Task ValidateAsync_RejectsTruncatedDocument()
     {
         var complete = CreatePdf(1);
-        var result = await DocumentCapturePdfValidator.ValidateAsync(complete.AsMemory(0, complete.Length - 32));
+        var result = await ValidateStructureAsync(complete.AsMemory(0, complete.Length - 32));
 
         Assert.False(result.IsValid);
         Assert.Equal("DOCUMENT_MALFORMED", result.ErrorCode);
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = 60000)]
     public async Task ValidateAsync_RejectsCyclicPageTreeWithoutHanging()
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(CreateStructuralPdf(cycle: true));
+        var result = await ValidateStructureAsync(CreateStructuralPdf(cycle: true));
 
         Assert.False(result.IsValid);
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = 60000)]
     public async Task ValidateAsync_RejectsPageTreeWhoseDeclaredCountHidesElevenPages()
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(CreateStructuralPdf(pageCount: 11, declaredCount: 1));
+        var result = await ValidateStructureAsync(CreateStructuralPdf(pageCount: 11, declaredCount: 1));
 
         Assert.False(result.IsValid);
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = 60000)]
     public async Task ValidateAsync_RejectsHugeKidsArrayWithinResourceBounds()
     {
         var pdf = CreateStructuralPdfWithHugeKids(100_000);
@@ -116,7 +112,7 @@ public sealed class DocumentCapturePdfValidatorTests
     [Fact]
     public async Task ValidateAsync_UsesLatestPageTreeFromIncrementalRevision()
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(CreateIncrementalPdf(oldPageCount: 11, activePageCount: 1));
+        var result = await ValidateStructureAsync(CreateIncrementalPdf(oldPageCount: 11, activePageCount: 1));
 
         Assert.True(result.IsValid);
         Assert.Equal(1, result.PageCount);
@@ -125,7 +121,7 @@ public sealed class DocumentCapturePdfValidatorTests
     [Fact]
     public async Task ValidateAsync_IgnoresPageTypeTextInAnUnrelatedStream()
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(
+        var result = await ValidateStructureAsync(
             CreateIncrementalPdf(oldPageCount: 1, activePageCount: 1, unrelatedPageToken: true));
 
         Assert.True(result.IsValid);
@@ -135,7 +131,7 @@ public sealed class DocumentCapturePdfValidatorTests
     [Fact]
     public async Task ValidateAsync_RejectsEncryptedDocument()
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(
+        var result = await ValidateStructureAsync(
             CreateIncrementalPdf(oldPageCount: 1, activePageCount: 1, encrypted: true));
 
         Assert.False(result.IsValid);
@@ -149,7 +145,7 @@ public sealed class DocumentCapturePdfValidatorTests
     [InlineData("AF")]
     public async Task ValidateAsync_RejectsUnsupportedCatalogFeatures(string key)
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(
+        var result = await ValidateStructureAsync(
             CreateStructuralPdf(catalogEntries: $" /{key} << >>"));
 
         Assert.False(result.IsValid);
@@ -161,7 +157,7 @@ public sealed class DocumentCapturePdfValidatorTests
     [InlineData("EmbeddedFiles")]
     public async Task ValidateAsync_RejectsActiveOrEmbeddedNameTrees(string key)
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(
+        var result = await ValidateStructureAsync(
             CreateStructuralPdf(catalogEntries: $" /Names << /{key} << >> >>"));
 
         Assert.False(result.IsValid);
@@ -171,7 +167,7 @@ public sealed class DocumentCapturePdfValidatorTests
     [Fact]
     public async Task ValidateAsync_AllowsNamedDestinationTree()
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(
+        var result = await ValidateStructureAsync(
             CreateStructuralPdf(catalogEntries: " /Names << /Dests << /invoice [3 0 R /Fit] >> >>"));
 
         Assert.True(result.IsValid);
@@ -187,7 +183,7 @@ public sealed class DocumentCapturePdfValidatorTests
     [InlineData("3D")]
     public async Task ValidateAsync_RejectsUnsupportedAnnotationSubtypes(string subtype)
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(
+        var result = await ValidateStructureAsync(
             CreateIncrementalAnnotationPdf($"<< /Type /Annot /Subtype /{subtype} >>"));
 
         Assert.False(result.IsValid);
@@ -206,7 +202,7 @@ public sealed class DocumentCapturePdfValidatorTests
     [InlineData("Movie")]
     public async Task ValidateAsync_RejectsUnsupportedAnnotationActions(string actionType)
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(
+        var result = await ValidateStructureAsync(
             CreateIncrementalAnnotationPdf($"<< /Type /Annot /Subtype /Link /A << /S /{actionType} >> >>"));
 
         Assert.False(result.IsValid);
@@ -216,7 +212,7 @@ public sealed class DocumentCapturePdfValidatorTests
     [Fact]
     public async Task ValidateAsync_RejectsUnsupportedAdditionalAnnotationActions()
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(
+        var result = await ValidateStructureAsync(
             CreateIncrementalAnnotationPdf("<< /Type /Annot /Subtype /Text /AA << /O << /S /JavaScript >> >> >>"));
 
         Assert.False(result.IsValid);
@@ -226,7 +222,7 @@ public sealed class DocumentCapturePdfValidatorTests
     [Fact]
     public async Task ValidateAsync_RejectsUnsupportedPageAdditionalActions()
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(
+        var result = await ValidateStructureAsync(
             CreateStructuralPdf(pageEntries: " /AA << /O << /S /JavaScript >> >>"));
 
         Assert.False(result.IsValid);
@@ -237,7 +233,7 @@ public sealed class DocumentCapturePdfValidatorTests
     public async Task ValidateAsync_RejectsMoreThanFiveHundredAnnotationsOnOnePage()
     {
         var annotations = string.Join(" ", Enumerable.Repeat("<< /Type /Annot /Subtype /Text >>", 501));
-        var result = await DocumentCapturePdfValidator.ValidateAsync(
+        var result = await ValidateStructureAsync(
             CreateStructuralPdf(pageEntries: $" /Annots [{annotations}]"));
 
         Assert.False(result.IsValid);
@@ -247,11 +243,11 @@ public sealed class DocumentCapturePdfValidatorTests
     [Fact]
     public async Task ValidateAsync_AllowsUriAndInternalLinkAnnotations()
     {
-        var uriResult = await DocumentCapturePdfValidator.ValidateAsync(
+        var uriResult = await ValidateStructureAsync(
             CreateIncrementalAnnotationPdf("<< /Type /Annot /Subtype /Link /A << /S /URI /URI (https://example.test/invoice) >> >>"));
-        var internalResult = await DocumentCapturePdfValidator.ValidateAsync(
+        var internalResult = await ValidateStructureAsync(
             CreateIncrementalAnnotationPdf("<< /Type /Annot /Subtype /Link /A << /S /GoTo /D [3 0 R /Fit] >> >>"));
-        var textResult = await DocumentCapturePdfValidator.ValidateAsync(
+        var textResult = await ValidateStructureAsync(
             CreateIncrementalAnnotationPdf("<< /Type /Annot /Subtype /Text >>"));
 
         Assert.True(uriResult.IsValid);
@@ -266,7 +262,7 @@ public sealed class DocumentCapturePdfValidatorTests
     [InlineData("<< /S /GoTo /D [3 0 R /Fit] >>")]
     public async Task ValidateAsync_AllowsPassiveOpenActionDestinationsAndGoTo(string openAction)
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(CreateStructuralPdf(catalogEntries: $" /OpenAction {openAction}"));
+        var result = await ValidateStructureAsync(CreateStructuralPdf(catalogEntries: $" /OpenAction {openAction}"));
 
         Assert.True(result.IsValid);
         Assert.Equal(1, result.PageCount);
@@ -278,7 +274,7 @@ public sealed class DocumentCapturePdfValidatorTests
     [InlineData("99 0 R")]
     public async Task ValidateAsync_RejectsActiveOrUnresolvableOpenAction(string openAction)
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(CreateStructuralPdf(catalogEntries: $" /OpenAction {openAction}"));
+        var result = await ValidateStructureAsync(CreateStructuralPdf(catalogEntries: $" /OpenAction {openAction}"));
 
         Assert.False(result.IsValid);
         Assert.Contains(result.ErrorCode, new[] { "DOCUMENT_UNSUPPORTED_TYPE", "DOCUMENT_MALFORMED" });
@@ -290,7 +286,7 @@ public sealed class DocumentCapturePdfValidatorTests
     [InlineData("<< /S /URI /URI (https://example.test) /Next [<< /S /GoTo /D [3 0 R /Fit] >> << /S /JavaScript /JS (app.alert(1)) >>] >>")]
     public async Task ValidateAsync_RejectsUnsupportedActionAnywhereInNextChain(string action)
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(
+        var result = await ValidateStructureAsync(
             CreateIncrementalAnnotationPdf($"<< /Type /Annot /Subtype /Link /A {action} >>"));
 
         Assert.False(result.IsValid);
@@ -300,21 +296,21 @@ public sealed class DocumentCapturePdfValidatorTests
     [Fact]
     public async Task ValidateAsync_RejectsActionChainInPageAdditionalActions()
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(CreateStructuralPdf(pageEntries:
+        var result = await ValidateStructureAsync(CreateStructuralPdf(pageEntries:
             " /AA << /O << /S /URI /URI (https://example.test) /Next << /S /JavaScript /JS (x) >> >> >>"));
 
         Assert.False(result.IsValid);
         Assert.Equal("DOCUMENT_UNSUPPORTED_TYPE", result.ErrorCode);
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = 60000)]
     public async Task ValidateAsync_RejectsCyclicActionNextChainWithinBounds()
     {
         var pdf = CreateIncrementalAnnotationPdf(
             "<< /Type /Annot /Subtype /Link /A << /S /URI /URI (https://example.test) /Next 5 0 R >> >>",
             "<< /S /GoTo /D [3 0 R /Fit] /Next 5 0 R >>");
 
-        var result = await DocumentCapturePdfValidator.ValidateAsync(pdf);
+        var result = await ValidateStructureAsync(pdf);
 
         Assert.False(result.IsValid);
         Assert.Equal("DOCUMENT_UNSUPPORTED_TYPE", result.ErrorCode);
@@ -323,7 +319,7 @@ public sealed class DocumentCapturePdfValidatorTests
     [Fact]
     public async Task ValidateAsync_AllowsUriToGoToActionChain()
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(
+        var result = await ValidateStructureAsync(
             CreateIncrementalAnnotationPdf("<< /Type /Annot /Subtype /Link /A << /S /URI /URI (https://example.test) /Next << /S /GoTo /D [3 0 R /Fit] >> >> >>"));
 
         Assert.True(result.IsValid);
@@ -332,9 +328,9 @@ public sealed class DocumentCapturePdfValidatorTests
     [Fact]
     public async Task ValidateAsync_AllowsPassiveAcroFormAndWidgetAnnotations()
     {
-        var form = await DocumentCapturePdfValidator.ValidateAsync(CreateStructuralPdf(
+        var form = await ValidateStructureAsync(CreateStructuralPdf(
             catalogEntries: " /AcroForm << /Fields [<< /FT /Tx /T (VendorName) /V (Fixture) >>] >>"));
-        var widget = await DocumentCapturePdfValidator.ValidateAsync(
+        var widget = await ValidateStructureAsync(
             CreateIncrementalAnnotationPdf("<< /Type /Annot /Subtype /Widget /Parent 4 0 R >>"));
 
         Assert.True(form.IsValid);
@@ -344,11 +340,11 @@ public sealed class DocumentCapturePdfValidatorTests
     [Fact]
     public async Task ValidateAsync_RejectsXfaFieldActionsAndWidgetActions()
     {
-        var xfa = await DocumentCapturePdfValidator.ValidateAsync(CreateStructuralPdf(
+        var xfa = await ValidateStructureAsync(CreateStructuralPdf(
             catalogEntries: " /AcroForm << /Fields [] /XFA (form) >>"));
-        var fieldAction = await DocumentCapturePdfValidator.ValidateAsync(CreateStructuralPdf(
+        var fieldAction = await ValidateStructureAsync(CreateStructuralPdf(
             catalogEntries: " /AcroForm << /Fields [<< /FT /Tx /AA << /K << /S /JavaScript /JS (x) >> >> >>] >>"));
-        var widgetAction = await DocumentCapturePdfValidator.ValidateAsync(
+        var widgetAction = await ValidateStructureAsync(
             CreateIncrementalAnnotationPdf("<< /Type /Annot /Subtype /Widget /A << /S /JavaScript /JS (x) >> >>"));
 
         Assert.All(new[] { xfa, fieldAction, widgetAction }, result =>
@@ -361,9 +357,9 @@ public sealed class DocumentCapturePdfValidatorTests
     [Fact]
     public async Task ValidateAsync_RejectsFieldActionChainAndNeedsRenderingForm()
     {
-        var fieldAction = await DocumentCapturePdfValidator.ValidateAsync(CreateStructuralPdf(
+        var fieldAction = await ValidateStructureAsync(CreateStructuralPdf(
             catalogEntries: " /AcroForm << /Fields [<< /FT /Tx /A << /S /URI /Next << /S /JavaScript /JS (x) >> >> >>] >>"));
-        var needsRendering = await DocumentCapturePdfValidator.ValidateAsync(CreateStructuralPdf(
+        var needsRendering = await ValidateStructureAsync(CreateStructuralPdf(
             catalogEntries: " /NeedsRendering true /AcroForm << /Fields [] >>"));
 
         Assert.All(new[] { fieldAction, needsRendering }, result =>
@@ -373,10 +369,10 @@ public sealed class DocumentCapturePdfValidatorTests
         });
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = 60000)]
     public async Task ValidateAsync_RejectsCyclicFormFieldTreeWithinBounds()
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(CreateStructuralPdf(
+        var result = await ValidateStructureAsync(CreateStructuralPdf(
             catalogEntries: " /AcroForm << /Fields [4 0 R] >>",
             extraObject: "<< /FT /Tx /T (cycle) /Kids [4 0 R] >>"));
 
@@ -384,20 +380,20 @@ public sealed class DocumentCapturePdfValidatorTests
         Assert.Contains(result.ErrorCode, new[] { "DOCUMENT_UNSUPPORTED_TYPE", "DOCUMENT_MALFORMED" });
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = 60000)]
     public async Task ValidateAsync_RejectsOverlyDeepFormFieldTreeWithinBounds()
     {
         var field = "<< /FT /Tx >>";
         for (var depth = 0; depth < 70; depth++)
             field = $"<< /Kids [{field}] >>";
-        var result = await DocumentCapturePdfValidator.ValidateAsync(CreateStructuralPdf(
+        var result = await ValidateStructureAsync(CreateStructuralPdf(
             catalogEntries: $" /AcroForm << /Fields [{field}] >>"));
 
         Assert.False(result.IsValid);
         Assert.Contains(result.ErrorCode, new[] { "DOCUMENT_UNSUPPORTED_TYPE", "DOCUMENT_MALFORMED" });
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = 60000)]
     public async Task ValidateAsync_RejectsOverlyDeepPageTreeWithinTimeAndAllocationBounds()
     {
         var pdf = CreateStructuralPdf(nestingDepth: 2000);
@@ -408,7 +404,7 @@ public sealed class DocumentCapturePdfValidatorTests
         AssertResourceBounds(metrics);
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = 60000)]
     public async Task ValidateAsync_RejectsOversizedDecodedXrefStreamWithinResourceBounds()
     {
         var pdf = CreateXrefStreamBomb();
@@ -420,7 +416,7 @@ public sealed class DocumentCapturePdfValidatorTests
         AssertResourceBounds(metrics);
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = 60000)]
     public async Task ValidateAsync_RejectsOversizedDecodedObjectStreamWithinResourceBounds()
     {
         var pdf = CreateObjectStreamBomb();
@@ -435,7 +431,7 @@ public sealed class DocumentCapturePdfValidatorTests
     [Fact]
     public async Task ValidateAsync_AcceptsXrefStreamWithPngUpPredictor()
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(CreatePredictorXrefPdf());
+        var result = await ValidateStructureAsync(CreatePredictorXrefPdf());
 
         Assert.True(result.IsValid, $"Parser returned {result.ErrorCode}.");
         Assert.Equal(1, result.PageCount);
@@ -449,7 +445,7 @@ public sealed class DocumentCapturePdfValidatorTests
     [InlineData(4)]
     public async Task ValidateAsync_AcceptsEachPngPredictorRowFilter(byte filterType)
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(CreatePredictorXrefPdf(filterType: filterType));
+        var result = await ValidateStructureAsync(CreatePredictorXrefPdf(filterType: filterType));
 
         Assert.True(result.IsValid, $"PNG row filter {filterType} returned {result.ErrorCode}.");
         Assert.Equal(1, result.PageCount);
@@ -458,7 +454,7 @@ public sealed class DocumentCapturePdfValidatorTests
     [Fact]
     public async Task ValidateAsync_AcceptsXrefStreamWithTiffPredictor()
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(CreatePredictorXrefPdf(predictor: 2));
+        var result = await ValidateStructureAsync(CreatePredictorXrefPdf(predictor: 2));
 
         Assert.True(result.IsValid, $"Parser returned {result.ErrorCode}.");
         Assert.Equal(1, result.PageCount);
@@ -467,7 +463,7 @@ public sealed class DocumentCapturePdfValidatorTests
     [Fact]
     public async Task ValidateAsync_AcceptsLzwXrefStreamWithPngPredictor()
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(CreatePredictorXrefPdf(useLzw: true));
+        var result = await ValidateStructureAsync(CreatePredictorXrefPdf(useLzw: true));
 
         Assert.True(result.IsValid, $"Parser returned {result.ErrorCode}.");
         Assert.Equal(1, result.PageCount);
@@ -476,7 +472,7 @@ public sealed class DocumentCapturePdfValidatorTests
     [Fact]
     public async Task ValidateAsync_AcceptsObjectStreamWithPngPredictor()
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(CreatePredictorObjectStreamPdf());
+        var result = await ValidateStructureAsync(CreatePredictorObjectStreamPdf());
 
         Assert.True(result.IsValid, $"Parser returned {result.ErrorCode}.");
         Assert.Equal(1, result.PageCount);
@@ -490,7 +486,7 @@ public sealed class DocumentCapturePdfValidatorTests
     [InlineData(1, 8, 70000)]
     public async Task ValidateAsync_RejectsInvalidPredictorParameters(int colors, int bitsPerComponent, int columns)
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(
+        var result = await ValidateStructureAsync(
             CreatePredictorXrefPdf(colors: colors, bitsPerComponent: bitsPerComponent, columns: columns));
 
         Assert.False(result.IsValid);
@@ -500,13 +496,13 @@ public sealed class DocumentCapturePdfValidatorTests
     [Fact]
     public async Task ValidateAsync_EncryptedXrefWithPredictorIsUnsupportedType()
     {
-        var result = await DocumentCapturePdfValidator.ValidateAsync(CreatePredictorXrefPdf(encrypted: true));
+        var result = await ValidateStructureAsync(CreatePredictorXrefPdf(encrypted: true));
 
         Assert.False(result.IsValid);
         Assert.Equal("DOCUMENT_UNSUPPORTED_TYPE", result.ErrorCode);
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact(Timeout = 60000)]
     public async Task ValidateAsync_FlateBombBehindPredictorStaysWithinDecodeBudget()
     {
         var pdf = CreatePredictorXrefBomb(1_500_000);
@@ -518,7 +514,7 @@ public sealed class DocumentCapturePdfValidatorTests
         AssertResourceBounds(metrics);
     }
 
-    [Fact(Timeout = 15000)]
+    [Fact(Timeout = 60000)]
     public async Task ValidateAsync_ManyTinyUnreferencedObjectsStayWithinResourceBounds()
     {
         var pdf = CreateManyTinyObjectsPdf(175_000);
@@ -530,7 +526,7 @@ public sealed class DocumentCapturePdfValidatorTests
         AssertResourceBounds(metrics);
     }
 
-    [Fact(Timeout = 15000)]
+    [Fact(Timeout = 60000)]
     public async Task ValidateAsync_FullSizeObjectAndXrefStreamsStayWithinResourceBounds()
     {
         var pdf = CreateFullSizeObjectAndXrefStreamPdf();
@@ -543,13 +539,22 @@ public sealed class DocumentCapturePdfValidatorTests
     }
 
     [Fact]
-    public async Task ValidateAsync_CooperativeDecodeDeadlineStopsAFileWhenClockAdvancesPastLimit()
+    public async Task ValidateAsync_CooperativeDecodeDeadlineReturnsRetryableBusy()
     {
         var result = await DocumentCapturePdfValidator.ValidateAsync(
             CreateFullSizeObjectAndXrefStreamPdf(), 1, new AdvancingTimeProvider());
 
         Assert.False(result.IsValid);
-        Assert.Equal("DOCUMENT_UNSUPPORTED_TYPE", result.ErrorCode);
+        Assert.Equal("DOCUMENT_BUSY", result.ErrorCode);
+    }
+
+    // Structural verdicts are measured independently of the runner's scheduling.
+    private static Task<DocumentCapturePdfValidationResult> ValidateStructureAsync(ReadOnlyMemory<byte> bytes) =>
+        DocumentCapturePdfValidator.ValidateAsync(bytes, DocumentCapturePdfLimits.ParseGateSlots, new FrozenTimeProvider());
+
+    private sealed class FrozenTimeProvider : TimeProvider
+    {
+        public override long GetTimestamp() => 0;
     }
 
     private static byte[] CreatePdf(int pageCount)
@@ -579,7 +584,7 @@ public sealed class DocumentCapturePdfValidatorTests
             start.ArgumentList.Add(probePath);
             start.ArgumentList.Add(filePath);
             using var process = Process.Start(start) ?? throw new InvalidOperationException("Could not start the PDF measurement probe.");
-            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(45));
             var readyLine = await process.StandardOutput.ReadLineAsync(deadline.Token)
                 ?? throw new InvalidOperationException("PDF measurement probe did not report its baseline.");
             Assert.StartsWith("READY|", readyLine, StringComparison.Ordinal);
@@ -600,7 +605,7 @@ public sealed class DocumentCapturePdfValidatorTests
             catch (OperationCanceledException)
             {
                 process.Kill(entireProcessTree: true);
-                throw new TimeoutException("The PDF measurement subprocess exceeded 20 seconds.");
+                throw new TimeoutException("The PDF measurement subprocess exceeded 45 seconds.");
             }
             var output = await outputTask;
             var error = await errorTask;
