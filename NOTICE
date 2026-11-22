@@ -50,6 +50,12 @@ notice, which is retained as that license requires:
 Third-party components bundled with or referenced by AccountGo are subject to
 their own licenses.
 
+The local document capture worker includes PaddleOCR PP-OCRv5 models under
+Apache-2.0, ONNX Runtime under MIT, and PDFium under BSD-3-Clause via the
+Apache-2.0 bblanchon/pdfium-binaries packages. Model provenance and licences are
+in src/Api.CaptureWorker/Models. Runtime and bundled dependency notices are in
+src/Api.CaptureWorker/Notices.
+
 -------------------------------------------------------------------------------
 Trademarks
 -------------------------------------------------------------------------------
