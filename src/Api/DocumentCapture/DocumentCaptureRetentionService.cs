@@ -4,12 +4,16 @@
 #nullable enable
 using Api.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Api.DocumentCaptures;
 
-public sealed class DocumentCaptureRetentionService(ApiDbContext db, DocumentCaptureAdmissionLock admissionLock, TimeProvider? timeProvider = null)
+public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCaptureAdmissionLock admissionLock,
+    TimeProvider? timeProvider = null, ILogger<DocumentCaptureRetentionService>? logger = null)
 {
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+    private readonly ILogger<DocumentCaptureRetentionService> _logger = logger ?? NullLogger<DocumentCaptureRetentionService>.Instance;
     public const int BatchSize = 100;
     public static readonly TimeSpan AttemptRetention = TimeSpan.FromHours(48);
     private static readonly TimeSpan PassBudget = TimeSpan.FromMinutes(2);
@@ -27,6 +31,7 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, DocumentCap
         var purgedCaptures = 0;
         var passStarted = _timeProvider.GetTimestamp();
         var stalledDeletedCompanies = new HashSet<int>();
+        var busyItems = 0;
         while (WithinPassBudget(passStarted))
         {
             var deletedCompanyIds = await db.Companies.IgnoreQueryFilters()
@@ -43,7 +48,16 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, DocumentCap
                 break;
             foreach (var companyId in deletedCompanyIds)
             {
-                purgedCaptures += await PurgeDeletedCompanyAsync(companyId, cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    purgedCaptures += await PurgeDeletedCompanyAsync(companyId, cancellationToken).ConfigureAwait(false);
+                }
+                catch (DocumentCaptureAdmissionBusyException)
+                {
+                    stalledDeletedCompanies.Add(companyId);
+                    busyItems++;
+                    continue;
+                }
                 if (await HasDeletedCompanyResidueAsync(companyId, cancellationToken).ConfigureAwait(false))
                     stalledDeletedCompanies.Add(companyId);
             }
@@ -66,10 +80,18 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, DocumentCap
             {
                 if (!WithinPassBudget(passStarted))
                     break;
-                if (await PurgeAbandonedBytesAsync(item.CompanyId, item.Id, utcNow, cancellationToken).ConfigureAwait(false))
-                    madeProgress = true;
-                else
+                try
+                {
+                    if (await PurgeAbandonedBytesAsync(item.CompanyId, item.Id, utcNow, cancellationToken).ConfigureAwait(false))
+                        madeProgress = true;
+                    else
+                        stalledAbandonedCaptures.Add(item.Id);
+                }
+                catch (DocumentCaptureAdmissionBusyException)
+                {
                     stalledAbandonedCaptures.Add(item.Id);
+                    busyItems++;
+                }
             }
             if (!madeProgress && abandoned.All(item => stalledAbandonedCaptures.Contains(item.Id)))
                 break;
@@ -93,15 +115,25 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, DocumentCap
             {
                 if (!WithinPassBudget(passStarted))
                     break;
-                if (await PurgeOldAttemptsAsync(companyId, utcNow - AttemptRetention, cancellationToken).ConfigureAwait(false) > 0)
-                    madeProgress = true;
-                else
+                try
+                {
+                    if (await PurgeOldAttemptsAsync(companyId, utcNow - AttemptRetention, cancellationToken).ConfigureAwait(false) > 0)
+                        madeProgress = true;
+                    else
+                        stalledAttemptCompanies.Add(companyId);
+                }
+                catch (DocumentCaptureAdmissionBusyException)
+                {
                     stalledAttemptCompanies.Add(companyId);
+                    busyItems++;
+                }
             }
             if (!madeProgress && oldAttemptsByCompany.All(stalledAttemptCompanies.Contains))
                 break;
         }
 
+        if (busyItems > 0)
+            _logger.LogInformation("Document capture retention pass skipped {BusyItems} locked items.", busyItems);
         return purgedCaptures;
     }
 

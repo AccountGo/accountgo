@@ -12,7 +12,14 @@ using Npgsql;
 
 namespace Api.DocumentCaptures;
 
-public sealed class DocumentCaptureAdmissionLock(ApiDbContext db)
+public interface IDocumentCaptureAdmissionLock
+{
+    Task<IDbContextTransaction> AcquireCompanyAsync(int companyId, CancellationToken cancellationToken);
+    Task<IDbContextTransaction> AcquirePurgeCompanyAsync(int companyId, CancellationToken cancellationToken);
+    Task<IAsyncDisposable?> TryAcquirePurgeWorkerSingletonAsync(CancellationToken cancellationToken);
+}
+
+public sealed class DocumentCaptureAdmissionLock(ApiDbContext db) : IDocumentCaptureAdmissionLock
 {
     private const long PurgeWorkerAdvisoryKey = 0x444F435057000001;
     public const int LockTimeoutMilliseconds = 500;

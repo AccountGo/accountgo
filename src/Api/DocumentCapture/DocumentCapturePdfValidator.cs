@@ -101,6 +101,10 @@ public static class DocumentCapturePdfValidator
         {
             return Invalid("DOCUMENT_UNSUPPORTED_TYPE");
         }
+        catch (Exception) when (budget?.LimitExceeded == true)
+        {
+            return Invalid("DOCUMENT_UNSUPPORTED_TYPE");
+        }
         catch (Exception) when (budget?.IsExpired == true)
         {
             return Invalid("DOCUMENT_UNSUPPORTED_TYPE");
@@ -136,11 +140,21 @@ public static class DocumentCapturePdfValidator
     private static bool HasUnsupportedActiveContent(PdfDocument document)
     {
         var catalog = document.Structure.Catalog.CatalogDictionary;
-        foreach (var key in new[] { "OpenAction", "AA", "AcroForm", "Collection", "Perms", "AF" })
-        {
-            if (catalog.ContainsKey(NameToken.Create(key)))
-                return true;
-        }
+        var actionBudget = new PdfActionInspectionBudget();
+        if (catalog.TryGet(NameToken.Create("OpenAction"), out var openAction)
+            && IsUnsupportedOpenAction(document, openAction, actionBudget))
+            return true;
+        if (catalog.ContainsKey(NameToken.Create("AA"))
+            || catalog.ContainsKey(NameToken.Create("Collection"))
+            || catalog.ContainsKey(NameToken.Create("Perms"))
+            || catalog.ContainsKey(NameToken.Create("AF")))
+            return true;
+        if (catalog.TryGet(NameToken.Create("NeedsRendering"), out var needsRendering)
+            && ResolveToken(document, needsRendering) is BooleanToken { Data: true })
+            return true;
+        if (catalog.TryGet(NameToken.Create("AcroForm"), out var acroForm)
+            && IsUnsupportedAcroForm(document, acroForm, actionBudget))
+            return true;
 
         if (catalog.TryGet(NameToken.Create("Names"), out var namesToken))
         {
@@ -155,13 +169,14 @@ public static class DocumentCapturePdfValidator
 
         var pageCount = 0;
         var nodesVisited = 0;
-        var hasUnsupportedContent = InspectPageTree(document, pagesToken, depth: 0, ref pageCount, ref nodesVisited);
+        var hasUnsupportedContent = InspectPageTree(document, pagesToken, depth: 0, ref pageCount, ref nodesVisited, actionBudget);
         if (pageCount != document.NumberOfPages)
             throw new InvalidDataException("PdfPig page count does not match the active page tree.");
         return hasUnsupportedContent;
     }
 
-    private static bool InspectPageTree(PdfDocument document, IToken nodeToken, int depth, ref int pageCount, ref int nodesVisited)
+    private static bool InspectPageTree(PdfDocument document, IToken nodeToken, int depth, ref int pageCount,
+        ref int nodesVisited, PdfActionInspectionBudget actionBudget)
     {
         if (depth >= DocumentCapturePdfLimits.MaxStackDepth || ++nodesVisited > 5000)
             throw new PdfDecodeLimitException("PDF active page tree exceeded its inspection bounds.");
@@ -174,7 +189,7 @@ public static class DocumentCapturePdfValidator
         {
             if (++pageCount > DocumentCapturePdfLimits.MaxPages)
                 return false;
-            return InspectPageAnnotations(document, node);
+            return InspectPageAnnotations(document, node, actionBudget);
         }
 
         if (type.Data != "Pages" || !node.TryGet(NameToken.Create("Kids"), out var kidsToken))
@@ -185,13 +200,13 @@ public static class DocumentCapturePdfValidator
         var hasUnsupportedContent = false;
         foreach (var child in kids.Data)
         {
-            if (InspectPageTree(document, child, depth + 1, ref pageCount, ref nodesVisited))
+            if (InspectPageTree(document, child, depth + 1, ref pageCount, ref nodesVisited, actionBudget))
                 hasUnsupportedContent = true;
         }
         return hasUnsupportedContent;
     }
 
-    private static bool InspectPageAnnotations(PdfDocument document, DictionaryToken page)
+    private static bool InspectPageAnnotations(PdfDocument document, DictionaryToken page, PdfActionInspectionBudget actionBudget)
     {
         if (page.TryGet(NameToken.Create("AA"), out var additionalActions))
         {
@@ -200,7 +215,7 @@ public static class DocumentCapturePdfValidator
                 throw new PdfDecodeLimitException("PDF page action dictionary exceeded its inspection bound.");
             foreach (var action in actions.Data.Values)
             {
-                if (IsUnsupportedAction(document, action))
+                if (IsUnsupportedAction(document, action, actionBudget))
                     return true;
             }
         }
@@ -216,11 +231,11 @@ public static class DocumentCapturePdfValidator
             var annotation = ResolveDictionary(document, annotationToken);
             if (annotation.TryGet(NameToken.Create("Subtype"), out var subtypeToken)
                 && subtypeToken is NameToken subtype
-                && subtype.Data is "Screen" or "RichMedia" or "FileAttachment" or "Movie" or "Sound" or "3D" or "Widget")
+                && subtype.Data is "Screen" or "RichMedia" or "FileAttachment" or "Movie" or "Sound" or "3D")
                 return true;
 
             if (annotation.TryGet(NameToken.Create("A"), out var action)
-                && IsUnsupportedAction(document, action))
+                && IsUnsupportedAction(document, action, actionBudget))
                 return true;
 
             if (annotation.TryGet(NameToken.Create("AA"), out var annotationActions))
@@ -230,7 +245,7 @@ public static class DocumentCapturePdfValidator
                     throw new PdfDecodeLimitException("PDF annotation action dictionary exceeded its inspection bound.");
                 foreach (var additionalAction in actions.Data.Values)
                 {
-                    if (IsUnsupportedAction(document, additionalAction))
+                    if (IsUnsupportedAction(document, additionalAction, actionBudget))
                         return true;
                 }
             }
@@ -239,13 +254,105 @@ public static class DocumentCapturePdfValidator
         return false;
     }
 
-    private static bool IsUnsupportedAction(PdfDocument document, IToken token)
+    private static bool IsUnsupportedOpenAction(PdfDocument document, IToken token, PdfActionInspectionBudget budget)
     {
-        var action = ResolveDictionary(document, token);
-        if (!action.TryGet(NameToken.Create("S"), out var typeToken) || typeToken is not NameToken type)
-            throw new InvalidDataException("PDF action has no valid type.");
-        return type.Data is "JavaScript" or "Launch" or "SubmitForm" or "ImportData" or "Rendition"
-            or "GoToR" or "GoToE" or "Sound" or "Movie";
+        var resolved = ResolveToken(document, token);
+        if (resolved is ArrayToken or NameToken or StringToken)
+            return false;
+        return IsUnsupportedAction(document, token, budget, goToOnly: true);
+    }
+
+    private static bool IsUnsupportedAction(PdfDocument document, IToken token, PdfActionInspectionBudget budget,
+        bool goToOnly = false)
+    {
+        var pending = new Stack<(IToken Token, int Depth)>();
+        var visitedReferences = new HashSet<IndirectReference>();
+        pending.Push((token, 0));
+        while (pending.TryPop(out var entry))
+        {
+            if (entry.Depth >= DocumentCapturePdfLimits.MaxStackDepth)
+                throw new PdfDecodeLimitException("PDF action chain exceeded its depth bound.");
+            if (entry.Token is IndirectReferenceToken reference && !visitedReferences.Add(reference.Data))
+                throw new PdfDecodeLimitException("PDF action chain contains a cycle.");
+            var resolved = ResolveToken(document, entry.Token);
+            var action = resolved as DictionaryToken ?? throw new InvalidDataException("PDF action is not a dictionary.");
+            if (!action.TryGet(NameToken.Create("S"), out var typeToken) || typeToken is not NameToken type)
+                throw new InvalidDataException("PDF action has no valid type.");
+            if (budget.Increment() > 256)
+                throw new PdfDecodeLimitException("PDF document exceeded its action inspection bound.");
+            if (goToOnly ? type.Data != "GoTo" : type.Data is not ("GoTo" or "URI"))
+                return true;
+
+            if (!action.TryGet(NameToken.Create("Next"), out var next))
+                continue;
+            var nextResolved = ResolveToken(document, next);
+            if (nextResolved is ArrayToken nextArray)
+            {
+                if (nextArray.Length > 256)
+                    throw new PdfDecodeLimitException("PDF action next-array exceeded its inspection bound.");
+                for (var index = nextArray.Length - 1; index >= 0; index--)
+                    pending.Push((nextArray.Data[index], entry.Depth + 1));
+            }
+            else
+            {
+                pending.Push((next, entry.Depth + 1));
+            }
+        }
+        return false;
+    }
+
+    private static bool IsUnsupportedAcroForm(PdfDocument document, IToken token, PdfActionInspectionBudget actionBudget)
+    {
+        var form = ResolveDictionary(document, token);
+        if (form.ContainsKey(NameToken.Create("XFA")))
+            return true;
+        if (!form.TryGet(NameToken.Create("Fields"), out var fieldsToken))
+            return false;
+
+        var fields = ResolveArray(document, fieldsToken);
+        if (fields.Length > 500)
+            throw new PdfDecodeLimitException("PDF form field array exceeded its inspection bound.");
+        var pending = new Stack<(IToken Token, int Depth)>();
+        var visitedReferences = new HashSet<IndirectReference>();
+        foreach (var field in fields.Data)
+            pending.Push((field, 0));
+        var visitedNodes = 0;
+        while (pending.TryPop(out var entry))
+        {
+            if (entry.Depth >= DocumentCapturePdfLimits.MaxStackDepth || ++visitedNodes > 5000)
+                throw new PdfDecodeLimitException("PDF form field tree exceeded its inspection bounds.");
+            if (entry.Token is IndirectReferenceToken reference && !visitedReferences.Add(reference.Data))
+                throw new PdfDecodeLimitException("PDF form field tree contains a cycle.");
+            var field = ResolveDictionary(document, entry.Token);
+            if (field.TryGet(NameToken.Create("A"), out var action)
+                && IsUnsupportedAction(document, action, actionBudget))
+                return true;
+            if (field.TryGet(NameToken.Create("AA"), out var additionalActions))
+            {
+                var actions = ResolveDictionary(document, additionalActions);
+                if (actions.Data.Keys.Any(key => key is "K" or "F" or "V" or "C"))
+                    return true;
+                if (actions.Data.Count > 500)
+                    throw new PdfDecodeLimitException("PDF field action dictionary exceeded its inspection bound.");
+                foreach (var fieldAction in actions.Data.Values)
+                    if (IsUnsupportedAction(document, fieldAction, actionBudget))
+                        return true;
+            }
+            if (!field.TryGet(NameToken.Create("Kids"), out var kidsToken))
+                continue;
+            var kids = ResolveArray(document, kidsToken);
+            if (kids.Length > 500)
+                throw new PdfDecodeLimitException("PDF field child array exceeded its inspection bound.");
+            foreach (var child in kids.Data)
+                pending.Push((child, entry.Depth + 1));
+        }
+        return false;
+    }
+
+    private sealed class PdfActionInspectionBudget
+    {
+        private int _actions;
+        public int Increment() => ++_actions;
     }
 
     private static DictionaryToken ResolveDictionary(PdfDocument document, IToken token)
@@ -293,6 +400,7 @@ internal sealed class PdfDecodeBudget
     private readonly TimeProvider _clock;
     private readonly ConditionalWeakTable<DictionaryToken, StreamCounter> _streams = new();
     private long _aggregateBytes;
+    private int _limitExceeded;
 
     public PdfDecodeBudget(int maxAggregate, int maxPerStream, TimeSpan deadline, TimeProvider clock)
     {
@@ -305,22 +413,33 @@ internal sealed class PdfDecodeBudget
     public void ThrowIfExpired()
     {
         if (IsExpired)
+        {
+            MarkLimitExceeded();
             throw new PdfDecodeLimitException("PDF parsing exceeded its bounded deadline.");
+        }
     }
 
     public bool IsExpired => _clock.GetTimestamp() > _deadlineTimestamp;
+    public bool LimitExceeded => Volatile.Read(ref _limitExceeded) != 0;
+    public void MarkLimitExceeded() => Volatile.Write(ref _limitExceeded, 1);
 
     public void Reserve(DictionaryToken stream, int count)
     {
         ThrowIfExpired();
         if (count < 0)
+        {
+            MarkLimitExceeded();
             throw new PdfDecodeLimitException("PDF decoder produced an invalid output size.");
+        }
 
         var streamCounter = _streams.GetValue(stream, static _ => new StreamCounter());
         var streamTotal = Interlocked.Add(ref streamCounter.Bytes, count);
         var total = Interlocked.Add(ref _aggregateBytes, count);
         if (streamTotal > _maxPerStream || total > _maxAggregate)
+        {
+            MarkLimitExceeded();
             throw new PdfDecodeLimitException("PDF decoded byte limit exceeded.");
+        }
     }
 
     private sealed class StreamCounter
@@ -366,12 +485,26 @@ internal abstract class BoundedPdfFilter(PdfDecodeBudget budget) : IFilter
 
     public Memory<byte> Decode(Memory<byte> input, DictionaryToken streamDictionary, IFilterProvider filterProvider, int filterIndex)
     {
-        budget.ThrowIfExpired();
-        RejectUnsupportedPredictor(streamDictionary, filterIndex);
-        var output = new ArrayBufferWriter<byte>(Math.Min(input.Length, 64 * 1024));
-        DecodeInto(input.Span, streamDictionary, output, filterIndex);
-        return output.WrittenMemory.ToArray();
+        try
+        {
+            budget.ThrowIfExpired();
+            var predictor = ReadPredictorParameters(streamDictionary, filterIndex);
+            if (predictor.Predictor != 1 && !SupportsPredictors)
+                throw new PdfDecodeLimitException("Predictors are supported only for Flate and LZW streams.");
+            var output = new ArrayBufferWriter<byte>(Math.Min(input.Length, 64 * 1024));
+            DecodeInto(input.Span, streamDictionary, output, filterIndex);
+            return predictor.Predictor == 1
+                ? output.WrittenMemory.ToArray()
+                : DecodePredictor(output.WrittenSpan, streamDictionary, predictor);
+        }
+        catch (PdfDecodeLimitException)
+        {
+            budget.MarkLimitExceeded();
+            throw;
+        }
     }
+
+    protected virtual bool SupportsPredictors => false;
 
     protected abstract void DecodeInto(ReadOnlySpan<byte> input, DictionaryToken stream, ArrayBufferWriter<byte> output, int filterIndex);
 
@@ -386,19 +519,144 @@ internal abstract class BoundedPdfFilter(PdfDecodeBudget budget) : IFilter
 
     protected void CheckDeadline() => budget.ThrowIfExpired();
 
-    private static void RejectUnsupportedPredictor(DictionaryToken stream, int filterIndex)
+    private PdfPredictorParameters ReadPredictorParameters(DictionaryToken stream, int filterIndex)
     {
         var decodeParams = GetDecodeParameters(stream, filterIndex);
         if (decodeParams is null or NullToken)
-            return;
+            return PdfPredictorParameters.Default;
         if (decodeParams is not DictionaryToken dictionary)
             throw new PdfDecodeLimitException("Unsupported PDF decode parameters.");
 
-        dictionary.TryGet(NameToken.Predictor, out var predictor);
-        if (predictor is null or NullToken)
-            return;
-        if (predictor is not NumericToken number || number.Data != 1)
+        var predictor = ReadInteger(dictionary, "Predictor", 1);
+        var colors = ReadInteger(dictionary, "Colors", 1);
+        var bitsPerComponent = ReadInteger(dictionary, "BitsPerComponent", 8);
+        var columns = ReadInteger(dictionary, "Columns", 1);
+        if (predictor is not (1 or 2) && predictor is not (>= 10 and <= 15))
             throw new PdfDecodeLimitException("Unsupported PDF predictor.");
+        if (colors is < 1 or > 4 || bitsPerComponent is not (1 or 2 or 4 or 8 or 16) || columns < 1)
+            throw new PdfDecodeLimitException("Invalid PDF predictor parameters.");
+        var rowBitCount = (long)colors * bitsPerComponent * columns;
+        var rowBytesLong = (rowBitCount + 7) / 8;
+        if (rowBytesLong is < 1 or > 65_536)
+            throw new PdfDecodeLimitException("PDF predictor row exceeds its size bound.");
+        var rowBytes = (int)rowBytesLong;
+        var bytesPerPixel = Math.Max(1, (colors * bitsPerComponent + 7) / 8);
+        return new PdfPredictorParameters(predictor, colors, bitsPerComponent, columns, rowBytes, bytesPerPixel);
+    }
+
+    private static int ReadInteger(DictionaryToken dictionary, string key, int defaultValue)
+    {
+        if (!dictionary.TryGet(NameToken.Create(key), out var token) || token is null or NullToken)
+            return defaultValue;
+        if (token is not NumericToken numeric || numeric.Data < int.MinValue || numeric.Data > int.MaxValue
+            || numeric.Data != Math.Truncate(numeric.Data))
+            throw new PdfDecodeLimitException($"PDF predictor parameter {key} is not an integer.");
+        return (int)numeric.Data;
+    }
+
+    private Memory<byte> DecodePredictor(ReadOnlySpan<byte> encoded, DictionaryToken stream,
+        PdfPredictorParameters parameters)
+    {
+        if (parameters.Predictor == 2)
+        {
+            if (encoded.Length % parameters.RowBytes != 0)
+                throw new PdfDecodeLimitException("TIFF predictor data ends in a partial row.");
+            budget.Reserve(stream, encoded.Length);
+            var decoded = encoded.ToArray();
+            var samplesPerRow = parameters.Columns * parameters.Colors;
+            var sampleMask = (1 << parameters.BitsPerComponent) - 1;
+            for (var rowOffset = 0; rowOffset < decoded.Length; rowOffset += parameters.RowBytes)
+            {
+                budget.ThrowIfExpired();
+                var row = decoded.AsSpan(rowOffset, parameters.RowBytes);
+                for (var sample = parameters.Colors; sample < samplesPerRow; sample++)
+                {
+                    var value = ReadPackedSample(row, sample, parameters.BitsPerComponent);
+                    var left = ReadPackedSample(row, sample - parameters.Colors, parameters.BitsPerComponent);
+                    WritePackedSample(row, sample, parameters.BitsPerComponent, (value + left) & sampleMask);
+                }
+            }
+            return decoded;
+        }
+
+        var encodedRowBytes = parameters.RowBytes + 1;
+        if (encoded.Length % encodedRowBytes != 0)
+            throw new PdfDecodeLimitException("PNG predictor data ends in a partial row.");
+        var rowCount = encoded.Length / encodedRowBytes;
+        var outputLength = rowCount * parameters.RowBytes;
+        if (outputLength > encoded.Length)
+            throw new PdfDecodeLimitException("PNG predictor output exceeds its decoded input.");
+        budget.Reserve(stream, outputLength);
+        var result = new byte[outputLength];
+        for (var rowIndex = 0; rowIndex < rowCount; rowIndex++)
+        {
+            budget.ThrowIfExpired();
+            var inputOffset = rowIndex * encodedRowBytes;
+            var filter = encoded[inputOffset];
+            if (filter > 4)
+                throw new PdfDecodeLimitException("PNG predictor row has an unknown filter type.");
+            var source = encoded.Slice(inputOffset + 1, parameters.RowBytes);
+            var row = result.AsSpan(rowIndex * parameters.RowBytes, parameters.RowBytes);
+            var previousRow = rowIndex == 0 ? ReadOnlySpan<byte>.Empty
+                : result.AsSpan((rowIndex - 1) * parameters.RowBytes, parameters.RowBytes);
+            for (var index = 0; index < row.Length; index++)
+            {
+                var left = index >= parameters.BytesPerPixel ? row[index - parameters.BytesPerPixel] : 0;
+                var above = previousRow.IsEmpty ? 0 : previousRow[index];
+                var upperLeft = previousRow.IsEmpty || index < parameters.BytesPerPixel
+                    ? 0 : previousRow[index - parameters.BytesPerPixel];
+                var prediction = filter switch
+                {
+                    0 => 0,
+                    1 => left,
+                    2 => above,
+                    3 => (left + above) / 2,
+                    4 => Paeth(left, above, upperLeft),
+                    _ => 0
+                };
+                row[index] = unchecked((byte)(source[index] + prediction));
+            }
+        }
+        return result;
+    }
+
+    private static int Paeth(int left, int above, int upperLeft)
+    {
+        var estimate = left + above - upperLeft;
+        var leftDistance = Math.Abs(estimate - left);
+        var aboveDistance = Math.Abs(estimate - above);
+        var upperLeftDistance = Math.Abs(estimate - upperLeft);
+        return leftDistance <= aboveDistance && leftDistance <= upperLeftDistance ? left
+            : aboveDistance <= upperLeftDistance ? above : upperLeft;
+    }
+
+    private static int ReadPackedSample(ReadOnlySpan<byte> row, int sample, int bitsPerComponent)
+    {
+        var bitOffset = sample * bitsPerComponent;
+        if (bitsPerComponent == 16)
+            return (row[bitOffset / 8] << 8) | row[bitOffset / 8 + 1];
+        var shift = 8 - bitsPerComponent - (bitOffset & 7);
+        return (row[bitOffset >> 3] >> shift) & ((1 << bitsPerComponent) - 1);
+    }
+
+    private static void WritePackedSample(Span<byte> row, int sample, int bitsPerComponent, int value)
+    {
+        var bitOffset = sample * bitsPerComponent;
+        if (bitsPerComponent == 16)
+        {
+            row[bitOffset / 8] = (byte)(value >> 8);
+            row[bitOffset / 8 + 1] = (byte)value;
+            return;
+        }
+        var shift = 8 - bitsPerComponent - (bitOffset & 7);
+        var mask = ((1 << bitsPerComponent) - 1) << shift;
+        row[bitOffset >> 3] = (byte)((row[bitOffset >> 3] & ~mask) | (value << shift));
+    }
+
+    private readonly record struct PdfPredictorParameters(int Predictor, int Colors, int BitsPerComponent,
+        int Columns, int RowBytes, int BytesPerPixel)
+    {
+        public static readonly PdfPredictorParameters Default = new(1, 1, 8, 1, 1, 1);
     }
 
     protected static IToken? GetDecodeParameters(DictionaryToken stream, int filterIndex)
@@ -418,6 +676,8 @@ internal abstract class BoundedPdfFilter(PdfDecodeBudget budget) : IFilter
 
 internal sealed class BoundedFlateFilter(PdfDecodeBudget budget) : BoundedPdfFilter(budget)
 {
+    protected override bool SupportsPredictors => true;
+
     protected override void DecodeInto(ReadOnlySpan<byte> input, DictionaryToken stream, ArrayBufferWriter<byte> output, int filterIndex)
     {
         using var inputStream = new MemoryStream(input.ToArray(), writable: false);
@@ -577,6 +837,8 @@ internal sealed class BoundedRunLengthFilter(PdfDecodeBudget budget) : BoundedPd
 
 internal sealed class BoundedLzwFilter(PdfDecodeBudget budget) : BoundedPdfFilter(budget)
 {
+    protected override bool SupportsPredictors => true;
+
     protected override void DecodeInto(ReadOnlySpan<byte> input, DictionaryToken stream, ArrayBufferWriter<byte> output, int filterIndex)
     {
         var earlyChange = ReadEarlyChange(stream, filterIndex);

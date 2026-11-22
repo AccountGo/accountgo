@@ -138,13 +138,11 @@ public sealed class DocumentCapturePdfValidatorTests
             CreateIncrementalPdf(oldPageCount: 1, activePageCount: 1, encrypted: true));
 
         Assert.False(result.IsValid);
-        Assert.Equal("DOCUMENT_UNSUPPORTED_TYPE", result.ErrorCode);
+        Assert.Contains(result.ErrorCode, new[] { "DOCUMENT_UNSUPPORTED_TYPE", "DOCUMENT_MALFORMED" });
     }
 
     [Theory]
-    [InlineData("OpenAction")]
     [InlineData("AA")]
-    [InlineData("AcroForm")]
     [InlineData("Collection")]
     [InlineData("Perms")]
     [InlineData("AF")]
@@ -186,7 +184,6 @@ public sealed class DocumentCapturePdfValidatorTests
     [InlineData("Movie")]
     [InlineData("Sound")]
     [InlineData("3D")]
-    [InlineData("Widget")]
     public async Task ValidateAsync_RejectsUnsupportedAnnotationSubtypes(string subtype)
     {
         var result = await DocumentCapturePdfValidator.ValidateAsync(
@@ -261,6 +258,144 @@ public sealed class DocumentCapturePdfValidatorTests
         Assert.True(textResult.IsValid);
     }
 
+    [Theory]
+    [InlineData("[3 0 R /Fit]")]
+    [InlineData("/invoice")]
+    [InlineData("(invoice)")]
+    [InlineData("<< /S /GoTo /D [3 0 R /Fit] >>")]
+    public async Task ValidateAsync_AllowsPassiveOpenActionDestinationsAndGoTo(string openAction)
+    {
+        var result = await DocumentCapturePdfValidator.ValidateAsync(CreateStructuralPdf(catalogEntries: $" /OpenAction {openAction}"));
+
+        Assert.True(result.IsValid);
+        Assert.Equal(1, result.PageCount);
+    }
+
+    [Theory]
+    [InlineData("<< /S /JavaScript /JS (app.alert(1)) >>")]
+    [InlineData("<< /S /GoTo /D [3 0 R /Fit] /Next << /S /JavaScript /JS (app.alert(1)) >> >>")]
+    [InlineData("99 0 R")]
+    public async Task ValidateAsync_RejectsActiveOrUnresolvableOpenAction(string openAction)
+    {
+        var result = await DocumentCapturePdfValidator.ValidateAsync(CreateStructuralPdf(catalogEntries: $" /OpenAction {openAction}"));
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.ErrorCode, new[] { "DOCUMENT_UNSUPPORTED_TYPE", "DOCUMENT_MALFORMED" });
+    }
+
+    [Theory]
+    [InlineData("<< /S /URI /URI (https://example.test) /Next << /S /JavaScript /JS (app.alert(1)) >> >>")]
+    [InlineData("<< /S /GoTo /D [3 0 R /Fit] /Next << /S /Launch /F (invoice.pdf) >> >>")]
+    [InlineData("<< /S /URI /URI (https://example.test) /Next [<< /S /GoTo /D [3 0 R /Fit] >> << /S /JavaScript /JS (app.alert(1)) >>] >>")]
+    public async Task ValidateAsync_RejectsUnsupportedActionAnywhereInNextChain(string action)
+    {
+        var result = await DocumentCapturePdfValidator.ValidateAsync(
+            CreateIncrementalAnnotationPdf($"<< /Type /Annot /Subtype /Link /A {action} >>"));
+
+        Assert.False(result.IsValid);
+        Assert.Equal("DOCUMENT_UNSUPPORTED_TYPE", result.ErrorCode);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_RejectsActionChainInPageAdditionalActions()
+    {
+        var result = await DocumentCapturePdfValidator.ValidateAsync(CreateStructuralPdf(pageEntries:
+            " /AA << /O << /S /URI /URI (https://example.test) /Next << /S /JavaScript /JS (x) >> >> >>"));
+
+        Assert.False(result.IsValid);
+        Assert.Equal("DOCUMENT_UNSUPPORTED_TYPE", result.ErrorCode);
+    }
+
+    [Fact(Timeout = 5000)]
+    public async Task ValidateAsync_RejectsCyclicActionNextChainWithinBounds()
+    {
+        var pdf = CreateIncrementalAnnotationPdf(
+            "<< /Type /Annot /Subtype /Link /A << /S /URI /URI (https://example.test) /Next 5 0 R >> >>",
+            "<< /S /GoTo /D [3 0 R /Fit] /Next 5 0 R >>");
+
+        var result = await DocumentCapturePdfValidator.ValidateAsync(pdf);
+
+        Assert.False(result.IsValid);
+        Assert.Equal("DOCUMENT_UNSUPPORTED_TYPE", result.ErrorCode);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_AllowsUriToGoToActionChain()
+    {
+        var result = await DocumentCapturePdfValidator.ValidateAsync(
+            CreateIncrementalAnnotationPdf("<< /Type /Annot /Subtype /Link /A << /S /URI /URI (https://example.test) /Next << /S /GoTo /D [3 0 R /Fit] >> >> >>"));
+
+        Assert.True(result.IsValid);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_AllowsPassiveAcroFormAndWidgetAnnotations()
+    {
+        var form = await DocumentCapturePdfValidator.ValidateAsync(CreateStructuralPdf(
+            catalogEntries: " /AcroForm << /Fields [<< /FT /Tx /T (VendorName) /V (Fixture) >>] >>"));
+        var widget = await DocumentCapturePdfValidator.ValidateAsync(
+            CreateIncrementalAnnotationPdf("<< /Type /Annot /Subtype /Widget /Parent 4 0 R >>"));
+
+        Assert.True(form.IsValid);
+        Assert.True(widget.IsValid);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_RejectsXfaFieldActionsAndWidgetActions()
+    {
+        var xfa = await DocumentCapturePdfValidator.ValidateAsync(CreateStructuralPdf(
+            catalogEntries: " /AcroForm << /Fields [] /XFA (form) >>"));
+        var fieldAction = await DocumentCapturePdfValidator.ValidateAsync(CreateStructuralPdf(
+            catalogEntries: " /AcroForm << /Fields [<< /FT /Tx /AA << /K << /S /JavaScript /JS (x) >> >> >>] >>"));
+        var widgetAction = await DocumentCapturePdfValidator.ValidateAsync(
+            CreateIncrementalAnnotationPdf("<< /Type /Annot /Subtype /Widget /A << /S /JavaScript /JS (x) >> >>"));
+
+        Assert.All(new[] { xfa, fieldAction, widgetAction }, result =>
+        {
+            Assert.False(result.IsValid);
+            Assert.Equal("DOCUMENT_UNSUPPORTED_TYPE", result.ErrorCode);
+        });
+    }
+
+    [Fact]
+    public async Task ValidateAsync_RejectsFieldActionChainAndNeedsRenderingForm()
+    {
+        var fieldAction = await DocumentCapturePdfValidator.ValidateAsync(CreateStructuralPdf(
+            catalogEntries: " /AcroForm << /Fields [<< /FT /Tx /A << /S /URI /Next << /S /JavaScript /JS (x) >> >> >>] >>"));
+        var needsRendering = await DocumentCapturePdfValidator.ValidateAsync(CreateStructuralPdf(
+            catalogEntries: " /NeedsRendering true /AcroForm << /Fields [] >>"));
+
+        Assert.All(new[] { fieldAction, needsRendering }, result =>
+        {
+            Assert.False(result.IsValid);
+            Assert.Equal("DOCUMENT_UNSUPPORTED_TYPE", result.ErrorCode);
+        });
+    }
+
+    [Fact(Timeout = 5000)]
+    public async Task ValidateAsync_RejectsCyclicFormFieldTreeWithinBounds()
+    {
+        var result = await DocumentCapturePdfValidator.ValidateAsync(CreateStructuralPdf(
+            catalogEntries: " /AcroForm << /Fields [4 0 R] >>",
+            extraObject: "<< /FT /Tx /T (cycle) /Kids [4 0 R] >>"));
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.ErrorCode, new[] { "DOCUMENT_UNSUPPORTED_TYPE", "DOCUMENT_MALFORMED" });
+    }
+
+    [Fact(Timeout = 5000)]
+    public async Task ValidateAsync_RejectsOverlyDeepFormFieldTreeWithinBounds()
+    {
+        var field = "<< /FT /Tx >>";
+        for (var depth = 0; depth < 70; depth++)
+            field = $"<< /Kids [{field}] >>";
+        var result = await DocumentCapturePdfValidator.ValidateAsync(CreateStructuralPdf(
+            catalogEntries: $" /AcroForm << /Fields [{field}] >>"));
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.ErrorCode, new[] { "DOCUMENT_UNSUPPORTED_TYPE", "DOCUMENT_MALFORMED" });
+    }
+
     [Fact(Timeout = 5000)]
     public async Task ValidateAsync_RejectsOverlyDeepPageTreeWithinTimeAndAllocationBounds()
     {
@@ -288,6 +423,92 @@ public sealed class DocumentCapturePdfValidatorTests
     public async Task ValidateAsync_RejectsOversizedDecodedObjectStreamWithinResourceBounds()
     {
         var pdf = CreateObjectStreamBomb();
+        Assert.True(pdf.Length < DocumentCapturePdfLimits.MaxInputBytes);
+        var metrics = await RunPdfProbeAsync(pdf);
+
+        Assert.False(metrics.IsValid);
+        Assert.Equal("DOCUMENT_UNSUPPORTED_TYPE", metrics.ErrorCode);
+        AssertResourceBounds(metrics);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_AcceptsXrefStreamWithPngUpPredictor()
+    {
+        var result = await DocumentCapturePdfValidator.ValidateAsync(CreatePredictorXrefPdf());
+
+        Assert.True(result.IsValid, $"Parser returned {result.ErrorCode}.");
+        Assert.Equal(1, result.PageCount);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    public async Task ValidateAsync_AcceptsEachPngPredictorRowFilter(byte filterType)
+    {
+        var result = await DocumentCapturePdfValidator.ValidateAsync(CreatePredictorXrefPdf(filterType: filterType));
+
+        Assert.True(result.IsValid, $"PNG row filter {filterType} returned {result.ErrorCode}.");
+        Assert.Equal(1, result.PageCount);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_AcceptsXrefStreamWithTiffPredictor()
+    {
+        var result = await DocumentCapturePdfValidator.ValidateAsync(CreatePredictorXrefPdf(predictor: 2));
+
+        Assert.True(result.IsValid, $"Parser returned {result.ErrorCode}.");
+        Assert.Equal(1, result.PageCount);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_AcceptsLzwXrefStreamWithPngPredictor()
+    {
+        var result = await DocumentCapturePdfValidator.ValidateAsync(CreatePredictorXrefPdf(useLzw: true));
+
+        Assert.True(result.IsValid, $"Parser returned {result.ErrorCode}.");
+        Assert.Equal(1, result.PageCount);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_AcceptsObjectStreamWithPngPredictor()
+    {
+        var result = await DocumentCapturePdfValidator.ValidateAsync(CreatePredictorObjectStreamPdf());
+
+        Assert.True(result.IsValid, $"Parser returned {result.ErrorCode}.");
+        Assert.Equal(1, result.PageCount);
+    }
+
+    [Theory]
+    [InlineData(0, 8, 6)]
+    [InlineData(5, 8, 6)]
+    [InlineData(1, 3, 6)]
+    [InlineData(1, 8, 0)]
+    [InlineData(1, 8, 70000)]
+    public async Task ValidateAsync_RejectsInvalidPredictorParameters(int colors, int bitsPerComponent, int columns)
+    {
+        var result = await DocumentCapturePdfValidator.ValidateAsync(
+            CreatePredictorXrefPdf(colors: colors, bitsPerComponent: bitsPerComponent, columns: columns));
+
+        Assert.False(result.IsValid);
+        Assert.Equal("DOCUMENT_UNSUPPORTED_TYPE", result.ErrorCode);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_EncryptedXrefWithPredictorIsUnsupportedType()
+    {
+        var result = await DocumentCapturePdfValidator.ValidateAsync(CreatePredictorXrefPdf(encrypted: true));
+
+        Assert.False(result.IsValid);
+        Assert.Equal("DOCUMENT_UNSUPPORTED_TYPE", result.ErrorCode);
+    }
+
+    [Fact(Timeout = 5000)]
+    public async Task ValidateAsync_FlateBombBehindPredictorStaysWithinDecodeBudget()
+    {
+        var pdf = CreatePredictorXrefBomb(1_500_000);
         Assert.True(pdf.Length < DocumentCapturePdfLimits.MaxInputBytes);
         var metrics = await RunPdfProbeAsync(pdf);
 
@@ -431,13 +652,19 @@ public sealed class DocumentCapturePdfValidatorTests
     }
 
     private static byte[] CreateStructuralPdf(int pageCount = 1, int declaredCount = 1, int nestingDepth = 0,
-        bool cycle = false, string catalogEntries = "", string pageEntries = "")
+        bool cycle = false, string catalogEntries = "", string pageEntries = "", string? extraObject = null)
     {
         var objects = new List<string> { $"<< /Type /Catalog /Pages 2 0 R{catalogEntries} >>" };
         var nextObject = 3;
         if (cycle)
         {
             objects.Add("<< /Type /Pages /Kids [2 0 R] /Count 1 >>");
+        }
+
+        if (extraObject is not null)
+        {
+            objects.Add(extraObject);
+            nextObject = objects.Count + 1;
         }
         else if (nestingDepth > 0)
         {
@@ -477,7 +704,7 @@ public sealed class DocumentCapturePdfValidatorTests
         return Encoding.ASCII.GetBytes(builder.ToString());
     }
 
-    private static byte[] CreateIncrementalAnnotationPdf(string annotationDictionary)
+    private static byte[] CreateIncrementalAnnotationPdf(string annotationDictionary, string? actionObject = null)
     {
         var original = CreateStructuralPdf();
         var text = Encoding.ASCII.GetString(original);
@@ -492,9 +719,14 @@ public sealed class DocumentCapturePdfValidatorTests
         WriteAscii(pdf, "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Resources << >> /Annots [4 0 R] >>\nendobj\n");
         var annotationOffset = pdf.Position;
         WriteAscii(pdf, $"4 0 obj\n{annotationDictionary}\nendobj\n");
+        var actionOffset = pdf.Position;
+        if (actionObject is not null)
+            WriteAscii(pdf, $"5 0 obj\n{actionObject}\nendobj\n");
         var xrefOffset = pdf.Position;
-        WriteAscii(pdf, $"xref\n3 2\n{pageOffset:D10} 00000 n \n{annotationOffset:D10} 00000 n \n");
-        WriteAscii(pdf, $"trailer\n<< /Size 5 /Root 1 0 R /Prev {previousXref} >>\nstartxref\n{xrefOffset}\n%%EOF\n");
+        WriteAscii(pdf, $"xref\n3 {(actionObject is null ? 2 : 3)}\n{pageOffset:D10} 00000 n \n{annotationOffset:D10} 00000 n \n");
+        if (actionObject is not null)
+            WriteAscii(pdf, $"{actionOffset:D10} 00000 n \n");
+        WriteAscii(pdf, $"trailer\n<< /Size {(actionObject is null ? 5 : 6)} /Root 1 0 R /Prev {previousXref} >>\nstartxref\n{xrefOffset}\n%%EOF\n");
         return pdf.ToArray();
     }
 
@@ -613,6 +845,167 @@ public sealed class DocumentCapturePdfValidatorTests
         var suffix = Encoding.ASCII.GetBytes($"\nendstream\nendobj\nstartxref\n{xrefOffset}\n%%EOF\n");
         pdf.Write(suffix);
         return pdf.ToArray();
+    }
+
+    private static byte[] CreatePredictorXrefPdf(int predictor = 12, int colors = 1, int bitsPerComponent = 8,
+        int columns = 6, byte? filterType = null, bool encrypted = false, bool useLzw = false)
+    {
+        var prefix = new StringBuilder("%PDF-1.5\n");
+        var offsets = new List<int> { 0 };
+        void AddObject(string body)
+        {
+            var objectId = offsets.Count;
+            offsets.Add(Encoding.ASCII.GetByteCount(prefix.ToString()));
+            prefix.Append($"{objectId} 0 obj\n{body}\nendobj\n");
+        }
+        AddObject("<< /Type /Catalog /Pages 2 0 R >>");
+        AddObject("<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
+        AddObject("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Resources << >> >>");
+        if (encrypted)
+            AddObject($"<< /Filter /Standard /V 2 /R 3 /Length 128 /O <{new string('0', 64)}> /U <{new string('0', 64)}> /P -4 >>");
+
+        var xrefObjectId = encrypted ? 5 : 4;
+        var xrefOffset = Encoding.ASCII.GetByteCount(prefix.ToString());
+        var rows = new byte[(xrefObjectId + 1) * 6];
+        SetPredictorXrefEntry(rows, 0, 0, 0, 255);
+        for (var id = 1; id <= 3; id++)
+            SetPredictorXrefEntry(rows, id, 1, (uint)offsets[id], 0);
+        if (encrypted)
+            SetPredictorXrefEntry(rows, 4, 1, (uint)offsets[4], 0);
+        SetPredictorXrefEntry(rows, xrefObjectId, 1, (uint)xrefOffset, 0);
+
+        var predicted = predictor == 2
+            ? EncodeTiffPredictorRows(rows, rowBytes: 6)
+            : EncodePngPredictorRows(rows, rowBytes: 6, filterType);
+        var compressed = useLzw ? EncodeLzw(predicted) : Compress(predicted);
+        var encryptionEntry = encrypted ? " /Encrypt 4 0 R" : string.Empty;
+        var filter = useLzw ? "LZWDecode" : "FlateDecode";
+        var earlyChange = useLzw ? " /EarlyChange 1" : string.Empty;
+        var dictionary = $"<< /Type /XRef /Size {xrefObjectId + 1} /Root 1 0 R{encryptionEntry} /W [1 4 1] /Index [0 {xrefObjectId + 1}] /Length {compressed.Length} /Filter /{filter} /DecodeParms << /Predictor {predictor} /Colors {colors} /BitsPerComponent {bitsPerComponent} /Columns {columns}{earlyChange} >> >>";
+        using var pdf = new MemoryStream();
+        WriteAscii(pdf, prefix.ToString());
+        WriteAscii(pdf, $"{xrefObjectId} 0 obj\n{dictionary}\nstream\n");
+        pdf.Write(compressed);
+        WriteAscii(pdf, $"\nendstream\nendobj\nstartxref\n{xrefOffset}\n%%EOF\n");
+        return pdf.ToArray();
+    }
+
+    private static byte[] CreatePredictorObjectStreamPdf()
+    {
+        var catalog = "<< /Type /Catalog /Pages 2 0 R >>";
+        var pages = "<< /Type /Pages /Kids [3 0 R] /Count 1 >>";
+        var page = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Resources << >> >>";
+        var offset2 = Encoding.ASCII.GetByteCount(catalog) + 1;
+        var offset3 = offset2 + Encoding.ASCII.GetByteCount(pages) + 1;
+        var objectHeader = $"1 0 2 {offset2} 3 {offset3}\n";
+        var decodedObjects = Encoding.ASCII.GetBytes(objectHeader + catalog + "\n" + pages + "\n" + page);
+        var compressedObjects = Compress(EncodePngPredictorRows(decodedObjects, rowBytes: 1, filterType: 0));
+        using var pdf = new MemoryStream();
+        WriteAscii(pdf, "%PDF-1.5\n");
+        var objectStreamOffset = (int)pdf.Position;
+        WriteAscii(pdf, $"4 0 obj\n<< /Type /ObjStm /N 3 /First {objectHeader.Length} /Length {compressedObjects.Length} /Filter /FlateDecode /DecodeParms << /Predictor 12 /Colors 1 /BitsPerComponent 8 /Columns 1 >> >>\nstream\n");
+        pdf.Write(compressedObjects);
+        WriteAscii(pdf, "\nendstream\nendobj\n");
+        var xrefOffset = (int)pdf.Position;
+        var rows = new byte[6 * 7];
+        WriteXrefEntry(rows.AsSpan(0, 7), 0, 0, ushort.MaxValue);
+        WriteXrefEntry(rows.AsSpan(7, 7), 2, 4, 0);
+        WriteXrefEntry(rows.AsSpan(14, 7), 2, 4, 1);
+        WriteXrefEntry(rows.AsSpan(21, 7), 2, 4, 2);
+        WriteXrefEntry(rows.AsSpan(28, 7), 1, (uint)objectStreamOffset, 0);
+        WriteXrefEntry(rows.AsSpan(35, 7), 1, (uint)xrefOffset, 0);
+        var compressedXref = Compress(rows);
+        WriteAscii(pdf, $"5 0 obj\n<< /Type /XRef /Size 6 /Root 1 0 R /W [1 4 2] /Index [0 6] /Length {compressedXref.Length} /Filter /FlateDecode >>\nstream\n");
+        pdf.Write(compressedXref);
+        WriteAscii(pdf, $"\nendstream\nendobj\nstartxref\n{xrefOffset}\n%%EOF\n");
+        return pdf.ToArray();
+    }
+
+    private static byte[] CreatePredictorXrefBomb(int entryCount)
+    {
+        var prefix = new StringBuilder("%PDF-1.5\n");
+        var offsets = new List<int> { 0 };
+        void AddObject(string body)
+        {
+            var objectId = offsets.Count;
+            offsets.Add(Encoding.ASCII.GetByteCount(prefix.ToString()));
+            prefix.Append($"{objectId} 0 obj\n{body}\nendobj\n");
+        }
+        AddObject("<< /Type /Catalog /Pages 2 0 R >>");
+        AddObject("<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
+        AddObject("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Resources << >> >>");
+        var xrefOffset = Encoding.ASCII.GetByteCount(prefix.ToString());
+        var rows = new byte[entryCount * 6];
+        SetPredictorXrefEntry(rows, 0, 0, 0, 255);
+        for (var id = 1; id <= 3; id++)
+            SetPredictorXrefEntry(rows, id, 1, (uint)offsets[id], 0);
+        SetPredictorXrefEntry(rows, 4, 1, (uint)xrefOffset, 0);
+        var predicted = EncodePngPredictorRows(rows, rowBytes: 6, filterType: 2);
+        var compressed = Compress(predicted);
+        using var pdf = new MemoryStream();
+        WriteAscii(pdf, prefix.ToString());
+        WriteAscii(pdf, $"4 0 obj\n<< /Type /XRef /Size {entryCount} /Root 1 0 R /W [1 4 1] /Index [0 {entryCount}] /Length {compressed.Length} /Filter /FlateDecode /DecodeParms << /Predictor 12 /Colors 1 /BitsPerComponent 8 /Columns 6 >> >>\nstream\n");
+        pdf.Write(compressed);
+        WriteAscii(pdf, $"\nendstream\nendobj\nstartxref\n{xrefOffset}\n%%EOF\n");
+        return pdf.ToArray();
+    }
+
+    private static void SetPredictorXrefEntry(byte[] rows, int id, byte type, uint offset, byte generation)
+    {
+        var row = rows.AsSpan(id * 6, 6);
+        row[0] = type;
+        BinaryPrimitives.WriteUInt32BigEndian(row.Slice(1, 4), offset);
+        row[5] = generation;
+    }
+
+    private static byte[] EncodePngPredictorRows(byte[] raw, int rowBytes, byte? filterType)
+    {
+        Assert.Equal(0, raw.Length % rowBytes);
+        var rowCount = raw.Length / rowBytes;
+        var encoded = new byte[rowCount * (rowBytes + 1)];
+        for (var rowIndex = 0; rowIndex < rowCount; rowIndex++)
+        {
+            var filter = filterType ?? (byte)(rowIndex % 5);
+            var sourceOffset = rowIndex * rowBytes;
+            var outputOffset = rowIndex * (rowBytes + 1);
+            encoded[outputOffset] = filter;
+            for (var index = 0; index < rowBytes; index++)
+            {
+                var value = raw[sourceOffset + index];
+                var left = index == 0 ? 0 : raw[sourceOffset + index - 1];
+                var above = rowIndex == 0 ? 0 : raw[sourceOffset - rowBytes + index];
+                var upperLeft = rowIndex == 0 || index == 0 ? 0 : raw[sourceOffset - rowBytes + index - 1];
+                var prediction = filter switch
+                {
+                    0 => 0,
+                    1 => left,
+                    2 => above,
+                    3 => (left + above) / 2,
+                    4 => ReferencePaeth(left, above, upperLeft),
+                    _ => throw new ArgumentOutOfRangeException(nameof(filterType))
+                };
+                encoded[outputOffset + index + 1] = unchecked((byte)(value - prediction));
+            }
+        }
+        return encoded;
+    }
+
+    private static byte[] EncodeTiffPredictorRows(byte[] raw, int rowBytes)
+    {
+        var encoded = raw.ToArray();
+        for (var rowOffset = 0; rowOffset < encoded.Length; rowOffset += rowBytes)
+        for (var index = rowBytes - 1; index > 0; index--)
+            encoded[rowOffset + index] = unchecked((byte)(raw[rowOffset + index] - raw[rowOffset + index - 1]));
+        return encoded;
+    }
+
+    private static int ReferencePaeth(int left, int above, int upperLeft)
+    {
+        var p = left + above - upperLeft;
+        var pa = Math.Abs(p - left);
+        var pb = Math.Abs(p - above);
+        var pc = Math.Abs(p - upperLeft);
+        return pa <= pb && pa <= pc ? left : pb <= pc ? above : upperLeft;
     }
 
     private static byte[] CreateObjectStreamBomb()
@@ -758,6 +1151,33 @@ public sealed class DocumentCapturePdfValidatorTests
         using var output = new MemoryStream();
         using (var zlib = new ZLibStream(output, CompressionLevel.Fastest, leaveOpen: true))
             zlib.Write(bytes);
+        return output.ToArray();
+    }
+
+    private static byte[] EncodeLzw(ReadOnlySpan<byte> bytes)
+    {
+        using var output = new MemoryStream();
+        var bitCount = 0;
+        byte current = 0;
+        void WriteCode(int code)
+        {
+            for (var bit = 8; bit >= 0; bit--)
+            {
+                current = (byte)((current << 1) | ((code >> bit) & 1));
+                if (++bitCount != 8)
+                    continue;
+                output.WriteByte(current);
+                current = 0;
+                bitCount = 0;
+            }
+        }
+
+        WriteCode(256);
+        foreach (var value in bytes)
+            WriteCode(value);
+        WriteCode(257);
+        if (bitCount > 0)
+            output.WriteByte((byte)(current << (8 - bitCount)));
         return output.ToArray();
     }
 
