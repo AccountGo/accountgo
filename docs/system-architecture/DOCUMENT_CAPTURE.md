@@ -8,6 +8,7 @@ Status: implementation record for the approved document-capture design. Parser s
 - Stored capture identifiers use registered `cap_` public IDs. Internal capture, party, and target integer IDs never cross API or UI boundaries.
 - `FakeDocumentFieldExtractor` is development/test only. The production adapter remains unconfigured until a later owner instruction names a provider. New extraction is disabled by default; evidence reads remain independently authorized.
 - Accepted bytes and fields remain until workspace deletion. Abandoned unaccepted bytes expire after seven days; attempt reservations expire after 48 hours. Rejection deletes bytes only for bank and assistant captures.
+- The runtime flag controls upload, retry, and accept. It does not block reject, linking an already accepted capture, or authorized evidence reads. Provider availability is reported separately and gates upload/extraction, not manual acceptance.
 - PDFs are retained byte-for-byte and served as authenticated attachments. Structural validation is not sanitization or malware certification.
 
 ## Bounded contracts
@@ -29,6 +30,7 @@ The API and UI share explicit, versioned kind schemas. Enforced limits:
 | Decimal representation | invariant string, at most 18 significant digits and 4 fractional digits |
 | Object/list nesting | 4 levels |
 | Extractor deadline | 20 seconds |
+| Minimum extraction lease | 30 seconds (extractor deadline plus finalization margin) |
 | Image decode concurrency | 4 slots by default, configurable from 1–4; 500 ms admission wait |
 | PDF parse concurrency | 1 slot by default, configurable from 1–4; 500 ms admission wait |
 
@@ -62,7 +64,7 @@ The API exposes capability discovery at `GET /api/document-captures/capabilities
 ## Persistence and serialization
 
 - SQLite admission uses an immediate write transaction (`BEGIN IMMEDIATE`/provider equivalent) with a bounded busy wait; the transaction rechecks company liveness, idempotency, lease, and rolling attempt counts before inserting a durable reservation.
-- New extraction reservations are limited to 20 per rolling hour and 60 per UTC day per company. Terminal idempotent replays and active-lease status checks do not create reservations.
+- New extraction reservations are limited to 20 per rolling hour and 60 per UTC calendar day per company. An omitted `Idempotency-Key` has no replay guarantee; source-hash deduplication still applies. Terminal idempotent replays and active-lease status checks do not create reservations.
 - Every state-changing path locks the company row before any capture row. PostgreSQL uses `SELECT ... FOR UPDATE` on the live company row; purge locks the deleted company row while bypassing the live-company filter. SQL Server uses `UPDLOCK, ROWLOCK, HOLDLOCK` on that row with a bounded lock timeout. SQLite uses an immediate write transaction with a bounded busy wait. This ordering serializes workspace deletion against admission, retry, completion, accept, reject, linking, and purge.
 - PostgreSQL advisory locking is reserved for a singleton purge-worker batch across API instances. Per-company purge steps still acquire the company row lock; they do not use a separate advisory namespace.
 - Provider calls run only after the reservation transaction commits. Completion uses capture generation and company-liveness conditions so stale or deleted work cannot overwrite newer state.
@@ -72,6 +74,10 @@ The API exposes capability discovery at `GET /api/document-captures/capabilities
 - Optional existing-writer context is a nullable `CaptureReviewContext` containing a `cap_` capture ID, a canonical source-total snapshot, the current form-total snapshot, and a user acknowledgement bound to those values. The writer independently loads accepted canonical capture fields, recalculates authoritative totals, and rejects stale or absent acknowledgement when required. It never trusts a client `totalsMatch` flag.
 - Resource-specific evidence reads use the existing authorization service: unlinked captures require the relevant module's capture-review read capability; linked evidence requires target read permission and target resource access on every metadata and byte path. Bank evidence additionally requires the existing sensitive banking permission. Assistant evidence is creator-only.
 - Company liveness is checked after tenant resolution and again in state-changing transactions. Cleanup commits `DeletedAt` first and is retried by a bounded purge worker.
+- Sensitive account identifiers in financial free text are replaced completely with `••••` before storage. Masked fields are `notes` and each financial line's `description`, plus assistant field `label`/`value` and bounded extractor raw text. Structured values such as invoice numbers, amounts, quantities, dates, and routing/account fields are not rewritten by the financial free-text masker.
+- Company attempts are reserved transactionally. Admission-lock contention returns `503 DOCUMENT_BUSY` with `Retry-After: 1`; it is not reported as a rate limit. Rate-limit responses remain `429 DOCUMENT_RATE_LIMITED`.
+- `Idempotency-Key` may be omitted. An explicitly empty or over-80-character value returns `400 DOCUMENT_IDEMPOTENCY_KEY_INVALID`; an omitted key relies on source-hash deduplication and has no key replay guarantee.
+- Runtime-disabled accept returns `503 DOCUMENT_CAPTURE_DISABLED`; upload while disabled or without a configured provider returns `503 DOCUMENT_CAPTURE_UNCONFIGURED`.
 
 ## PDF parser decision and policy
 

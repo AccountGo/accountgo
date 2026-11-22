@@ -7,9 +7,14 @@ namespace AccountGo.BackendTests.DocumentCapture;
 public sealed class DocumentCaptureMaskingTests
 {
     [Theory]
-    [InlineData("routing 021000021", "routing *****0021")]
-    [InlineData("account 1234-5678-9012", "account ****-****-9012")]
-    [InlineData("IBAN GB82 WEST 1234 5698 7654 32", "IBAN **** **** **** **** **54 32")]
+    [InlineData("routing 021000021", "routing ••••")]
+    [InlineData("account 1234-5678-9012", "account ••••")]
+    [InlineData("IBAN GB82 WEST 1234 5698 7654 32", "IBAN ••••")]
+    [InlineData("12345678", "••••")]
+    [InlineData("12345678901234567", "••••")]
+    [InlineData("1234567", "1234567")]
+    [InlineData("123456789012345678", "123456789012345678")]
+    [InlineData("A021000021Z", "A••••Z")]
     public void MaskSensitiveValue_MasksFinancialIdentifiers(string input, string expected)
     {
         Assert.Equal(expected, DocumentCaptureMasking.MaskSensitiveValue(input));
@@ -22,7 +27,8 @@ public sealed class DocumentCaptureMaskingTests
 
         var result = DocumentCaptureMasking.MaskAssistantFields(input.RootElement);
 
-        Assert.Contains("*****0021", result, StringComparison.Ordinal);
+        using var output = JsonDocument.Parse(result);
+        Assert.Equal("••••", output.RootElement.GetProperty("fields")[0].GetProperty("value").GetString());
         Assert.DoesNotContain("021000021", result, StringComparison.Ordinal);
     }
 
@@ -33,8 +39,9 @@ public sealed class DocumentCaptureMaskingTests
 
         var result = DocumentCaptureMasking.MaskAssistantFields(input.RootElement);
 
-        Assert.Equal(2, result.Split("*****0021", StringSplitOptions.None).Length - 1);
-        Assert.DoesNotContain("021000021", result, StringComparison.Ordinal);
+        using var output = JsonDocument.Parse(result);
+        Assert.Equal("••••", output.RootElement.GetProperty("fields")[0].GetProperty("label").GetString());
+        Assert.Equal("••••", output.RootElement.GetProperty("fields")[0].GetProperty("value").GetString());
     }
 
     [Fact]
@@ -42,9 +49,21 @@ public sealed class DocumentCaptureMaskingTests
     {
         var result = DocumentCaptureMasking.MaskRawText("Routing: 021000021");
 
-        Assert.Equal("Routing: *****0021", result);
+        Assert.Equal("Routing: ••••", result);
         Assert.Equal(DocumentCaptureFieldSchemas.MaxRawTextLength,
             DocumentCaptureMasking.MaskRawText(new string('x', DocumentCaptureFieldSchemas.MaxRawTextLength + 1))!.Length);
+    }
+
+    [Fact]
+    public void FinancialFreeText_IsMaskedWithoutChangingStructuredNumbers()
+    {
+        const string fields = """{"notes":"Pay 021000021","sourceInvoiceNo":"INV-021000021","grandTotal":123456789,"lines":[{"description":"Account 1234-5678-9012","quantity":1}]}""";
+        var result = DocumentCaptureMasking.MaskFinancialFreeText("purchase-invoice", fields);
+        using var output = JsonDocument.Parse(result);
+        Assert.Equal("Pay ••••", output.RootElement.GetProperty("notes").GetString());
+        Assert.Equal("Account ••••", output.RootElement.GetProperty("lines")[0].GetProperty("description").GetString());
+        Assert.Equal("INV-021000021", output.RootElement.GetProperty("sourceInvoiceNo").GetString());
+        Assert.Equal(123456789, output.RootElement.GetProperty("grandTotal").GetInt32());
     }
 
     [Fact]

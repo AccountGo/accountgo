@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Api.Data;
 using Api.Controllers;
 using Api.DocumentCaptures;
@@ -12,6 +13,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -51,15 +53,244 @@ public sealed class DocumentCaptureServiceTests
         var accepted = await harness.Service.AcceptAsync(internalId, acceptedFields, CancellationToken.None);
         Assert.Equal("accepted", accepted.Status);
         Assert.Null(accepted.Fields);
-        Assert.Equal("Fixture Vendor", accepted.AcceptedFields!.Value.GetProperty("vendorName").GetString());
+        Assert.Equal("Fixture Vendor", accepted.AcceptedFields!["vendorName"]!.ToObject<string>());
         var acceptedReplay = await harness.Service.AcceptAsync(internalId,
             "{\"vendorName\":\"Fixture Vendor\",\"date\":\"2026-11-20\"}", CancellationToken.None);
-        Assert.Equal(accepted.AcceptedFields.Value.GetRawText(), acceptedReplay.AcceptedFields!.Value.GetRawText());
+        Assert.Equal(accepted.AcceptedFields.ToString(Newtonsoft.Json.Formatting.None),
+            acceptedReplay.AcceptedFields!.ToString(Newtonsoft.Json.Formatting.None));
         Assert.False(acceptedReplay.CanAccept);
         Assert.True(acceptedReplay.CanApply);
         Assert.Empty(await harness.Db.PurchaseInvoiceHeaders.ToListAsync());
         Assert.Empty(await harness.Db.SalesInvoiceHeaders.ToListAsync());
         Assert.Empty(await harness.Db.Banks.ToListAsync());
+    }
+
+    [Fact]
+    public async Task Upload_TerminalReplayDoesNotNeedAnImageDecodeSlot()
+    {
+        using var harness = new Harness(enabled: true);
+        var source = CreatePng();
+        var first = await harness.Service.UploadAsync("purchase-invoice", 1, "image/png", source, "terminal-replay", CancellationToken.None);
+        var gate = DocumentCaptureImageNormalizer.DecodeGates.GetOrAdd(DocumentCaptureImageLimits.DecodeGateSlots,
+            slots => new SemaphoreSlim(slots, slots));
+        for (var i = 0; i < DocumentCaptureImageLimits.DecodeGateSlots; i++) await gate.WaitAsync();
+        try
+        {
+            var replay = await harness.Service.UploadAsync("purchase-invoice", 1, "image/png", source, "terminal-replay", CancellationToken.None);
+            Assert.Equal(first.Id, replay.Id);
+        }
+        finally
+        {
+            for (var i = 0; i < DocumentCaptureImageLimits.DecodeGateSlots; i++) gate.Release();
+        }
+    }
+
+    [Fact]
+    public async Task Upload_OmittedIdempotencyKeyUsesHashDedupe()
+    {
+        using var harness = new Harness(enabled: true);
+        var source = CreatePng();
+        var first = await harness.Service.UploadAsync("purchase-invoice", 1, "image/png", source, null, CancellationToken.None);
+        var replay = await harness.Service.UploadAsync("purchase-invoice", 1, "image/png", source, null, CancellationToken.None);
+        Assert.Equal(first.Id, replay.Id);
+        Assert.Single(await harness.Db.DocumentCaptureAttempts.ToListAsync());
+    }
+
+    [Fact]
+    public async Task BankReadsRequireSensitiveManagePermissionEvenWhenViewIsGranted()
+    {
+        using var harness = new Harness(enabled: true);
+        harness.Tenant.Permissions = new HashSet<string> { SystemPermissions.BankingAccountsManage, SystemPermissions.BankingAccountsView };
+        var uploaded = await harness.Service.UploadAsync("bank", 1, "image/png", CreatePng(), "bank-sensitive", CancellationToken.None);
+        var captureId = await harness.Db.DocumentCaptures.Where(capture => capture.PublicId == uploaded.Id)
+            .Select(capture => capture.Id).SingleAsync();
+        harness.Tenant.Permissions = new HashSet<string> { SystemPermissions.BankingAccountsView };
+
+        var metadata = await Assert.ThrowsAsync<DocumentCaptureServiceException>(() => harness.Service.GetAsync(captureId, CancellationToken.None));
+        var bytes = await Assert.ThrowsAsync<DocumentCaptureServiceException>(() => harness.Service.GetBytesAsync(captureId, CancellationToken.None));
+
+        Assert.Equal("DOCUMENT_PERMISSION_REQUIRED", metadata.ErrorCode);
+        Assert.Equal("DOCUMENT_PERMISSION_REQUIRED", bytes.ErrorCode);
+    }
+
+    [Fact]
+    public async Task RejectChecksWritePermissionBeforeReturningAlreadyRejectedState()
+    {
+        using var harness = new Harness(enabled: true);
+        var uploaded = await harness.Service.UploadAsync("purchase-invoice", 1, "image/png", CreatePng(), "reject-auth-order", CancellationToken.None);
+        var captureId = await harness.Db.DocumentCaptures.Where(capture => capture.PublicId == uploaded.Id).Select(capture => capture.Id).SingleAsync();
+        await harness.Service.RejectAsync(captureId, CancellationToken.None);
+        harness.Tenant.Permissions = new HashSet<string> { SystemPermissions.PurchasesBillsView };
+
+        var denied = await Assert.ThrowsAsync<DocumentCaptureServiceException>(() => harness.Service.RejectAsync(captureId, CancellationToken.None));
+
+        Assert.Equal("DOCUMENT_PERMISSION_REQUIRED", denied.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Upload_DedupeSkipsCaptureWhoseLinkedTargetIsNoLongerReadable()
+    {
+        using var harness = new Harness(enabled: true);
+        var source = CreatePng(31);
+        var original = await harness.Service.UploadAsync("purchase-invoice", 1, "image/png", source, "linked-denied-original", CancellationToken.None);
+        var captureId = await harness.Db.DocumentCaptures.Where(capture => capture.PublicId == original.Id).Select(capture => capture.Id).SingleAsync();
+        await harness.Service.AcceptAsync(captureId, "{\"date\":\"2026-11-20\",\"vendorName\":\"Linked\"}", CancellationToken.None);
+        var target = new PurchaseInvoiceHeader { CompanyId = 1, PublicId = "bill_unreadable", Date = new DateTime(2026, 11, 20), VendorInvoiceNo = "HIDDEN" };
+        harness.Db.PurchaseInvoiceHeaders.Add(target);
+        await harness.Db.SaveChangesAsync();
+        harness.PublicIds.Setup(ids => ids.ResolveAsync("bill_unreadable", "bill", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(PublicIdLookupResult.Success(target.Id));
+        await harness.Service.LinkAsync(captureId, "bill", "bill_unreadable", CancellationToken.None);
+        await harness.Db.PurchaseInvoiceHeaders.Where(header => header.Id == target.Id).ExecuteDeleteAsync();
+
+        var next = await harness.Service.UploadAsync("purchase-invoice", 1, "image/png", source, "linked-denied-next", CancellationToken.None);
+
+        Assert.NotEqual(original.Id, next.Id);
+        Assert.Equal(2, await harness.Db.DocumentCaptures.CountAsync());
+    }
+
+    [Fact]
+    public async Task RuntimeDisabledBlocksAcceptButAllowsRejectLinkAndAuthorizedReads()
+    {
+        using var harness = new Harness(enabled: true);
+        var source = CreatePng(21);
+        var accepted = await harness.Service.UploadAsync("purchase-invoice", 1, "image/png", source, "flag-link", CancellationToken.None);
+        var acceptedCaptureId = await harness.Db.DocumentCaptures.Where(capture => capture.PublicId == accepted.Id).Select(capture => capture.Id).SingleAsync();
+        await harness.Service.AcceptAsync(acceptedCaptureId, "{\"date\":\"2026-11-20\",\"vendorName\":\"Accepted\"}", CancellationToken.None);
+        var target = new PurchaseInvoiceHeader { CompanyId = 1, PublicId = "bill_flag", Date = new DateTime(2026, 11, 20), VendorInvoiceNo = "FLAG" };
+        harness.Db.PurchaseInvoiceHeaders.Add(target);
+        await harness.Db.SaveChangesAsync();
+        harness.PublicIds.Setup(ids => ids.ResolveAsync("bill_flag", "bill", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(PublicIdLookupResult.Success(target.Id));
+        var rejected = await harness.Service.UploadAsync("purchase-invoice", 1, "image/png", CreatePng(22), "flag-reject", CancellationToken.None);
+        var rejectedCaptureId = await harness.Db.DocumentCaptures.Where(capture => capture.PublicId == rejected.Id).Select(capture => capture.Id).SingleAsync();
+        var pending = await harness.Service.UploadAsync("purchase-invoice", 1, "image/png", CreatePng(23), "flag-accept", CancellationToken.None);
+        var pendingId = await harness.Db.DocumentCaptures.Where(capture => capture.PublicId == pending.Id).Select(capture => capture.Id).SingleAsync();
+        harness.CaptureOptions.Value.Enabled = false;
+
+        Assert.Equal("accepted", (await harness.Service.LinkAsync(acceptedCaptureId, "bill", "bill_flag", CancellationToken.None)).Status);
+        Assert.Equal("rejected", (await harness.Service.RejectAsync(rejectedCaptureId, CancellationToken.None)).Status);
+        Assert.Equal(pending.Id, (await harness.Service.GetAsync(pendingId, CancellationToken.None)).Id);
+        var disabled = await Assert.ThrowsAsync<DocumentCaptureServiceException>(() =>
+            harness.Service.AcceptAsync(pendingId, "{\"date\":\"2026-11-20\",\"vendorName\":\"Pending\"}", CancellationToken.None));
+        Assert.Equal("DOCUMENT_CAPTURE_DISABLED", disabled.ErrorCode);
+    }
+
+    [Fact]
+    public void Capabilities_SeparateRuntimeFlagProviderAndAuthorizedKinds()
+    {
+        using var harness = new Harness(enabled: true);
+        var providerOff = new DocumentCapturesController(harness.Service, harness.Tenant, harness.Entitlement,
+            harness.CaptureOptions, new UnconfiguredDocumentFieldExtractor());
+        var providerOffJson = System.Text.Json.JsonSerializer.Serialize(((OkObjectResult)providerOff.Capabilities()).Value);
+        using var providerOffBody = System.Text.Json.JsonDocument.Parse(providerOffJson);
+        Assert.True(providerOffBody.RootElement.GetProperty("enabled").GetBoolean());
+        Assert.False(providerOffBody.RootElement.GetProperty("providerAvailable").GetBoolean());
+        Assert.Contains("purchase-invoice", providerOffBody.RootElement.GetProperty("kinds").EnumerateArray().Select(kind => kind.GetString()));
+
+        harness.CaptureOptions.Value.Enabled = false;
+        var flagOff = new DocumentCapturesController(harness.Service, harness.Tenant, harness.Entitlement,
+            harness.CaptureOptions, harness.Extractor);
+        var flagOffJson = System.Text.Json.JsonSerializer.Serialize(((OkObjectResult)flagOff.Capabilities()).Value);
+        using var flagOffBody = System.Text.Json.JsonDocument.Parse(flagOffJson);
+        Assert.False(flagOffBody.RootElement.GetProperty("enabled").GetBoolean());
+        Assert.True(flagOffBody.RootElement.GetProperty("providerAvailable").GetBoolean());
+        Assert.Contains("purchase-invoice", flagOffBody.RootElement.GetProperty("kinds").EnumerateArray().Select(kind => kind.GetString()));
+        Assert.True(flagOffBody.RootElement.GetProperty("maxImagePixels").GetInt64() > 0);
+        Assert.DoesNotContain("image/webp", flagOffBody.RootElement.GetProperty("allowedMimeTypes").EnumerateArray()
+            .Select(type => type.GetString()));
+    }
+
+    [Fact]
+    public async Task Upload_DailyAttemptLimitRollsAtUtcMidnight()
+    {
+        using var harness = new Harness(enabled: true, maxAttemptsPerHour: 20, maxAttemptsPerDay: 1);
+        var clock = new MutableTimeProvider(new DateTimeOffset(2026, 11, 21, 23, 59, 0, TimeSpan.Zero));
+        var service = harness.CreateService(harness.Extractor, timeProvider: clock);
+        await service.UploadAsync("purchase-invoice", 1, "image/png", CreatePng(1), "before-midnight", CancellationToken.None);
+        clock.SetUtcNow(new DateTimeOffset(2026, 11, 22, 0, 1, 0, TimeSpan.Zero));
+
+        var nextDay = await service.UploadAsync("purchase-invoice", 1, "image/png", CreatePng(2), "after-midnight", CancellationToken.None);
+
+        Assert.Equal("ready", nextDay.Status);
+        Assert.Equal(2, await harness.Db.DocumentCaptureAttempts.CountAsync());
+    }
+
+    [Fact]
+    public async Task Upload_RetryAfterRetentionPurgedBytesRestoresBlobAndReservesOneAttempt()
+    {
+        using var harness = new Harness(enabled: true);
+        var source = CreatePng();
+        var failing = harness.CreateService(new FailingExtractor());
+        await Assert.ThrowsAsync<DocumentCaptureServiceException>(() =>
+            failing.UploadAsync("purchase-invoice", 1, "image/png", source, "retry-purged", CancellationToken.None));
+        var capture = await harness.Db.DocumentCaptures.SingleAsync();
+        capture.ExpiresAt = DateTime.UtcNow.AddDays(-1);
+        await harness.Db.SaveChangesAsync();
+        var retention = new DocumentCaptureRetentionService(harness.Db, new DocumentCaptureAdmissionLock(harness.Db));
+        await retention.PurgeAsync(DateTime.UtcNow, CancellationToken.None);
+        Assert.Empty(await harness.Db.DocumentCaptureBlobs.ToListAsync());
+
+        var retry = await harness.Service.UploadAsync("purchase-invoice", 1, "image/png", source, "retry-purged", CancellationToken.None);
+
+        Assert.Equal("ready", retry.Status);
+        Assert.Equal(2, (await harness.Db.DocumentCaptures.SingleAsync()).ExtractionGeneration);
+        Assert.Single(await harness.Db.DocumentCaptureBlobs.ToListAsync());
+        Assert.Equal(2, await harness.Db.DocumentCaptureAttempts.CountAsync());
+        Assert.Null((await harness.Db.DocumentCaptures.SingleAsync()).BytesDeletedAt);
+    }
+
+    [Fact]
+    public async Task Retention_RemovesAttemptReservationsAtFortyEightHours()
+    {
+        using var harness = new Harness(enabled: true);
+        var uploaded = await harness.Service.UploadAsync("purchase-invoice", 1, "image/png", CreatePng(), "attempt-retention", CancellationToken.None);
+        var attempt = await harness.Db.DocumentCaptureAttempts.SingleAsync();
+        attempt.ReservedAt = new DateTime(2026, 11, 20, 11, 59, 59, DateTimeKind.Utc);
+        var capture = await harness.Db.DocumentCaptures.SingleAsync();
+        capture.AcceptedAt = DateTime.UtcNow;
+        await harness.Db.SaveChangesAsync();
+        var retention = new DocumentCaptureRetentionService(harness.Db, new DocumentCaptureAdmissionLock(harness.Db));
+
+        await retention.PurgeAsync(new DateTime(2026, 11, 22, 12, 0, 0, DateTimeKind.Utc), CancellationToken.None);
+
+        Assert.Empty(await harness.Db.DocumentCaptureAttempts.ToListAsync());
+        Assert.Equal(uploaded.Id, capture.PublicId);
+    }
+
+    [Fact]
+    public async Task Retention_ProcessesDeletedWorkspacesBeyondOneBatch()
+    {
+        using var harness = new Harness(enabled: true);
+        var now = DateTime.UtcNow;
+        harness.Db.SuppressTenantSecurityCheck = true;
+        var companies = Enumerable.Range(0, DocumentCaptureRetentionService.BatchSize + 1)
+            .Select(index => new Company
+            {
+                Name = $"Deleted {index}", CompanyCode = $"D{index:D3}", Slug = $"deleted-{index:D3}", DeletedAt = now
+            }).ToArray();
+        harness.Db.Companies.AddRange(companies);
+        await harness.Db.SaveChangesAsync();
+        foreach (var (company, index) in companies.Select((company, index) => (company, index)))
+        {
+            harness.Db.DocumentCaptures.Add(new Core.Domain.DocumentCapture
+            {
+                CompanyId = company.Id, PublicId = PublicIdGenerator.New("cap"), Kind = "purchase-invoice", SchemaVersion = 1,
+                Status = "ready", SourceHash = $"source-{index}", ContentHash = $"content-{index}",
+                NormalizationVersion = "test", ContentType = "application/pdf", ByteCount = 1, PageCount = 1,
+                RequestFingerprint = $"fingerprint-{index}", ExtractionGeneration = 1, CreatedBy = "creator-1",
+                CreatedAt = now, ExpiresAt = now.AddDays(7), Blob = new DocumentCaptureBlob { CompanyId = company.Id, DocumentBytes = [1] },
+                Attempts = [new DocumentCaptureAttempt { CompanyId = company.Id, Generation = 1, ReservedAt = now }]
+            });
+        }
+        await harness.Db.SaveChangesAsync();
+        var retention = new DocumentCaptureRetentionService(harness.Db, new DocumentCaptureAdmissionLock(harness.Db));
+
+        var deleted = await retention.PurgeAsync(now, CancellationToken.None);
+
+        Assert.Equal(DocumentCaptureRetentionService.BatchSize + 1, deleted);
+        Assert.Empty(await harness.Db.DocumentCaptures.IgnoreQueryFilters().Where(capture => companies.Select(item => item.Id).Contains(capture.CompanyId)).ToListAsync());
+        Assert.Empty(await harness.Db.DocumentCaptureAttempts.IgnoreQueryFilters().Where(attempt => companies.Select(item => item.Id).Contains(attempt.CompanyId)).ToListAsync());
     }
 
     [Fact]
@@ -73,6 +304,42 @@ public sealed class DocumentCaptureServiceTests
         Assert.Equal("DOCUMENT_CAPTURE_UNCONFIGURED", exception.ErrorCode);
         Assert.Empty(await harness.Db.DocumentCaptures.ToListAsync());
         Assert.Empty(await harness.Db.DocumentCaptureAttempts.ToListAsync());
+    }
+
+    [Fact]
+    public async Task FeatureDenialUsesSharedEntitlementProblemBody()
+    {
+        using var harness = new Harness(enabled: true);
+        var snapshot = new EntitlementSnapshot(true, "invoicing", "invoicing", false, [], [], [], null,
+            new HashSet<string>(), "invoicing");
+        var entitlement = new Mock<IEntitlementService>();
+        entitlement.Setup(service => service.Get(1)).Returns(snapshot);
+        entitlement.Setup(service => service.Evaluate(1, It.IsAny<EntitlementAction>()))
+            .Returns(new EntitlementDecision(false, "FEATURE_NOT_ENTITLED", "Upgrade required.",
+                RequiredFeature: FeatureKeys.DocumentCapture, UpgradeAvailable: true, EffectivePlan: "invoicing"));
+        entitlement.SetupGet(service => service.Options).Returns(new EntitlementsOptions { SupportEmail = "support@example.test" });
+        var service = new DocumentCaptureService(harness.Db, new DocumentCaptureAdmissionLock(harness.Db), harness.Extractor,
+            entitlement.Object, harness.PublicIds.Object, harness.Tenant, harness.CaptureOptions,
+            NullLogger<DocumentCaptureService>.Instance);
+        var controller = new DocumentCapturesController(service, harness.Tenant, entitlement.Object, harness.CaptureOptions, harness.Extractor)
+        {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+        };
+        var bytes = CreatePng();
+        await using var stream = new MemoryStream(bytes);
+        var file = new FormFile(stream, 0, bytes.Length, "File", "invoice.png") { Headers = new HeaderDictionary() };
+        file.ContentType = "image/png";
+
+        var result = Assert.IsType<ObjectResult>(await controller.Upload(new DocumentCaptureUploadRequest
+        {
+            Kind = "purchase-invoice", SchemaVersion = 1, File = file
+        }, CancellationToken.None));
+        var problem = Assert.IsType<ProblemDetails>(result.Value);
+
+        Assert.Equal(403, result.StatusCode);
+        Assert.Equal("FEATURE_NOT_ENTITLED", problem.Extensions["code"]);
+        Assert.Equal("support@example.test", problem.Extensions["contact"]);
+        Assert.True(problem.Extensions.ContainsKey("upgradeAvailable"));
     }
 
     [Fact]
@@ -103,6 +370,31 @@ public sealed class DocumentCaptureServiceTests
         Assert.Equal("accepted", replay.Status);
         Assert.Single(await harness.Db.DocumentCaptureLinks.ToListAsync());
         Assert.Single(await harness.Service.GetLinkedAsync("bill", "bill_target1", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task GetLinked_UsesBoundedBatchQueriesForManyCaptures()
+    {
+        var queryCounter = new QueryCountingInterceptor();
+        using var harness = new Harness(enabled: true, interceptor: queryCounter);
+        var target = new PurchaseInvoiceHeader { CompanyId = 1, PublicId = "bill_batch", Date = new DateTime(2026, 11, 20), VendorInvoiceNo = "BATCH" };
+        harness.Db.PurchaseInvoiceHeaders.Add(target);
+        await harness.Db.SaveChangesAsync();
+        harness.PublicIds.Setup(ids => ids.ResolveAsync("bill_batch", "bill", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(PublicIdLookupResult.Success(target.Id));
+        for (var i = 0; i < 5; i++)
+        {
+            var uploaded = await harness.Service.UploadAsync("purchase-invoice", 1, "image/png", CreatePng(i + 41), $"batch-{i}", CancellationToken.None);
+            var captureId = await harness.Db.DocumentCaptures.Where(capture => capture.PublicId == uploaded.Id).Select(capture => capture.Id).SingleAsync();
+            await harness.Service.AcceptAsync(captureId, "{\"date\":\"2026-11-20\",\"vendorName\":\"Batch\"}", CancellationToken.None);
+            await harness.Service.LinkAsync(captureId, "bill", "bill_batch", CancellationToken.None);
+        }
+        queryCounter.Reset();
+
+        var linked = await harness.Service.GetLinkedAsync("bill", "bill_batch", CancellationToken.None);
+
+        Assert.Equal(5, linked.Count);
+        Assert.InRange(queryCounter.SelectCount, 1, 5);
     }
 
     [Fact]
@@ -308,11 +600,14 @@ public sealed class DocumentCaptureServiceTests
         public IEntitlementService Entitlement => _entitlement;
         public IDocumentFieldExtractor Extractor { get; }
 
-        public Harness(bool enabled, int maxAttemptsPerHour = 20, int maxAttemptsPerDay = 60)
+        public Harness(bool enabled, int maxAttemptsPerHour = 20, int maxAttemptsPerDay = 60, DbCommandInterceptor? interceptor = null)
         {
             _connection.Open();
             _tenant = new TestTenantContext(1);
-            Db = new ApiDbContext(new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(_connection).Options, _tenant);
+            var contextOptions = new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(_connection);
+            if (interceptor is not null)
+                contextOptions.AddInterceptors(interceptor);
+            Db = new ApiDbContext(contextOptions.Options, _tenant);
             Db.Database.EnsureCreated();
             Db.Companies.Add(new Company { Name = "Capture Co", CompanyCode = "CAP", Slug = "capture-co" });
             Db.SaveChanges();
@@ -337,22 +632,44 @@ public sealed class DocumentCaptureServiceTests
                 MaxAttemptsPerDay = maxAttemptsPerDay,
                 FakeFixtures = new Dictionary<string, string>
                 {
-                    ["purchase-invoice"] = "{\"vendorName\":\"Fixture Vendor\",\"date\":\"2026-11-20\",\"lines\":[]}"
+                    ["purchase-invoice"] = "{\"vendorName\":\"Fixture Vendor\",\"date\":\"2026-11-20\",\"lines\":[]}",
+                    ["bank"] = "{\"bankName\":\"Fixture Bank\",\"accountNumber\":\"021000021\"}"
                 }
             });
             Extractor = new FakeDocumentFieldExtractor(_configuredOptions);
             Service = CreateService(Extractor);
         }
 
-        public DocumentCaptureService CreateService(IDocumentFieldExtractor extractor, ISecurityAuditService? audit = null) =>
+        public DocumentCaptureService CreateService(IDocumentFieldExtractor extractor, ISecurityAuditService? audit = null, TimeProvider? timeProvider = null) =>
             new(Db, new DocumentCaptureAdmissionLock(Db), extractor, _entitlement, PublicIds.Object,
-                _tenant, _configuredOptions, NullLogger<DocumentCaptureService>.Instance, audit);
+                _tenant, _configuredOptions, NullLogger<DocumentCaptureService>.Instance, audit, timeProvider);
 
         public void Dispose()
         {
             Db.Dispose();
             _connection.Dispose();
         }
+    }
+
+    private sealed class QueryCountingInterceptor : DbCommandInterceptor
+    {
+        private int _selectCount;
+        public int SelectCount => Volatile.Read(ref _selectCount);
+        public void Reset() => Interlocked.Exchange(ref _selectCount, 0);
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.TrimStart().StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
+                Interlocked.Increment(ref _selectCount);
+            return ValueTask.FromResult(result);
+        }
+    }
+
+    private sealed class MutableTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        private DateTimeOffset _utcNow = utcNow;
+        public override DateTimeOffset GetUtcNow() => _utcNow;
+        public void SetUtcNow(DateTimeOffset value) => _utcNow = value;
     }
 
     private sealed class TestTenantContext(int companyId) : ITenantContext

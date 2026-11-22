@@ -4,13 +4,19 @@
 #nullable enable
 using Api.Data;
 using Microsoft.EntityFrameworkCore;
+using System.Diagnostics;
 
 namespace Api.DocumentCaptures;
 
-public sealed class DocumentCaptureRetentionService(ApiDbContext db, DocumentCaptureAdmissionLock admissionLock)
+public sealed class DocumentCaptureRetentionService(ApiDbContext db, DocumentCaptureAdmissionLock admissionLock, TimeProvider? timeProvider = null)
 {
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
     public const int BatchSize = 100;
     public static readonly TimeSpan AttemptRetention = TimeSpan.FromHours(48);
+    private static readonly TimeSpan PassBudget = TimeSpan.FromMinutes(2);
+
+    public Task<int> PurgeAsync(CancellationToken cancellationToken) =>
+        PurgeAsync(_timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
 
     public async Task<int> PurgeAsync(DateTime utcNow, CancellationToken cancellationToken)
     {
@@ -19,15 +25,24 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, DocumentCap
             return 0;
         await using var workerLease = workerLock;
 
-        var deletedCompanyIds = await db.Companies.IgnoreQueryFilters()
-            .Where(company => company.DeletedAt != null)
-            .OrderBy(company => company.Id)
-            .Select(company => company.Id)
-            .Take(BatchSize)
-            .ToListAsync(cancellationToken).ConfigureAwait(false);
         var purgedCaptures = 0;
-        foreach (var companyId in deletedCompanyIds)
-            purgedCaptures += await PurgeDeletedCompanyAsync(companyId, cancellationToken).ConfigureAwait(false);
+        var elapsed = Stopwatch.StartNew();
+        while (elapsed.Elapsed < PassBudget)
+        {
+            var deletedCompanyIds = await db.Companies.IgnoreQueryFilters()
+                .Where(company => company.DeletedAt != null
+                    && (db.DocumentCaptures.IgnoreQueryFilters().Any(capture => capture.CompanyId == company.Id)
+                        || db.DocumentCaptureAttempts.IgnoreQueryFilters().Any(attempt => attempt.CompanyId == company.Id)
+                        || db.DocumentCaptureBlobs.IgnoreQueryFilters().Any(blob => blob.CompanyId == company.Id)))
+                .OrderBy(company => company.Id)
+                .Select(company => company.Id)
+                .Take(BatchSize)
+                .ToListAsync(cancellationToken).ConfigureAwait(false);
+            if (deletedCompanyIds.Count == 0)
+                break;
+            foreach (var companyId in deletedCompanyIds)
+                purgedCaptures += await PurgeDeletedCompanyAsync(companyId, cancellationToken).ConfigureAwait(false);
+        }
 
         var abandoned = await db.DocumentCaptures.IgnoreQueryFilters().AsNoTracking()
             .Where(capture => capture.ExpiresAt <= utcNow && capture.AcceptedAt == null && capture.RejectedAt == null
@@ -63,6 +78,9 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, DocumentCap
 
         var deleted = await db.DocumentCaptures.IgnoreQueryFilters()
             .Where(capture => capture.CompanyId == companyId)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        await db.DocumentCaptureAttempts.IgnoreQueryFilters()
+            .Where(attempt => attempt.CompanyId == companyId)
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         db.ChangeTracker.Clear();

@@ -763,9 +763,20 @@ namespace Api.Controllers
         public async Task<IActionResult> Delete([FromBody] DeleteOrganizationRequest request, CancellationToken cancellationToken = default)
         {
             var companyId = _tenant.RequireCompanyId();
-            await using var transaction = await HttpContext.RequestServices
-                .GetRequiredService<DocumentCaptureAdmissionLock>()
-                .AcquireCompanyAsync(companyId, cancellationToken);
+            Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction;
+            try
+            {
+                transaction = await HttpContext.RequestServices.GetRequiredService<DocumentCaptureAdmissionLock>()
+                    .AcquireCompanyAsync(companyId, cancellationToken);
+            }
+            catch (DocumentCaptureAdmissionBusyException)
+            {
+                Response.Headers.RetryAfter = "1";
+                var busy = new ProblemDetails { Status = StatusCodes.Status503ServiceUnavailable, Title = "DOCUMENT_BUSY" };
+                busy.Extensions["code"] = "DOCUMENT_BUSY";
+                return new ObjectResult(busy) { StatusCode = StatusCodes.Status503ServiceUnavailable };
+            }
+            await using var transactionScope = transaction;
             var company = await _db.Companies.IgnoreQueryFilters()
                 .SingleOrDefaultAsync(c => c.Id == companyId, cancellationToken);
             if (company is null || company.DeletedAt != null)

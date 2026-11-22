@@ -392,6 +392,39 @@ test("bufferRequest rejects an unknown-length streamed capture upload over the r
   );
 });
 
+test("run-stream buffers the largest supported assistant message and rejects one byte over", async () => {
+  const limit = MAX_ASSISTANT_RUN_STREAM_BODY_BYTES;
+  const validPayload = JSON.stringify({
+    message: "\\".repeat(8000),
+    sessionId: "session_1234567890",
+    contextVariables: { pageRoute: "/org/acme/purchases/bills/123", pageTitle: "Purchase bill review", sessionId: "session_1234567890" },
+  });
+  const validBytes = new TextEncoder().encode(validPayload);
+  assert.ok(validBytes.byteLength < limit, `valid client payload is ${validBytes.byteLength} bytes`);
+  const validRequest = new Request("http://app.test/api/ai/chat/run-stream", {
+    method: "POST", headers: { "content-type": "application/json" }, body: validPayload,
+  });
+  const validBuffered = await bufferRequest(validRequest.url, validRequest, new Headers(validRequest.headers), {
+    maxBytes: maxRequestBodyBytesForRoute(new URL(validRequest.url).pathname, "POST"),
+  });
+  assert.equal(validBuffered.body?.byteLength, validBytes.byteLength);
+
+  await assert.rejects(
+    () => {
+      const overRequest = new Request("http://app.test/api/ai/chat/run-stream", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: new ReadableStream({
+          start(controller) { controller.enqueue(new Uint8Array(limit)); controller.enqueue(new Uint8Array(1)); controller.close(); },
+        }), duplex: "half",
+      });
+      return bufferRequest(overRequest.url, overRequest, new Headers(overRequest.headers), {
+        maxBytes: maxRequestBodyBytesForRoute(new URL(overRequest.url).pathname, "POST"),
+      });
+    },
+    PayloadTooLargeError,
+  );
+});
+
 test("turnstileActionForRoute matches mixed-case, trailing-slash, and percent-encoded auth POST routes", () => {
   assert.equal(turnstileActionForRoute("/api/auth/send-otp", "POST"), "login");
   assert.equal(turnstileActionForRoute("/api/auth/SEND-OTP", "POST"), "login");

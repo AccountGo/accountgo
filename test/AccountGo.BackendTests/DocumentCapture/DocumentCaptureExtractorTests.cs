@@ -56,7 +56,20 @@ public sealed class DocumentCaptureExtractorTests
 
         var exception = Assert.Throws<InvalidOperationException>(() => DocumentCaptureOptions.Validate(options, environment));
 
-        Assert.Contains("cannot be enabled in production", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("only in development and tests", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Options_RequireLeaseMarginAndRestrictFakeToDevelopmentAndTests()
+    {
+        var development = new TestHostEnvironment { EnvironmentName = Environments.Development };
+        DocumentCaptureOptions.Validate(new DocumentCaptureOptions { ExtractionLeaseSeconds = 30, Extractor = "Fake" }, development);
+        Assert.Throws<InvalidOperationException>(() => DocumentCaptureOptions.Validate(
+            new DocumentCaptureOptions { ExtractionLeaseSeconds = 29 }, development));
+        Assert.Throws<InvalidOperationException>(() => DocumentCaptureOptions.Validate(
+            new DocumentCaptureOptions { Extractor = "Fake" }, new TestHostEnvironment { EnvironmentName = "Staging" }));
+        DocumentCaptureOptions.Validate(new DocumentCaptureOptions { Extractor = "Fake" },
+            new TestHostEnvironment { EnvironmentName = "Testing" });
     }
 
     [Fact]

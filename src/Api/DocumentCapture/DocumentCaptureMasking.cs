@@ -3,6 +3,7 @@
 
 #nullable enable
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 namespace Api.DocumentCaptures;
@@ -40,45 +41,35 @@ public static partial class DocumentCaptureMasking
         return MaskSensitiveValue(rawText);
     }
 
+    public static string MaskFinancialFreeText(string kind, string json)
+    {
+        if (kind is not ("expense-receipt" or "purchase-invoice" or "sales-invoice"))
+            return json;
+        var root = JsonNode.Parse(json);
+        if (root is not JsonObject fields)
+            return json;
+        MaskProperty(fields, "notes");
+        if (fields["lines"] is JsonArray lines)
+            foreach (var line in lines.OfType<JsonObject>())
+                MaskProperty(line, "description");
+        return root.ToJsonString();
+    }
+
+    private static void MaskProperty(JsonObject value, string name)
+    {
+        if (value[name] is JsonValue node && node.TryGetValue<string>(out var text) && text is not null)
+            value[name] = MaskSensitiveValue(text);
+    }
+
     public static string MaskSensitiveValue(string value)
     {
-        var maskedIbans = IbanRegex().Replace(value, match => MaskAllButLastFour(match.Value));
-        return AccountNumberRegex().Replace(maskedIbans, match =>
-        {
-            var chars = match.Value.ToCharArray();
-            var remainingDigits = Math.Min(4, chars.Count(char.IsAsciiDigit));
-            for (var i = chars.Length - 1; i >= 0; i--)
-            {
-                if (!char.IsAsciiDigit(chars[i]))
-                    continue;
-                if (remainingDigits > 0)
-                    remainingDigits--;
-                else
-                    chars[i] = '*';
-            }
-            return new string(chars);
-        });
+        var maskedIbans = IbanRegex().Replace(value, "••••");
+        return AccountNumberRegex().Replace(maskedIbans, "••••");
     }
 
-    private static string MaskAllButLastFour(string value)
-    {
-        var chars = value.ToCharArray();
-        var remaining = 4;
-        for (var i = chars.Length - 1; i >= 0; i--)
-        {
-            if (!char.IsAsciiLetterOrDigit(chars[i]))
-                continue;
-            if (remaining > 0)
-                remaining--;
-            else
-                chars[i] = '*';
-        }
-        return new string(chars);
-    }
-
-    [GeneratedRegex(@"\b[A-Z]{2}[0-9]{2}(?:[ -]?[A-Z0-9]){11,30}\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"(?<![A-Z0-9])[A-Z]{2}[ -]?[0-9]{2}(?:[ -]?[A-Z0-9]){11,30}(?![A-Z0-9])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex IbanRegex();
 
-    [GeneratedRegex(@"(?<![A-Z0-9])[0-9](?:[ -]?[0-9]){8,17}(?![A-Z0-9])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"(?<![0-9])[0-9](?:[ -]?[0-9]){7,16}(?![0-9])", RegexOptions.CultureInvariant)]
     private static partial Regex AccountNumberRegex();
 }

@@ -1,5 +1,6 @@
 using Api.Data;
 using Api.DocumentCaptures;
+using Api.Controllers;
 using Api.Data.Postgres;
 using Api.PublicIds;
 using Core.Domain;
@@ -8,9 +9,12 @@ using Core.Domain.Security;
 using Core.Entitlements;
 using Core.Tenancy;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
+using Newtonsoft.Json.Linq;
 using SkiaSharp;
 using Xunit;
 
@@ -123,6 +127,42 @@ public sealed class DocumentCapturePostgresConcurrencyTests
         var afterRelease = await secondAdmission.TryAcquirePurgeWorkerSingletonAsync(CancellationToken.None)
             ?? throw new InvalidOperationException("The purge runner could not acquire the released singleton lock.");
         await afterRelease.DisposeAsync();
+    }
+
+    [PostgresOnlyFact]
+    public async Task HeldCompanyLock_MapsAcceptRejectAndLinkToRetryableBusyResponses()
+    {
+        using var postgres = PostgresTestDatabase.CreateIfConfigured()!;
+        var tenant = new TestTenantContext(CompanyId);
+        var contextOptions = new DbContextOptionsBuilder<PostgresApiDbContext>().UseNpgsql(postgres.ConnectionString).Options;
+        await CreateCompanyAsync(contextOptions, tenant);
+        var options = CaptureOptions();
+        var entitlement = CreateEntitlement();
+        await using var seedDb = new PostgresApiDbContext(contextOptions, tenant);
+        var uploaded = await CreateService(seedDb, tenant, entitlement, options)
+            .UploadAsync("purchase-invoice", 1, "image/png", CreatePng(13), "busy-route", CancellationToken.None);
+        var captureId = await seedDb.DocumentCaptures.Where(capture => capture.PublicId == uploaded.Id)
+            .Select(capture => capture.Id).SingleAsync();
+
+        await using var blockerDb = new PostgresApiDbContext(contextOptions, tenant);
+        await using var held = await new DocumentCaptureAdmissionLock(blockerDb).AcquireCompanyAsync(CompanyId, CancellationToken.None);
+        await using var requestDb = new PostgresApiDbContext(contextOptions, tenant);
+        var extractor = new FakeDocumentFieldExtractor(options);
+        var service = CreateService(requestDb, tenant, entitlement, options, extractor);
+        var controller = new DocumentCapturesController(service, tenant, entitlement, options, extractor)
+        {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+        };
+
+        var accept = Assert.IsType<ObjectResult>(await controller.Accept(captureId,
+            new DocumentCaptureAcceptRequest(JObject.Parse("{\"date\":\"2026-11-20\",\"vendorName\":\"Reviewed\"}")), CancellationToken.None));
+        Assert.Equal(503, accept.StatusCode);
+        Assert.Equal("1", controller.Response.Headers.RetryAfter);
+        var reject = Assert.IsType<ObjectResult>(await controller.Reject(captureId, CancellationToken.None));
+        Assert.Equal(503, reject.StatusCode);
+        var link = Assert.IsType<ObjectResult>(await controller.Link(captureId,
+            new DocumentCaptureLinkRequest("bill", "bill_unknown"), CancellationToken.None));
+        Assert.Equal(503, link.StatusCode);
     }
 
     [PostgresOnlyFact]

@@ -23,7 +23,7 @@ public sealed class DocumentCaptureOptions
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(environment);
-        if (options.ExtractionLeaseSeconds is < 10 or > 300
+        if (options.ExtractionLeaseSeconds is < 30 or > 300
             || options.MaxAttemptsPerHour is < 1 or > 20
             || options.MaxAttemptsPerDay is < 1 or > 60
             || options.ImageDecodeSlots is < 1 or > DocumentCaptureImageLimits.DecodeGateSlots
@@ -33,8 +33,9 @@ public sealed class DocumentCaptureOptions
             throw new InvalidOperationException("Document capture limits are outside the supported range.");
 
         if (string.Equals(options.Extractor, "Fake", StringComparison.OrdinalIgnoreCase)
-            && environment.IsProduction())
-            throw new InvalidOperationException("The fake document extractor cannot be enabled in production.");
+            && !environment.IsDevelopment()
+            && !string.Equals(environment.EnvironmentName, "Testing", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The fake document extractor is allowed only in development and tests.");
 
         foreach (var fixture in options.FakeFixtures)
         {

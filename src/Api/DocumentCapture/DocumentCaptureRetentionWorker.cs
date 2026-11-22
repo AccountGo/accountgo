@@ -8,9 +8,11 @@ using Microsoft.Extensions.Logging;
 
 namespace Api.DocumentCaptures;
 
-public sealed class DocumentCaptureRetentionWorker(IServiceScopeFactory scopes, ILogger<DocumentCaptureRetentionWorker> logger) : BackgroundService
+public sealed class DocumentCaptureRetentionWorker(IServiceScopeFactory scopes, ILogger<DocumentCaptureRetentionWorker> logger,
+    TimeProvider? timeProvider = null) : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromHours(1);
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -20,7 +22,7 @@ public sealed class DocumentCaptureRetentionWorker(IServiceScopeFactory scopes, 
             {
                 using var scope = scopes.CreateScope();
                 var retention = scope.ServiceProvider.GetRequiredService<DocumentCaptureRetentionService>();
-                var deleted = await retention.PurgeAsync(DateTime.UtcNow, stoppingToken).ConfigureAwait(false);
+                var deleted = await retention.PurgeAsync(stoppingToken).ConfigureAwait(false);
                 if (deleted > 0)
                     logger.LogInformation("Document capture workspace cleanup removed {CaptureCount} captures.", deleted);
             }
@@ -33,7 +35,7 @@ public sealed class DocumentCaptureRetentionWorker(IServiceScopeFactory scopes, 
                 logger.LogError(ex, "Document capture retention pass failed.");
             }
 
-            await Task.Delay(Interval, stoppingToken).ConfigureAwait(false);
+            await Task.Delay(Interval, _timeProvider, stoppingToken).ConfigureAwait(false);
         }
     }
 }

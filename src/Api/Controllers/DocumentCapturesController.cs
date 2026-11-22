@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 #nullable enable
-using System.Text.Json;
 using Api.DocumentCaptures;
 using Api.Filters;
 using Core.Entitlements;
@@ -11,6 +10,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.Extensions.Options;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace Api.Controllers;
 
@@ -33,8 +34,9 @@ public sealed class DocumentCapturesController(
     [HttpGet("capabilities")]
     public IActionResult Capabilities()
     {
-        var enabled = options.Value.Enabled && extractor.IsConfigured;
-        var kinds = enabled && tenant.IsResolved
+        var enabled = options.Value.Enabled;
+        var providerAvailable = extractor.IsConfigured;
+        var kinds = tenant.IsResolved
             ? DocumentCaptureFieldSchemas.SupportedKinds.Where(kind =>
                 DocumentCaptureAccessPolicy.AuthorizeNew(entitlements, tenant.RequireCompanyId(), tenant.Permissions, kind)
                 == DocumentCaptureAccessFailure.None).ToArray()
@@ -42,10 +44,15 @@ public sealed class DocumentCapturesController(
         return Ok(new
         {
             enabled,
+            providerAvailable,
             kinds,
             schemaVersion = DocumentCaptureFieldSchemas.CurrentSchemaVersion,
             maxUploadBytes = DocumentCaptureImageLimits.MaxInputBytes,
-            maxPdfPages = DocumentCapturePdfLimits.MaxPages
+            maxPdfPages = DocumentCapturePdfLimits.MaxPages,
+            maxImageWidth = DocumentCaptureImageLimits.MaxDimensionPixels,
+            maxImageHeight = DocumentCaptureImageLimits.MaxDimensionPixels,
+            maxImagePixels = DocumentCaptureImageLimits.MaxTotalPixels,
+            allowedMimeTypes = new[] { "image/jpeg", "image/png", "application/pdf" }
         });
     }
 
@@ -66,7 +73,7 @@ public sealed class DocumentCapturesController(
         }
         catch (DocumentCaptureServiceException ex)
         {
-            return ErrorProblem(ex.StatusCode, ex.ErrorCode, ex.CaptureId);
+            return ServiceProblem(ex);
         }
         catch (DocumentCaptureMediaException ex)
         {
@@ -74,7 +81,8 @@ public sealed class DocumentCapturesController(
         }
         catch (DocumentCaptureAdmissionBusyException)
         {
-            return ErrorProblem(429, "DOCUMENT_RATE_LIMITED");
+            Response.Headers.RetryAfter = "1";
+            return ErrorProblem(503, "DOCUMENT_BUSY");
         }
     }
 
@@ -87,7 +95,12 @@ public sealed class DocumentCapturesController(
         }
         catch (DocumentCaptureServiceException ex)
         {
-            return ErrorProblem(ex.StatusCode, ex.ErrorCode);
+            return ServiceProblem(ex);
+        }
+        catch (DocumentCaptureAdmissionBusyException)
+        {
+            Response.Headers.RetryAfter = "1";
+            return ErrorProblem(503, "DOCUMENT_BUSY");
         }
     }
 
@@ -111,7 +124,12 @@ public sealed class DocumentCapturesController(
         }
         catch (DocumentCaptureServiceException ex)
         {
-            return ErrorProblem(ex.StatusCode, ex.ErrorCode);
+            return ServiceProblem(ex);
+        }
+        catch (DocumentCaptureAdmissionBusyException)
+        {
+            Response.Headers.RetryAfter = "1";
+            return ErrorProblem(503, "DOCUMENT_BUSY");
         }
     }
 
@@ -124,7 +142,7 @@ public sealed class DocumentCapturesController(
     {
         try
         {
-            var fieldsJson = request.Fields.GetRawText();
+            var fieldsJson = request.Fields.ToString(Formatting.None);
             return Ok(await captures.AcceptAsync(id, fieldsJson, cancellationToken).ConfigureAwait(false));
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException)
@@ -133,7 +151,12 @@ public sealed class DocumentCapturesController(
         }
         catch (DocumentCaptureServiceException ex)
         {
-            return ErrorProblem(ex.StatusCode, ex.ErrorCode);
+            return ServiceProblem(ex);
+        }
+        catch (DocumentCaptureAdmissionBusyException)
+        {
+            Response.Headers.RetryAfter = "1";
+            return ErrorProblem(503, "DOCUMENT_BUSY");
         }
     }
 
@@ -147,7 +170,12 @@ public sealed class DocumentCapturesController(
         }
         catch (DocumentCaptureServiceException ex)
         {
-            return ErrorProblem(ex.StatusCode, ex.ErrorCode);
+            return ServiceProblem(ex);
+        }
+        catch (DocumentCaptureAdmissionBusyException)
+        {
+            Response.Headers.RetryAfter = "1";
+            return ErrorProblem(503, "DOCUMENT_BUSY");
         }
     }
 
@@ -165,11 +193,12 @@ public sealed class DocumentCapturesController(
         }
         catch (DocumentCaptureServiceException ex)
         {
-            return ErrorProblem(ex.StatusCode, ex.ErrorCode);
+            return ServiceProblem(ex);
         }
         catch (DocumentCaptureAdmissionBusyException)
         {
-            return ErrorProblem(429, "DOCUMENT_RATE_LIMITED");
+            Response.Headers.RetryAfter = "1";
+            return ErrorProblem(503, "DOCUMENT_BUSY");
         }
     }
 
@@ -183,7 +212,12 @@ public sealed class DocumentCapturesController(
         }
         catch (DocumentCaptureServiceException ex)
         {
-            return ErrorProblem(ex.StatusCode, ex.ErrorCode);
+            return ServiceProblem(ex);
+        }
+        catch (DocumentCaptureAdmissionBusyException)
+        {
+            Response.Headers.RetryAfter = "1";
+            return ErrorProblem(503, "DOCUMENT_BUSY");
         }
     }
 
@@ -194,6 +228,19 @@ public sealed class DocumentCapturesController(
         if (captureId is not null)
             problem.Extensions["captureId"] = captureId;
         return new ObjectResult(problem) { StatusCode = statusCode };
+    }
+
+    private ObjectResult ServiceProblem(DocumentCaptureServiceException exception)
+    {
+        if (exception.EntitlementDecision is { } decision)
+        {
+            var problem = EntitlementProblemFactory.FromDecision(decision, tenant, entitlements.Options.SupportEmail,
+                exception.RequiredModules);
+            return new ObjectResult(problem) { StatusCode = StatusCodes.Status403Forbidden };
+        }
+        if (exception.StatusCode == 503 && exception.ErrorCode == "DOCUMENT_BUSY")
+            Response.Headers.RetryAfter = "1";
+        return ErrorProblem(exception.StatusCode, exception.ErrorCode, exception.CaptureId);
     }
 
     private static int StatusForMediaError(string code) => code switch
@@ -239,5 +286,5 @@ public sealed class DocumentCaptureUploadRequest
     public bool Force { get; set; }
 }
 
-public sealed record DocumentCaptureAcceptRequest(JsonElement Fields);
+public sealed record DocumentCaptureAcceptRequest(JToken Fields);
 public sealed record DocumentCaptureLinkRequest(string TargetType, string TargetId);

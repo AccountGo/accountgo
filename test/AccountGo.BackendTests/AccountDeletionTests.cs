@@ -210,6 +210,7 @@ namespace AccountGo.BackendTests
             var owner = await CreateUser(OwnerEmail);
             await CreateWorkspace(owner.Token, "Ws One", "ws-one");
             Assert.Equal(HttpStatusCode.NoContent, (await Send(HttpMethod.Delete, "/api/organizations/current", new { confirmSlug = "ws-one" }, owner.Token)).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Delete, "/api/organizations/current", new { confirmSlug = "ws-one" }, owner.Token)).StatusCode);
 
             Assert.Equal(HttpStatusCode.NoContent, (await Delete(owner.Token, OwnerEmail)).StatusCode);
             using var scope = _factory.Services.CreateScope();

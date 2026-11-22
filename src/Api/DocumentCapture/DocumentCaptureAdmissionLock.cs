@@ -61,6 +61,7 @@ public sealed class DocumentCaptureAdmissionLock(ApiDbContext db)
                         "SELECT \"Id\" FROM \"Company\" WHERE \"Id\" = @companyId{0} FOR UPDATE",
                         " AND \"DeletedAt\" IS NULL", isPurge, cancellationToken)
                         .ConfigureAwait(false);
+                    await db.Database.ExecuteSqlRawAsync("SET LOCAL lock_timeout = '0ms'", cancellationToken).ConfigureAwait(false);
                 }
                 catch (PostgresException ex) when (ex.SqlState == "55P03")
                 {
@@ -121,10 +122,17 @@ public sealed class DocumentCaptureAdmissionLock(ApiDbContext db)
         }
         finally
         {
-            await using var reset = connection.CreateCommand();
-            reset.Transaction = db.Database.CurrentTransaction?.GetDbTransaction();
-            reset.CommandText = "SET LOCK_TIMEOUT -1";
-            await reset.ExecuteNonQueryAsync(CancellationToken.None).ConfigureAwait(false);
+            try
+            {
+                await using var reset = connection.CreateCommand();
+                reset.Transaction = db.Database.CurrentTransaction?.GetDbTransaction();
+                reset.CommandText = "SET LOCK_TIMEOUT -1";
+                await reset.ExecuteNonQueryAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (SqlException ex) when (ex.Number is 1205 or 1222)
+            {
+                // The transaction may already be aborted; preserve the original lock failure.
+            }
         }
     }
 
@@ -136,37 +144,39 @@ public sealed class DocumentCaptureAdmissionLock(ApiDbContext db)
         var connection = new NpgsqlConnection(db.Database.GetConnectionString()
             ?? throw new InvalidOperationException("PostgreSQL connection string is unavailable."));
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var command = connection.CreateCommand();
-            command.CommandText = "SELECT pg_try_advisory_lock(@lockKey)";
+            command.Transaction = transaction;
+            command.CommandText = "SELECT pg_try_advisory_xact_lock(@lockKey)";
             command.Parameters.AddWithValue("lockKey", PurgeWorkerAdvisoryKey);
             if (await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) is true)
-                return new PostgresAdvisoryLease(connection, PurgeWorkerAdvisoryKey);
+                return new PostgresAdvisoryLease(connection, transaction);
 
+            await transaction.DisposeAsync().ConfigureAwait(false);
             await connection.DisposeAsync().ConfigureAwait(false);
             return null;
         }
         catch
         {
+            await transaction.DisposeAsync().ConfigureAwait(false);
             await connection.DisposeAsync().ConfigureAwait(false);
             throw;
         }
     }
 
-    private sealed class PostgresAdvisoryLease(NpgsqlConnection connection, long lockKey) : IAsyncDisposable
+    private sealed class PostgresAdvisoryLease(NpgsqlConnection connection, NpgsqlTransaction transaction) : IAsyncDisposable
     {
         public async ValueTask DisposeAsync()
         {
             try
             {
-                await using var command = connection.CreateCommand();
-                command.CommandText = "SELECT pg_advisory_unlock(@lockKey)";
-                command.Parameters.AddWithValue("lockKey", lockKey);
-                await command.ExecuteScalarAsync(CancellationToken.None).ConfigureAwait(false);
+                await transaction.CommitAsync(CancellationToken.None).ConfigureAwait(false);
             }
             finally
             {
+                await transaction.DisposeAsync().ConfigureAwait(false);
                 await connection.DisposeAsync().ConfigureAwait(false);
             }
         }

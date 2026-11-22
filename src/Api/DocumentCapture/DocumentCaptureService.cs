@@ -17,6 +17,7 @@ using Core.Tenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Newtonsoft.Json.Linq;
 
 namespace Api.DocumentCaptures;
 
@@ -30,9 +31,9 @@ public sealed record DocumentCaptureView(
     int? Width,
     int? Height,
     int PageCount,
-    JsonElement? Fields,
-    JsonElement? AcceptedFields,
-    JsonElement? Warnings,
+    JToken? Fields,
+    JToken? AcceptedFields,
+    JToken? Warnings,
     string? ErrorCode,
     bool BytesAvailable,
     bool CanAccept,
@@ -58,9 +59,11 @@ public sealed class DocumentCaptureService(
     ITenantContext tenant,
     IOptions<DocumentCaptureOptions> options,
     ILogger<DocumentCaptureService> logger,
-    ISecurityAuditService? securityAudit = null)
+    ISecurityAuditService? securityAudit = null,
+    TimeProvider? timeProvider = null)
 {
     private static readonly TimeSpan ExtractorDeadline = TimeSpan.FromSeconds(20);
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     public async Task<DocumentCaptureView> UploadAsync(
         string kind,
@@ -74,7 +77,7 @@ public sealed class DocumentCaptureService(
         var config = options.Value;
         if (!config.Enabled || !extractor.IsConfigured)
             throw new DocumentCaptureServiceException(503, "DOCUMENT_CAPTURE_UNCONFIGURED");
-        if (idempotencyKey is null || idempotencyKey.Length is < 1 or > 80)
+        if (idempotencyKey is { Length: 0 or > 80 })
             throw new DocumentCaptureServiceException(400, "DOCUMENT_IDEMPOTENCY_KEY_INVALID");
 
         var companyId = tenant.RequireCompanyId();
@@ -85,15 +88,48 @@ public sealed class DocumentCaptureService(
             throw new DocumentCaptureServiceException(400, "DOCUMENT_KIND_UNKNOWN");
         var access = DocumentCaptureAccessPolicy.AuthorizeNew(entitlements, companyId, tenant.Permissions, kind);
         if (access != DocumentCaptureAccessFailure.None)
-            throw AccessFailure(access);
+            throw AccessFailure(access, kind, companyId);
         if (schemaVersion != DocumentCaptureFieldSchemas.CurrentSchemaVersion)
             throw new DocumentCaptureServiceException(400, "DOCUMENT_KIND_UNKNOWN");
 
-        var prepared = await PrepareMediaAsync(kind, contentType, sourceBytes, config, cancellationToken).ConfigureAwait(false);
         var sourceHash = Hash(sourceBytes);
-        var contentHash = Hash(prepared.Bytes);
         var fingerprint = Hash(Encoding.UTF8.GetBytes($"{sourceHash}\n{kind}\n{schemaVersion}"));
-        var now = DateTime.UtcNow;
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        if (idempotencyKey is not null)
+        {
+            var prior = await db.DocumentCaptures.AsNoTracking()
+                .SingleOrDefaultAsync(capture => capture.CompanyId == companyId && capture.IdempotencyKey == idempotencyKey, cancellationToken)
+                .ConfigureAwait(false);
+            if (prior is not null)
+            {
+                if (!await CanReadCandidateAsync(prior, companyId, actorId, cancellationToken).ConfigureAwait(false))
+                    prior = null;
+            }
+            if (prior is not null)
+            {
+                if (!CryptographicOperations.FixedTimeEquals(Convert.FromHexString(prior.RequestFingerprint), Convert.FromHexString(fingerprint)))
+                    throw new DocumentCaptureServiceException(409, "IDEMPOTENCY_CONFLICT");
+                if (prior.Status is "ready" or "accepted" or "rejected")
+                    return await GetAsync(prior.Id, cancellationToken).ConfigureAwait(false);
+                else if (prior.Status == "extracting" && prior.LeaseExpiresAt > now)
+                    throw new DocumentCaptureServiceException(409, "DOCUMENT_EXTRACTION_IN_PROGRESS");
+            }
+        }
+        if (!force)
+        {
+            var candidates = await db.DocumentCaptures.AsNoTracking()
+                .Where(capture => capture.CompanyId == companyId && capture.SourceHash == sourceHash
+                    && capture.Kind == kind && capture.SchemaVersion == schemaVersion
+                    && (capture.Status == "ready" || capture.Status == "accepted") && capture.BytesDeletedAt == null
+                    && db.DocumentCaptureBlobs.Any(blob => blob.CompanyId == companyId && blob.CaptureId == capture.Id))
+                .OrderByDescending(capture => capture.CreatedAt).Take(100).ToListAsync(cancellationToken).ConfigureAwait(false);
+            foreach (var candidate in candidates)
+                if (await CanReadCandidateAsync(candidate, companyId, actorId, cancellationToken).ConfigureAwait(false))
+                    return await GetAsync(candidate.Id, cancellationToken).ConfigureAwait(false);
+        }
+
+        var prepared = await PrepareMediaAsync(kind, contentType, sourceBytes, config, cancellationToken).ConfigureAwait(false);
+        var contentHash = Hash(prepared.Bytes);
         var captureId = 0;
         var capturePublicId = string.Empty;
         var generation = 1;
@@ -104,9 +140,14 @@ public sealed class DocumentCaptureService(
             if (!await db.Companies.IgnoreQueryFilters().AnyAsync(c => c.Id == companyId && c.DeletedAt == null, cancellationToken).ConfigureAwait(false))
                 throw new DocumentCaptureServiceException(404, "DOCUMENT_NOT_FOUND");
 
-            var existing = await db.DocumentCaptures.IgnoreQueryFilters()
+            var existing = idempotencyKey is null ? null : await db.DocumentCaptures.IgnoreQueryFilters()
                 .SingleOrDefaultAsync(c => c.CompanyId == companyId && c.IdempotencyKey == idempotencyKey, cancellationToken)
                 .ConfigureAwait(false);
+            if (existing is not null && !await CanReadCandidateAsync(existing, companyId, actorId, cancellationToken).ConfigureAwait(false))
+            {
+                existing = null;
+                idempotencyKey = null;
+            }
             if (existing is not null)
             {
                 if (!CryptographicOperations.FixedTimeEquals(Convert.FromHexString(existing.RequestFingerprint), Convert.FromHexString(fingerprint)))
@@ -134,7 +175,15 @@ public sealed class DocumentCaptureService(
                     captureId = existing.Id;
                     capturePublicId = existing.PublicId;
                     if (!await db.DocumentCaptureBlobs.IgnoreQueryFilters().AnyAsync(b => b.CompanyId == companyId && b.CaptureId == captureId, cancellationToken).ConfigureAwait(false))
-                        throw new DocumentCaptureServiceException(409, "DOCUMENT_BYTES_UNAVAILABLE");
+                    {
+                        db.DocumentCaptureBlobs.Add(new DocumentCaptureBlob
+                        {
+                            CompanyId = companyId,
+                            CaptureId = captureId,
+                            DocumentBytes = prepared.Bytes
+                        });
+                        existing.BytesDeletedAt = null;
+                    }
                     db.DocumentCaptureAttempts.Add(new DocumentCaptureAttempt
                     {
                         CompanyId = companyId,
@@ -147,16 +196,22 @@ public sealed class DocumentCaptureService(
             }
             else
             {
-                var duplicate = force ? null : await db.DocumentCaptures.IgnoreQueryFilters().AsNoTracking()
+                List<DocumentCapture> candidates = force ? [] : await db.DocumentCaptures.IgnoreQueryFilters().AsNoTracking()
                     .Where(c => c.CompanyId == companyId && c.SourceHash == sourceHash
                         && c.Kind == kind && c.SchemaVersion == schemaVersion
                         && (c.Status == "ready" || c.Status == "accepted")
                         && c.BytesDeletedAt == null)
-                    .Where(c => kind != "assistant-attachment" || c.CreatedBy == actorId)
                     .Where(c => db.DocumentCaptureBlobs.IgnoreQueryFilters()
                         .Any(blob => blob.CompanyId == companyId && blob.CaptureId == c.Id))
                     .OrderByDescending(c => c.CreatedAt)
-                    .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+                    .Take(100).ToListAsync(cancellationToken).ConfigureAwait(false);
+                DocumentCapture? duplicate = null;
+                foreach (var candidate in candidates)
+                    if (await CanReadCandidateAsync(candidate, companyId, actorId, cancellationToken).ConfigureAwait(false))
+                    {
+                        duplicate = candidate;
+                        break;
+                    }
                 if (duplicate is not null)
                 {
                     replay = true;
@@ -181,7 +236,7 @@ public sealed class DocumentCaptureService(
                         Width = prepared.Width,
                         Height = prepared.Height,
                         PageCount = prepared.PageCount,
-                        IdempotencyKey = idempotencyKey,
+                        IdempotencyKey = idempotencyKey ?? $"omitted:{Guid.NewGuid():N}",
                         RequestFingerprint = fingerprint,
                         ExtractionGeneration = generation,
                         ExtractingStartedAt = now,
@@ -241,7 +296,7 @@ public sealed class DocumentCaptureService(
         EnsureCreatorAccess(capture);
         var access = DocumentCaptureAccessPolicy.AuthorizeRead(entitlements, companyId, tenant.Permissions, capture.Kind);
         if (access != DocumentCaptureAccessFailure.None)
-            throw AccessFailure(access);
+            throw AccessFailure(access, capture.Kind, companyId);
         await EnsureLinkedTargetReadAsync(capture, companyId, cancellationToken).ConfigureAwait(false);
         var bytesAvailable = await db.DocumentCaptureBlobs.AsNoTracking()
             .AnyAsync(b => b.CompanyId == companyId && b.CaptureId == captureId, cancellationToken).ConfigureAwait(false);
@@ -264,7 +319,7 @@ public sealed class DocumentCaptureService(
         EnsureCreatorAccess(capture);
         var access = DocumentCaptureAccessPolicy.AuthorizeRead(entitlements, companyId, tenant.Permissions, capture.Kind);
         if (access != DocumentCaptureAccessFailure.None)
-            throw AccessFailure(access);
+            throw AccessFailure(access, capture.Kind, companyId);
         await EnsureLinkedTargetReadAsync(capture, companyId, cancellationToken).ConfigureAwait(false);
         var blob = await db.DocumentCaptureBlobs.AsNoTracking()
             .SingleOrDefaultAsync(b => b.CompanyId == companyId && b.CaptureId == captureId, cancellationToken).ConfigureAwait(false);
@@ -287,9 +342,9 @@ public sealed class DocumentCaptureService(
             .ConfigureAwait(false)
             ?? throw new DocumentCaptureServiceException(404, "DOCUMENT_NOT_FOUND");
         EnsureCreatorAccess(capture);
-        var writeAccess = DocumentCaptureAccessPolicy.AuthorizeNew(entitlements, companyId, tenant.Permissions, capture.Kind);
+        var writeAccess = DocumentCaptureAccessPolicy.AuthorizeExistingWrite(entitlements, companyId, tenant.Permissions, capture.Kind);
         if (writeAccess != DocumentCaptureAccessFailure.None)
-            throw AccessFailure(writeAccess);
+            throw AccessFailure(writeAccess, capture.Kind, companyId);
         if (capture.Status != "accepted" || capture.AcceptedFieldsJson is null)
             throw new DocumentCaptureServiceException(409, "DOCUMENT_STATE_CONFLICT");
         if (!await db.DocumentCaptureBlobs.IgnoreQueryFilters()
@@ -343,7 +398,7 @@ public sealed class DocumentCaptureService(
             TargetType = targetType,
             TargetId = targetId,
             LinkedBy = tenant.UserId ?? string.Empty,
-            LinkedAt = DateTime.UtcNow
+            LinkedAt = _timeProvider.GetUtcNow().UtcDateTime
         });
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -375,15 +430,34 @@ public sealed class DocumentCaptureService(
             : await db.SalesInvoiceHeaders.AsNoTracking().AnyAsync(target => target.CompanyId == companyId && target.Id == targetId, cancellationToken).ConfigureAwait(false);
         if (!targetExists)
             throw new DocumentCaptureServiceException(404, "DOCUMENT_NOT_FOUND");
-        var captureIds = await db.DocumentCaptureLinks.AsNoTracking()
+        var links = await db.DocumentCaptureLinks.AsNoTracking()
             .Where(link => link.CompanyId == companyId && link.TargetType == targetType && link.TargetId == targetId)
             .OrderBy(link => link.LinkedAt)
-            .Select(link => link.CaptureId)
+            .Select(link => new { link.CaptureId, link.TargetType, link.TargetId, link.LinkedAt })
             .Take(100)
             .ToListAsync(cancellationToken).ConfigureAwait(false);
-        var views = new List<DocumentCaptureView>(captureIds.Count);
-        foreach (var captureId in captureIds)
-            views.Add(await GetAsync(captureId, cancellationToken).ConfigureAwait(false));
+        var captureIds = links.Select(link => link.CaptureId).ToArray();
+        var captures = await db.DocumentCaptures.AsNoTracking()
+            .Where(capture => capture.CompanyId == companyId && captureIds.Contains(capture.Id))
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        var blobs = await db.DocumentCaptureBlobs.AsNoTracking()
+            .Where(blob => blob.CompanyId == companyId && captureIds.Contains(blob.CaptureId))
+            .Select(blob => blob.CaptureId).ToListAsync(cancellationToken).ConfigureAwait(false);
+        var blobIds = blobs.ToHashSet();
+        var linksById = links.ToDictionary(link => link.CaptureId);
+        var views = new List<DocumentCaptureView>(captures.Count);
+        foreach (var capture in captures.OrderBy(item => linksById[item.Id].LinkedAt))
+        {
+            EnsureCreatorAccess(capture);
+            var access = DocumentCaptureAccessPolicy.AuthorizeRead(entitlements, companyId, tenant.Permissions, capture.Kind);
+            if (access != DocumentCaptureAccessFailure.None)
+                throw AccessFailure(access, capture.Kind, companyId);
+            var link = linksById[capture.Id];
+            views.Add(ToView(capture, blobIds.Contains(capture.Id),
+                DocumentCaptureAccessPolicy.AuthorizeExistingWrite(entitlements, companyId, tenant.Permissions, capture.Kind)
+                    == DocumentCaptureAccessFailure.None,
+                new DocumentCaptureLinkView(link.TargetType, targetPublicId, DateTime.SpecifyKind(link.LinkedAt, DateTimeKind.Utc))));
+        }
         return views;
     }
 
@@ -402,9 +476,12 @@ public sealed class DocumentCaptureService(
         if (capture is null)
             throw new DocumentCaptureServiceException(404, "DOCUMENT_NOT_FOUND");
         EnsureCreatorAccess(capture);
+        if (!options.Value.Enabled)
+            throw new DocumentCaptureServiceException(503, "DOCUMENT_CAPTURE_DISABLED");
         var access = DocumentCaptureAccessPolicy.AuthorizeNew(entitlements, companyId, tenant.Permissions, capture.Kind);
         if (access != DocumentCaptureAccessFailure.None)
-            throw AccessFailure(access);
+            throw AccessFailure(access, capture.Kind, companyId);
+        fieldsJson = DocumentCaptureMasking.MaskFinancialFreeText(capture.Kind, fieldsJson);
         using var request = JsonDocument.Parse(fieldsJson);
         if (!DocumentCaptureFieldSchemas.TryValidateAcceptedFields(capture.Kind, capture.SchemaVersion, request.RootElement, out var canonical, out _))
             throw new DocumentCaptureServiceException(400, "DOCUMENT_ACCEPT_INVALID");
@@ -434,7 +511,7 @@ public sealed class DocumentCaptureService(
         if (!await db.DocumentCaptureBlobs.AnyAsync(b => b.CompanyId == companyId && b.CaptureId == captureId, cancellationToken).ConfigureAwait(false))
             throw new DocumentCaptureServiceException(409, "DOCUMENT_BYTES_UNAVAILABLE");
 
-        var now = DateTime.UtcNow;
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
         var updated = await db.DocumentCaptures.Where(c => c.CompanyId == companyId && c.Id == captureId && c.Status == "ready")
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(c => c.Status, "accepted")
@@ -465,6 +542,9 @@ public sealed class DocumentCaptureService(
         if (capture is null)
             throw new DocumentCaptureServiceException(404, "DOCUMENT_NOT_FOUND");
         EnsureCreatorAccess(capture);
+        var access = DocumentCaptureAccessPolicy.AuthorizeExistingWrite(entitlements, companyId, tenant.Permissions, capture.Kind);
+        if (access != DocumentCaptureAccessFailure.None)
+            throw AccessFailure(access, capture.Kind, companyId);
         if (capture.Status == "rejected")
         {
             await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
@@ -472,11 +552,7 @@ public sealed class DocumentCaptureService(
         }
         if (capture.Status is "accepted" or "extracting")
             throw new DocumentCaptureServiceException(409, "DOCUMENT_STATE_CONFLICT");
-        var access = DocumentCaptureAccessPolicy.AuthorizeNew(entitlements, companyId, tenant.Permissions, capture.Kind);
-        if (access != DocumentCaptureAccessFailure.None)
-            throw AccessFailure(access);
-
-        var now = DateTime.UtcNow;
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
         var updated = await db.DocumentCaptures.Where(c => c.CompanyId == companyId && c.Id == captureId && c.Status != "accepted" && c.Status != "extracting")
             .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.Status, "rejected")
                 .SetProperty(c => c.RejectedBy, actorId).SetProperty(c => c.RejectedAt, now), cancellationToken).ConfigureAwait(false);
@@ -519,6 +595,7 @@ public sealed class DocumentCaptureService(
                 || extracted.ProviderVersion.Length > 100)
                 throw new DocumentCaptureServiceException(422, "DOCUMENT_PROVIDER_OUTPUT_INVALID");
             var fieldsJson = DocumentCaptureFieldSchemas.SanitizeProviderFields(media.Kind, extracted.FieldsJson);
+            fieldsJson = DocumentCaptureMasking.MaskFinancialFreeText(media.Kind, fieldsJson);
             using var fieldDocument = JsonDocument.Parse(fieldsJson);
             if (media.Kind == "assistant-attachment")
                 fieldsJson = DocumentCaptureMasking.MaskAssistantFields(fieldDocument.RootElement);
@@ -528,8 +605,8 @@ public sealed class DocumentCaptureService(
                 throw new DocumentCaptureServiceException(422, "DOCUMENT_PROVIDER_OUTPUT_INVALID");
             var warningsJson = JsonSerializer.Serialize(extracted.Warnings.Select(DocumentCaptureWarningCodes.Sanitize).Distinct(StringComparer.Ordinal));
             var rawText = DocumentCaptureMasking.MaskRawText(extracted.RawText);
-            var now = DateTime.UtcNow;
-            await using var finalization = await admissionLock.AcquireCompanyAsync(companyId, CancellationToken.None).ConfigureAwait(false);
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
+            await using var finalization = await AcquireFinalizationLockAsync(companyId).ConfigureAwait(false);
             if (!await IsCompanyLiveAsync(companyId, CancellationToken.None).ConfigureAwait(false))
             {
                 await finalization.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
@@ -565,7 +642,7 @@ public sealed class DocumentCaptureService(
         }
         catch (DocumentCaptureAdmissionBusyException)
         {
-            throw new DocumentCaptureServiceException(429, "DOCUMENT_RATE_LIMITED");
+            throw new DocumentCaptureServiceException(503, "DOCUMENT_BUSY");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -575,8 +652,8 @@ public sealed class DocumentCaptureService(
         {
             logger.LogWarning("Document capture extraction failed. CaptureId={CaptureId}, Kind={Kind}, FailureType={FailureType}",
                 captureId, media.Kind, ex.GetType().Name);
-            var now = DateTime.UtcNow;
-            await using var finalization = await admissionLock.AcquireCompanyAsync(companyId, CancellationToken.None).ConfigureAwait(false);
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
+            await using var finalization = await AcquireFinalizationLockAsync(companyId).ConfigureAwait(false);
             var updated = await db.DocumentCaptures.IgnoreQueryFilters()
                 .Where(c => c.CompanyId == companyId && c.Id == captureId && c.ExtractionGeneration == generation && c.Status == "extracting")
                 .Where(c => db.Companies.IgnoreQueryFilters().Any(company => company.Id == companyId && company.DeletedAt == null))
@@ -629,10 +706,26 @@ public sealed class DocumentCaptureService(
     {
         var hourCount = await db.DocumentCaptureAttempts.IgnoreQueryFilters()
             .CountAsync(attempt => attempt.CompanyId == companyId && attempt.ReservedAt > now.AddHours(-1), cancellationToken).ConfigureAwait(false);
+        var dayStart = now.Date;
         var dayCount = await db.DocumentCaptureAttempts.IgnoreQueryFilters()
-            .CountAsync(attempt => attempt.CompanyId == companyId && attempt.ReservedAt > now.AddDays(-1), cancellationToken).ConfigureAwait(false);
+            .CountAsync(attempt => attempt.CompanyId == companyId && attempt.ReservedAt >= dayStart, cancellationToken).ConfigureAwait(false);
         if (hourCount >= config.MaxAttemptsPerHour || dayCount >= config.MaxAttemptsPerDay)
             throw new DocumentCaptureServiceException(429, "DOCUMENT_RATE_LIMITED");
+    }
+
+    private async Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> AcquireFinalizationLockAsync(int companyId)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return await admissionLock.AcquireCompanyAsync(companyId, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (DocumentCaptureAdmissionBusyException) when (attempt < 2)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(100 * (attempt + 1)), CancellationToken.None).ConfigureAwait(false);
+            }
+        }
     }
 
     private Task<bool> IsCompanyLiveAsync(int companyId, CancellationToken cancellationToken) =>
@@ -642,7 +735,11 @@ public sealed class DocumentCaptureService(
     {
         var lookup = await publicIds.ResolveAsync(publicId, expectedPrefix, cancellationToken).ConfigureAwait(false);
         if (!lookup.Ok)
-            throw new DocumentCaptureServiceException(404, "DOCUMENT_NOT_FOUND");
+        {
+            if (lookup.Error == PublicIdLookupError.NotFound)
+                throw new PublicIdSerializationException(PublicIdErrorCodes.UnknownId, PublicIdErrorCodes.NotFoundMessage);
+            throw new PublicIdSerializationException(PublicIdErrorCodes.InvalidId, "The identifier is invalid.");
+        }
         return lookup.Id;
     }
 
@@ -666,6 +763,29 @@ public sealed class DocumentCaptureService(
         };
         if (!readable)
             throw new DocumentCaptureServiceException(404, "DOCUMENT_NOT_FOUND");
+    }
+
+    private async Task<bool> CanReadCandidateAsync(DocumentCapture capture, int companyId, string actorId,
+        CancellationToken cancellationToken)
+    {
+        if (capture.Kind == "assistant-attachment" && !string.Equals(capture.CreatedBy, actorId, StringComparison.Ordinal))
+            return false;
+        if (DocumentCaptureAccessPolicy.AuthorizeRead(entitlements, companyId, tenant.Permissions, capture.Kind)
+            != DocumentCaptureAccessFailure.None)
+            return false;
+        var link = await db.DocumentCaptureLinks.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.CompanyId == companyId && item.CaptureId == capture.Id, cancellationToken)
+            .ConfigureAwait(false);
+        if (link is null)
+            return true;
+        return link.TargetType switch
+        {
+            "bill" => tenant.Permissions.Contains(SystemPermissions.PurchasesBillsView)
+                && await db.PurchaseInvoiceHeaders.AsNoTracking().AnyAsync(target => target.CompanyId == companyId && target.Id == link.TargetId, cancellationToken).ConfigureAwait(false),
+            "invoice" => tenant.Permissions.Contains(SystemPermissions.SalesInvoicesView)
+                && await db.SalesInvoiceHeaders.AsNoTracking().AnyAsync(target => target.CompanyId == companyId && target.Id == link.TargetId, cancellationToken).ConfigureAwait(false),
+            _ => false
+        };
     }
 
     private async Task<DocumentCaptureLinkView?> GetLinkViewAsync(DocumentCapture capture, int companyId, CancellationToken cancellationToken)
@@ -697,10 +817,11 @@ public sealed class DocumentCaptureService(
             throw new DocumentCaptureServiceException(404, "DOCUMENT_NOT_FOUND");
     }
 
-    private static DocumentCaptureServiceException AccessFailure(DocumentCaptureAccessFailure failure) => failure switch
+    private DocumentCaptureServiceException AccessFailure(DocumentCaptureAccessFailure failure, string kind, int companyId) => failure switch
     {
-        DocumentCaptureAccessFailure.FeatureRequired => new(403, "DOCUMENT_FEATURE_REQUIRED"),
-        DocumentCaptureAccessFailure.ModuleRequired => new(403, "DOCUMENT_MODULE_REQUIRED"),
+        DocumentCaptureAccessFailure.FeatureRequired or DocumentCaptureAccessFailure.ModuleRequired =>
+            new(403, "ENTITLEMENT_DENIED", entitlementDecision: DocumentCaptureAccessPolicy.GetEntitlementDecision(entitlements, companyId, kind, failure),
+                requiredModules: failure == DocumentCaptureAccessFailure.ModuleRequired ? DocumentCaptureAccessPolicy.GetRequiredModules(kind) : null),
         DocumentCaptureAccessFailure.PermissionRequired => new(403, "DOCUMENT_PERMISSION_REQUIRED"),
         _ => new(404, "DOCUMENT_NOT_FOUND")
     };
@@ -734,12 +855,11 @@ public sealed class DocumentCaptureService(
         capture.AcceptedAt is { } accepted ? DateTime.SpecifyKind(accepted, DateTimeKind.Utc) : null,
         capture.RejectedAt is { } rejected ? DateTime.SpecifyKind(rejected, DateTimeKind.Utc) : null);
 
-    private static JsonElement? ParseJson(string? json)
+    private static JToken? ParseJson(string? json)
     {
         if (string.IsNullOrEmpty(json))
             return null;
-        using var document = JsonDocument.Parse(json);
-        return document.RootElement.Clone();
+        return JToken.Parse(json);
     }
 
     private static string Hash(ReadOnlySpan<byte> bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
@@ -754,9 +874,12 @@ public sealed class DocumentCaptureService(
         string NormalizationVersion);
 }
 
-public sealed class DocumentCaptureServiceException(int statusCode, string errorCode, string? captureId = null) : Exception(errorCode)
+public sealed class DocumentCaptureServiceException(int statusCode, string errorCode, string? captureId = null,
+    EntitlementDecision? entitlementDecision = null, IReadOnlyList<string>? requiredModules = null) : Exception(errorCode)
 {
     public int StatusCode { get; } = statusCode;
     public string ErrorCode { get; } = errorCode;
     public string? CaptureId { get; } = captureId;
+    public EntitlementDecision? EntitlementDecision { get; } = entitlementDecision;
+    public IReadOnlyList<string>? RequiredModules { get; } = requiredModules;
 }
