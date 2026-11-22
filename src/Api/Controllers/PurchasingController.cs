@@ -858,6 +858,9 @@ namespace Api.Controllers
             if (paymentTermId.HasValue)
                 _tenantGuard.EnsureOwned<PaymentTerm>(paymentTermId.Value, nameof(billDto.PaymentTermId));
 
+            if (Api.Service.BillCaptureReviewValidator.ValidateForSave(_db, _tenantContext, billDto, approving) is { } captureReviewFailure)
+                return captureReviewFailure;
+
             Core.Authorization.IWorkspacePolicyCompletionToken? scope = null;
             try
             {
@@ -981,10 +984,15 @@ namespace Api.Controllers
         [HttpPost]
         [Route("ApproveBill")]
         [RequirePermission(SystemPermissions.PurchasesBillsPost)]
-        public IActionResult ApproveBill([Dto.Common.PublicId("bill")] int id, bool confirmDuplicate = false)
+        public IActionResult ApproveBill(
+            [Dto.Common.PublicId("bill")] int id,
+            bool confirmDuplicate = false,
+            [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] Dto.Purchasing.CaptureReviewContext? captureReview = null)
         {
             _tenantGuard.EnsureOwned<PurchaseInvoiceHeader>(id, nameof(id));
             var bill = _db.PurchaseInvoiceHeaders.Include(b => b.PurchaseInvoiceLines).Single(b => b.Id == id);
+            if (Api.Service.BillCaptureReviewValidator.ValidateForApprove(_db, _tenantContext, bill, captureReview) is { } captureReviewFailure)
+                return captureReviewFailure;
             var vendorInvoiceNo = Blank(bill.VendorInvoiceNo);
             if (vendorInvoiceNo != null)
             {
