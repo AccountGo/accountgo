@@ -36,6 +36,7 @@ namespace Api.Controllers
         private readonly IConfiguration _configuration;
         private readonly Services.Financial.IBooksLockGuard _booksLockGuard;
         private readonly Core.Authorization.IWorkspacePolicyTransaction? _policyTransaction;
+        private readonly Api.Service.ISecurityAuditService? _securityAudit;
 
         public SalesController(IAdministrationService adminService,
             ISalesService salesService,
@@ -52,7 +53,8 @@ namespace Api.Controllers
             Api.Service.SalesInvoicePresentation invoicePresentation,
             IConfiguration configuration,
             Services.Financial.IBooksLockGuard booksLockGuard,
-            Core.Authorization.IWorkspacePolicyTransaction? policyTransaction = null)
+            Core.Authorization.IWorkspacePolicyTransaction? policyTransaction = null,
+            Api.Service.ISecurityAuditService? securityAudit = null)
         {
             _adminService = adminService;
             _salesService = salesService;
@@ -70,6 +72,7 @@ namespace Api.Controllers
             _configuration = configuration;
             _booksLockGuard = booksLockGuard;
             _policyTransaction = policyTransaction;
+            _securityAudit = securityAudit;
         }
 
         private IActionResult? RefuseIfBooksLocked(DateTime date)
@@ -1839,6 +1842,8 @@ namespace Api.Controllers
                     return RequirePermissionAttribute.Denied(Core.Domain.Security.SystemPermissions.SalesInvoicesPost);
                 if (issuing && RefuseBeforeBooksStart(salesInvoiceDto.InvoiceDate) is { } beforeBooksStart)
                     return beforeBooksStart;
+                if (!issuing && Api.Service.SalesInvoiceCaptureReviewValidator.ValidateForDraft(_db, _tenantContext, salesInvoiceDto.Id > 0 ? salesInvoiceDto.Id : null, salesInvoiceDto.CaptureReviews) is { } draftReviewFailure)
+                    return draftReviewFailure;
 
                 Core.Domain.Sales.SalesInvoiceHeader? salesInvoice = null;
                 Core.Domain.Sales.SalesOrderHeader? salesOrder = null;
@@ -2085,9 +2090,21 @@ namespace Api.Controllers
                 var stockWarnings = _salesService.GetSalesInvoiceStockWarnings(salesInvoice);
                 CaptureIfIssued(salesInvoice);
                 _salesService.SaveSalesInvoice(salesInvoice, salesOrder!);
+                IReadOnlyList<Api.Service.AcknowledgedCaptureDiscrepancy> acknowledgedDiscrepancies = Array.Empty<Api.Service.AcknowledgedCaptureDiscrepancy>();
+                if (issuing)
+                {
+                    var reviewResult = Api.Service.SalesInvoiceCaptureReviewValidator.ValidateForIssue(_db, _tenantContext, salesInvoice, salesInvoiceDto.CaptureReviews);
+                    if (!reviewResult.Succeeded)
+                        return reviewResult.Failure!;
+                    acknowledgedDiscrepancies = reviewResult.AcknowledgedDiscrepancies;
+                }
                 if (CapturePaymentInstructionsIfIssued(salesInvoice))
                     _salesService.UpdateSalesInvoice(salesInvoice);
                 tx.Commit();
+                tx.Dispose();
+
+                if (acknowledgedDiscrepancies.Count > 0)
+                    RecordInvoiceCaptureDiscrepancyAcknowledgements(salesInvoice.PublicId, acknowledgedDiscrepancies);
 
                 // Auto-post to GL if issued (not draft) and not already posted
                 string? postingError = null;
@@ -2462,7 +2479,10 @@ namespace Api.Controllers
         [HttpPost]
         [Route("IssueSalesInvoice")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesPost)]
-        public IActionResult IssueSalesInvoice([Dto.Common.PublicId("inv")] int id, string? expectedNo = null)
+        public IActionResult IssueSalesInvoice(
+            [Dto.Common.PublicId("inv")] int id,
+            string? expectedNo = null,
+            [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] Dto.Sales.IssueSalesInvoiceRequest? request = null)
         {
             try
             {
@@ -2494,6 +2514,10 @@ namespace Api.Controllers
                 if (RefuseIfBooksLocked(invoice.Date) is { } locked)
                     return locked;
 
+                var reviewResult = Api.Service.SalesInvoiceCaptureReviewValidator.ValidateForIssue(_db, _tenantContext, invoice, request?.CaptureReviews);
+                if (!reviewResult.Succeeded)
+                    return reviewResult.Failure!;
+
                 var stockWarnings = invoice.GeneralLedgerHeaderId.HasValue
                     ? new List<string>()
                     : _salesService.GetSalesInvoiceStockWarnings(invoice);
@@ -2513,6 +2537,10 @@ namespace Api.Controllers
                 if (CapturePaymentInstructionsIfIssued(invoice))
                     _salesService.UpdateSalesInvoice(invoice);
                 tx.Commit();
+                tx.Dispose();
+
+                if (reviewResult.AcknowledgedDiscrepancies.Count > 0)
+                    RecordInvoiceCaptureDiscrepancyAcknowledgements(invoice.PublicId, reviewResult.AcknowledgedDiscrepancies);
 
                 string? postingError = null;
                 if (!invoice.GeneralLedgerHeaderId.HasValue)
@@ -2526,6 +2554,47 @@ namespace Api.Controllers
                     return StatusCode(numberProblem.Status, new { message = numberProblem.Message, code = numberProblem.Code });
                 _logger.LogError(ex, "Failed to issue invoice {InvoiceId}", id);
                 return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        private void RecordInvoiceCaptureDiscrepancyAcknowledgements(
+            string invoicePublicId,
+            IReadOnlyList<Api.Service.AcknowledgedCaptureDiscrepancy> acknowledgements)
+        {
+            var audit = _securityAudit ?? HttpContext?.RequestServices?.GetService(typeof(Api.Service.ISecurityAuditService)) as Api.Service.ISecurityAuditService;
+            if (audit is null || acknowledgements.Count == 0)
+                return;
+
+            try
+            {
+                var actor = _tenantContext.UserId ?? GetUserNameFromRequestHeader();
+                var companyId = _tenantContext.RequireCompanyId();
+                foreach (var ack in acknowledgements)
+                {
+                    audit.LogEventAsync(
+                        "invoice.capture_discrepancy.acknowledged",
+                        "success",
+                        actor,
+                        companyId,
+                        new
+                        {
+                            invoiceId = invoicePublicId,
+                            captureId = ack.CapturePublicId,
+                            sourceGrandTotal = ack.SourceGrandTotal,
+                            formTotal = ack.FormTotal,
+                            difference = ack.Difference,
+                            actor,
+                        }).GetAwaiter().GetResult();
+                }
+            }
+            catch (Exception ex)
+            {
+                // Best effort: the invoice issue is already committed, so an audit failure must never turn it into a 500.
+                _logger.LogWarning(
+                    ex,
+                    "Failed to record capture discrepancy acknowledgement audit events for invoice {InvoicePublicId} (count={Count}).",
+                    invoicePublicId,
+                    acknowledgements.Count);
             }
         }
 
