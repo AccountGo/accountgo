@@ -27,9 +27,11 @@ import {
   EditableLineDraft,
   evaluateFinancialApplyGates,
   getFieldDescriptors,
+  isSalesKind,
   isSupportedSchemaVersion,
   isVendorKind,
   KIND_LABELS,
+  validateSalesFieldsForAccept,
   validateVendorFieldsForAccept,
   VendorCaptureFields,
 } from './fields';
@@ -205,33 +207,58 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
       return;
     }
 
-    if (!isVendorKind(capture.kind)) {
-      setValidationErrors([`No typed review schema handler is registered in this panel for kind "${capture.kind}".`]);
+    if (isVendorKind(capture.kind)) {
+      const checked = validateVendorFieldsForAccept(
+        {
+          vendorName: headerValues.vendorName ?? '',
+          vendorInvoiceNo: headerValues.vendorInvoiceNo ?? '',
+          date: headerValues.date ?? '',
+          dueDate: headerValues.dueDate ?? '',
+          referenceNo: headerValues.referenceNo ?? '',
+          currency: headerValues.currency ?? '',
+          notes: headerValues.notes ?? '',
+        },
+        lines,
+        sourceTotals,
+        paymentHints
+      );
+      if (!checked.valid) {
+        setValidationErrors(checked.errors);
+        return;
+      }
+      const canonical = await accept(checked.payload as Record<string, unknown>);
+      if (canonical) {
+        onAccepted(canonical);
+      }
       return;
     }
 
-    const checked = validateVendorFieldsForAccept(
-      {
-        vendorName: headerValues.vendorName ?? '',
-        vendorInvoiceNo: headerValues.vendorInvoiceNo ?? '',
-        date: headerValues.date ?? '',
-        dueDate: headerValues.dueDate ?? '',
-        referenceNo: headerValues.referenceNo ?? '',
-        currency: headerValues.currency ?? '',
-        notes: headerValues.notes ?? '',
-      },
-      lines,
-      sourceTotals,
-      paymentHints
-    );
-    if (!checked.valid) {
-      setValidationErrors(checked.errors);
+    if (isSalesKind(capture.kind)) {
+      const checked = validateSalesFieldsForAccept(
+        {
+          customerName: headerValues.customerName ?? '',
+          sourceInvoiceNo: headerValues.sourceInvoiceNo ?? '',
+          date: headerValues.date ?? '',
+          dueDate: headerValues.dueDate ?? '',
+          referenceNo: headerValues.referenceNo ?? '',
+          currency: headerValues.currency ?? '',
+          notes: headerValues.notes ?? '',
+        },
+        lines,
+        sourceTotals
+      );
+      if (!checked.valid) {
+        setValidationErrors(checked.errors);
+        return;
+      }
+      const canonical = await accept(checked.payload as Record<string, unknown>);
+      if (canonical) {
+        onAccepted(canonical);
+      }
       return;
     }
-    const canonical = await accept(checked.payload as Record<string, unknown>);
-    if (canonical) {
-      onAccepted(canonical);
-    }
+
+    setValidationErrors([`No typed review schema handler is registered in this panel for kind "${capture.kind}".`]);
   };
 
   const handleUseAlreadyAccepted = () => {
@@ -241,7 +268,7 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
 
   const descriptors = capture ? getFieldDescriptors(capture.kind, capture.schemaVersion) : [];
   const schemaSupported = capture ? isSupportedSchemaVersion(capture.schemaVersion) : true;
-  const kindHasTypedHandler = capture ? isVendorKind(capture.kind) : true;
+  const kindHasTypedHandler = capture ? (isVendorKind(capture.kind) || isSalesKind(capture.kind)) : true;
   const gates = capture ? evaluateFinancialApplyGates(capture, orgCurrency) : null;
   const isAlreadyLinked = Boolean(capture?.link);
 
@@ -507,8 +534,15 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
             </div>
           )}
 
+          {/* Reference-only & historical-import warning for sales-invoice captures */}
+          {schemaSupported && isSalesKind(capture.kind) && (
+            <div className="rounded-xl border border-sky-500/25 bg-sky-500/10 p-3 text-xs text-sky-900 dark:text-sky-200">
+              Sales capture creates a new draft from a reference document, not a historical import. The source invoice number is kept as a reference only and never replaces AccountGo invoice numbering.
+            </div>
+          )}
+
           {/* Editable financial lines */}
-          {schemaSupported && isVendorKind(capture.kind) && (
+          {schemaSupported && (isVendorKind(capture.kind) || isSalesKind(capture.kind)) && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">

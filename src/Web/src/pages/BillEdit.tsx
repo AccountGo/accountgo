@@ -230,8 +230,8 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
             // Load already-linked evidence for this draft so reconciliation and approval work in edit mode (G3).
             const linkedRes = await authFetch(`/api/document-captures/linked/bill/${encodeURIComponent(bill.id)}`).catch(() => null);
             if (!cancelled && linkedRes?.ok) {
-              const linked: DocumentCaptureView[] = await linkedRes.json();
-              if (!cancelled) setLinkedCaptures(linked);
+              const rawLinked = await linkedRes.json();
+              if (!cancelled) setLinkedCaptures(Array.isArray(rawLinked) ? rawLinked : []);
             }
           } else {
             // A copy is a new bill: dated today, due on the same terms, without the vendor's number.

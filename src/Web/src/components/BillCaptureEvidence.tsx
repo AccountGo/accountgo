@@ -57,7 +57,8 @@ export const BillCaptureEvidence: React.FC<BillCaptureEvidenceProps> = ({
           onCapturesLoaded?.([]);
           return;
         }
-        const data: DocumentCaptureView[] = await res.json();
+        const raw = await res.json();
+        const data: DocumentCaptureView[] = Array.isArray(raw) ? raw : [];
         if (!cancelled) {
           setCaptures(data);
           onCapturesLoaded?.(data);

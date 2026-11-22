@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Link, useOutletContext, useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useCallback, useContext } from 'react';
+import { Link, UNSAFE_DataRouterContext, useBlocker, useOutletContext, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Plus,
   Trash2,
@@ -15,14 +15,31 @@ import {
   Users,
   ChevronsUpDown,
   Pencil,
+  ScanLine,
+  RefreshCw,
+  ExternalLink,
 } from 'lucide-react';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { CatalogPickerDialog } from '../components/CatalogPickerDialog';
 import { PartyPickerDialog } from '../components/PartyPickerDialog';
 import { PartyFormDialog } from '../components/PartyFormDialog';
 import { ItemFormDialog } from '../components/ItemFormDialog';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { usePermissions } from '../components/Gating';
 import { useOptionalCapabilities } from '../lib/entitlements';
+import { DocumentCapturePanel } from '../components/document-capture/DocumentCapturePanel';
+import {
+  computeCaptureDiscrepancy,
+  describeCaptureError,
+  DocumentCaptureCapabilities,
+  DocumentCaptureView,
+  evaluateFinancialApplyGates,
+  findSuggestedVendor,
+  isValidIsoDate,
+  MAX_SALES_REFERENCE_NO_LENGTH,
+  parseStrictDecimal,
+  SalesCaptureFields,
+} from '../components/document-capture/fields';
 import {
   TenantContextType,
   Invoice,
@@ -50,13 +67,30 @@ interface FormLineItem {
   itemId?: string | null;
   itemDescription: string;
   quantity: number;
-  amount: number;
+  amount: number | '';
   discount: number;
   taxId: string | '';
   salesAccountId?: string | null;
   salesAccountCode?: string | null;
   salesAccountName?: string | null;
+  missingQuantityDefaulted?: boolean;
+  captureAmountWarning?: string;
 }
+
+const DataRouterPendingLinkBlocker: React.FC<{ when: boolean }> = ({ when }) => {
+  const blocker = useBlocker(when);
+  if (blocker.state !== 'blocked') return null;
+  return (
+    <ConfirmDialog
+      title="Leave without attaching source document?"
+      message="Your invoice was saved, but the captured source document has not been attached yet. If you leave now, the evidence will remain unlinked."
+      confirmLabel="Leave without attaching"
+      destructive
+      onConfirm={() => blocker.proceed?.()}
+      onCancel={() => blocker.reset?.()}
+    />
+  );
+};
 
 interface SalesAccountOption {
   id: string;
@@ -140,6 +174,46 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const canManageClients = hasPermission('sales.customers.manage');
   // The line a new catalog item is being added for, from the item picker.
   const [newItemLine, setNewItemLine] = useState<number | null>(null);
+  const hasDataRouter = Boolean(useContext(UNSAFE_DataRouterContext));
+
+  // Document capture state (shared panel, unrecorded-sale confirmation, reconciliation, post-save link)
+  const [captureCapabilities, setCaptureCapabilities] = useState<DocumentCaptureCapabilities | null>(null);
+  const [showCapturePanel, setShowCapturePanel] = useState(false);
+  const [linkedCaptures, setLinkedCaptures] = useState<DocumentCaptureView[]>([]);
+  const [acceptedCapture, setAcceptedCapture] = useState<DocumentCaptureView | null>(null);
+  const [unrecordedSaleConfirmed, setUnrecordedSaleConfirmed] = useState(false);
+  const [ambiguousCurrencyConfirmed, setAmbiguousCurrencyConfirmed] = useState(false);
+  const [suggestedCustomer, setSuggestedCustomer] = useState<CustomerOption | null>(null);
+  const [pendingDueDate, setPendingDueDate] = useState<string | null>(null);
+  const [pendingLineMerge, setPendingLineMerge] = useState<FormLineItem[] | null>(null);
+  const [ackSnapshots, setAckSnapshots] = useState<
+    Record<string, { sourceGrandTotal: number | null; formTotal: number }>
+  >({});
+  const [serverReconciliation, setServerReconciliation] = useState<
+    Record<string, { sourceGrandTotal: number; formTotal: number; difference: number }>
+  >({});
+  const [pendingLink, setPendingLink] = useState<{
+    captureId: string;
+    invoiceId: string;
+    error: string;
+  } | null>(null);
+  const [retryingLink, setRetryingLink] = useState(false);
+
+  const captureAvailable = Boolean(
+    captureCapabilities?.enabled &&
+      captureCapabilities.providerAvailable &&
+      captureCapabilities.kinds.includes('sales-invoice')
+  );
+
+  useEffect(() => {
+    if (!pendingLink) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [pendingLink]);
 
   // Currency
   const currencySymbol = getCurrencySymbol(currentOrg.currency);
@@ -302,13 +376,21 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     if (isEdit && invoiceId) {
       const loadInvoice = async () => {
         try {
-          const res = await authFetch(`/api/Sales/SalesInvoice?id=${invoiceId}`);
+          const [res, linkedRes] = await Promise.all([
+            authFetch(`/api/Sales/SalesInvoice?id=${invoiceId}`),
+            authFetch(`/api/document-captures/linked/invoice/${encodeURIComponent(invoiceId)}`).catch(() => null),
+          ]);
           if (!res.ok) throw new Error(`Could not load invoice ${shortRef(invoiceId)}`);
           const data: Invoice = await res.json();
 
           if (data.status !== 'Draft') {
             navigate(`/org/${orgSlug}/sales/${invoiceId}`, { replace: true });
             return;
+          }
+
+          if (linkedRes?.ok) {
+            const rawLinked = await linkedRes.json().catch(() => []);
+            setLinkedCaptures(Array.isArray(rawLinked) ? rawLinked : []);
           }
 
           setSelectedCustomerId(data.customerId);
@@ -507,7 +589,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
 
     lines.forEach((l) => {
       const taxPercent = taxes.find(t => t.id === l.taxId)?.rate ?? 0;
-      const amounts = invoiceLineAmounts(l.quantity, l.amount, l.discount, taxPercent);
+      const amounts = invoiceLineAmounts(l.quantity, Number(l.amount) || 0, l.discount, taxPercent);
       subtotal += amounts.subtotal;
       totalDiscount += amounts.discount;
       totalTax += amounts.tax;
@@ -526,6 +608,209 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     };
   }, [lines, taxes, shippingHandlingCharge]);
 
+  // Discover document-capture capabilities ONCE per workspace and pass down to DocumentCapturePanel.
+  useEffect(() => {
+    let cancelled = false;
+    setCaptureCapabilities(null);
+    setShowCapturePanel(false);
+    setAcceptedCapture(null);
+    setUnrecordedSaleConfirmed(false);
+    setSuggestedCustomer(null);
+    setPendingDueDate(null);
+    setPendingLineMerge(null);
+    setAckSnapshots({});
+    setServerReconciliation({});
+    setPendingLink(null);
+    if (!salesWritable || isIssued) return;
+    (async () => {
+      try {
+        const res = await authFetch('/api/document-captures/capabilities');
+        if (cancelled || !res.ok) return;
+        const capsData: DocumentCaptureCapabilities = await res.json();
+        if (!cancelled) setCaptureCapabilities(capsData);
+      } catch {
+        if (!cancelled) setCaptureCapabilities(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch, orgSlug, salesWritable, isIssued]);
+
+  useEffect(() => {
+    setServerReconciliation({});
+  }, [calculatedTotals.grandTotal]);
+
+  const reviewedCaptures = useMemo<DocumentCaptureView[]>(() => {
+    const map = new Map<string, DocumentCaptureView>();
+    for (const c of linkedCaptures) map.set(c.id, c);
+    if (acceptedCapture) map.set(acceptedCapture.id, acceptedCapture);
+    return Array.from(map.values());
+  }, [linkedCaptures, acceptedCapture]);
+
+  const getDiscrepancyForCapture = useCallback(
+    (capture: DocumentCaptureView) => {
+      const override = serverReconciliation[capture.id];
+      if (override) {
+        return {
+          sourceGrandTotal: override.sourceGrandTotal,
+          formTotal: override.formTotal,
+          difference: override.difference,
+          hasDiscrepancy: Math.abs(override.difference) > 0.005,
+        };
+      }
+      const fields = ((capture.acceptedFields ?? capture.fields) as SalesCaptureFields | null) ?? null;
+      return computeCaptureDiscrepancy(fields?.sourceTotals ?? null, calculatedTotals.grandTotal);
+    },
+    [serverReconciliation, calculatedTotals.grandTotal]
+  );
+
+  const isCaptureAcknowledged = useCallback(
+    (capture: DocumentCaptureView) => {
+      const disc = getDiscrepancyForCapture(capture);
+      const snap = ackSnapshots[capture.id];
+      return Boolean(
+        snap &&
+          snap.sourceGrandTotal === disc.sourceGrandTotal &&
+          snap.formTotal === disc.formTotal
+      );
+    },
+    [ackSnapshots, getDiscrepancyForCapture]
+  );
+
+  const mapCapturedLines = useCallback((fields: SalesCaptureFields): FormLineItem[] => {
+    const sourceLines = fields.lines ?? [];
+    return sourceLines
+      .filter((l) => (l.description && l.description.trim() !== '') || (l.unitAmount && l.unitAmount.trim() !== '') || (l.sourceLineTotal && l.sourceLineTotal.trim() !== ''))
+      .map((l) => {
+        const parsedQty = parseStrictDecimal(l.quantity ?? null);
+        const qtyMissing = !l.quantity || l.quantity.trim() === '';
+        const qty = parsedQty.valid && parsedQty.numeric !== null && parsedQty.numeric > 0 ? parsedQty.numeric : 1;
+
+        const parsedAmt = parseStrictDecimal(l.unitAmount ?? null);
+        const hasValidAmount = Boolean(l.unitAmount && l.unitAmount.trim() !== '' && parsedAmt.valid && parsedAmt.numeric !== null);
+
+        const parsedDisc = parseStrictDecimal(l.discount ?? null);
+        const discount = parsedDisc.valid && parsedDisc.numeric !== null ? parsedDisc.numeric : 0;
+
+        return {
+          itemId: null,
+          itemDescription: (l.description ?? '').trim(),
+          quantity: qty,
+          amount: hasValidAmount ? parsedAmt.numeric! : '',
+          discount,
+          taxId: '',
+          missingQuantityDefaulted: Boolean(l.missingQuantityDefaulted || qtyMissing),
+          captureAmountWarning: hasValidAmount ? undefined : 'Enter a valid unit price before saving.',
+        };
+      });
+  }, []);
+
+  const hasPopulatedLines = useMemo(
+    () => lines.some((l) => l.itemId || l.itemDescription.trim() !== '' || (l.amount !== '' && Number(l.amount) !== 0)),
+    [lines]
+  );
+
+  const applyCapturedMonetaryLines = useCallback(
+    (fields: SalesCaptureFields) => {
+      const mapped = mapCapturedLines(fields);
+      if (mapped.length === 0) return;
+      if (hasPopulatedLines) {
+        setPendingLineMerge(mapped);
+      } else {
+        setLines(mapped);
+        setPendingLineMerge(null);
+      }
+    },
+    [hasPopulatedLines, mapCapturedLines]
+  );
+
+  const applyConfirmedSalesCapture = useCallback(
+    (canonical: DocumentCaptureView) => {
+      const fields = ((canonical.acceptedFields ?? canonical.fields) as SalesCaptureFields | null) ?? {};
+      const gates = evaluateFinancialApplyGates(canonical, currentOrg.currency, ambiguousCurrencyConfirmed);
+
+      const matched = findSuggestedVendor(fields.customerName, customers);
+      setSuggestedCustomer(matched && matched.id !== selectedCustomerId ? matched : null);
+
+      if (!gates.canApplyNonMonetary) {
+        return;
+      }
+
+      // Source invoice number is kept ONLY as source reference (referenceNo), never replacing AccountGo numbering (invoiceNo).
+      const sourceRef = fields.sourceInvoiceNo?.trim() || fields.referenceNo?.trim();
+      if (sourceRef) {
+        setReferenceNo(sourceRef.slice(0, MAX_SALES_REFERENCE_NO_LENGTH));
+      }
+      if (fields.date && isValidIsoDate(fields.date)) {
+        setInvoiceDate(fields.date);
+      }
+      if (fields.dueDate && isValidIsoDate(fields.dueDate)) {
+        if (paymentTermId === '') {
+          setDueDate(fields.dueDate);
+        } else {
+          setPendingDueDate(fields.dueDate);
+        }
+      }
+      if (fields.notes?.trim()) {
+        setNotes((prev) => (prev.trim() ? prev : fields.notes!.trim()));
+      }
+
+      if (gates.canApplyMonetary) {
+        applyCapturedMonetaryLines(fields);
+      }
+    },
+    [ambiguousCurrencyConfirmed, applyCapturedMonetaryLines, currentOrg.currency, customers, paymentTermId, selectedCustomerId]
+  );
+
+  const handleCaptureAccepted = useCallback((canonical: DocumentCaptureView) => {
+    setAcceptedCapture(canonical);
+    setShowCapturePanel(false);
+    setUnrecordedSaleConfirmed(false);
+    setAmbiguousCurrencyConfirmed(false);
+    setSuggestedCustomer(null);
+    setPendingDueDate(null);
+    setPendingLineMerge(null);
+    setPendingLink(null);
+    setAckSnapshots((prev) => {
+      const next = { ...prev };
+      delete next[canonical.id];
+      return next;
+    });
+  }, []);
+
+  const linkCaptureToInvoice = useCallback(
+    async (captureId: string, savedInvoiceId: string, warnings: string[], postingError: string | null) => {
+      setRetryingLink(true);
+      try {
+        const linkRes = await authFetch(`/api/document-captures/${encodeURIComponent(captureId)}/links`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetType: 'invoice', targetId: savedInvoiceId }),
+        });
+        if (!linkRes.ok) {
+          const body = await linkRes.json().catch(() => null);
+          const presentation = describeCaptureError(body?.code, linkRes.status);
+          setPendingLink({ captureId, invoiceId: savedInvoiceId, error: presentation.message });
+          return false;
+        }
+        setPendingLink(null);
+        navigate(`/org/${orgSlug}/sales/${savedInvoiceId}`, { state: { stockWarnings: warnings, postingError } });
+        return true;
+      } catch {
+        setPendingLink({
+          captureId,
+          invoiceId: savedInvoiceId,
+          error: 'Could not attach the source document right now. Retry attachment without saving the invoice again.',
+        });
+        return false;
+      } finally {
+        setRetryingLink(false);
+      }
+    },
+    [authFetch, navigate, orgSlug]
+  );
+
   // Submit Handler
   const handleSaveInvoice = async (asDraft: boolean) => {
     setErrorBanner(null);
@@ -542,9 +827,18 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       return;
     }
 
-    const validLines = lines.filter((l) => l.itemDescription.trim() !== '' || l.amount > 0);
+    if (lines.some((l) => l.amount === '' || l.captureAmountWarning)) {
+      setErrorBanner('Enter a valid unit price for every line before saving.');
+      return;
+    }
+
+    const validLines = lines.filter((l) => l.itemDescription.trim() !== '' || Number(l.amount) > 0);
     if (validLines.length === 0) {
       setErrorBanner('Please provide at least one line item with a description or rate.');
+      return;
+    }
+    if (!asDraft && reviewedCaptures.some((c) => getDiscrepancyForCapture(c).hasDiscrepancy && !isCaptureAcknowledged(c))) {
+      setErrorBanner('The invoice total differs from one or more captured source totals. Correct the lines or check each reconciliation acknowledgement before issuing.');
       return;
     }
     const archived = firstArchivedTax(taxes, validLines.map((line) => line.taxId));
@@ -561,6 +855,19 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     else setIsSavingIssue(true);
 
     try {
+      const captureReviews =
+        reviewedCaptures.length > 0
+          ? reviewedCaptures.map((c) => {
+              const disc = getDiscrepancyForCapture(c);
+              return {
+                captureId: c.id,
+                sourceGrandTotal: disc.sourceGrandTotal,
+                formTotal: disc.formTotal,
+                discrepancyAcknowledged: isCaptureAcknowledged(c),
+              };
+            })
+          : undefined;
+
       const payload: any = {
         id: isEdit && invoiceId ? invoiceId : null,
         // Blank: the invoice takes the next number when it is issued.
@@ -574,6 +881,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         status: asDraft ? 'Draft' : 'Open',
         notes: notes.trim() || undefined,
         paymentInstructions: paymentInstructionsPayload(paymentInstructions, paymentInstructionsCleared),
+        captureReviews,
         salesInvoiceLines: validLines.map((l) => ({
           id: l.id || null,
           itemId: l.itemId || null,
@@ -594,9 +902,35 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => null);
+        if (res.status === 409 && errorData?.code === 'DOCUMENT_REVIEW_REQUIRED') {
+          const nextOverrides: Record<string, { sourceGrandTotal: number; formTotal: number; difference: number }> = {};
+          if (Array.isArray(errorData.discrepancies)) {
+            for (const d of errorData.discrepancies) {
+              if (d?.captureId && typeof d.sourceGrandTotal === 'number' && typeof d.formTotal === 'number') {
+                nextOverrides[d.captureId] = {
+                  sourceGrandTotal: d.sourceGrandTotal,
+                  formTotal: d.formTotal,
+                  difference: typeof d.difference === 'number' ? d.difference : d.formTotal - d.sourceGrandTotal,
+                };
+              }
+            }
+          } else if (errorData?.captureId && typeof errorData.sourceGrandTotal === 'number' && typeof errorData.formTotal === 'number') {
+            nextOverrides[errorData.captureId] = {
+              sourceGrandTotal: errorData.sourceGrandTotal,
+              formTotal: errorData.formTotal,
+              difference: typeof errorData.difference === 'number' ? errorData.difference : errorData.formTotal - errorData.sourceGrandTotal,
+            };
+          }
+          if (Object.keys(nextOverrides).length > 0) {
+            setServerReconciliation((prev) => ({ ...prev, ...nextOverrides }));
+          }
+          setErrorBanner(errorData?.detail || 'The invoice total differs from one or more captured source totals. Correct the invoice or acknowledge the difference before issuing.');
+          return;
+        }
         let msg = 'Failed to save sales invoice.';
         if (Array.isArray(errorData)) msg = errorData.join(' ');
         else if (errorData?.message) msg = errorData.message;
+        else if (errorData?.detail) msg = errorData.detail;
         throw new Error(msg);
       }
 
@@ -606,6 +940,11 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       const postingError = typeof savedData.postingError === 'string' ? savedData.postingError : null;
       setStockWarnings(warnings);
       if (postingError) setErrorBanner(`Issued, but not posted to the ledger: ${postingError}`);
+
+      if (acceptedCapture && acceptedCapture.link?.targetId !== targetId) {
+        await linkCaptureToInvoice(acceptedCapture.id, targetId, warnings, postingError);
+        return;
+      }
 
       setSuccessBanner(
         asDraft
@@ -681,13 +1020,22 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         actions={
           <>
             <HeaderButton label="Cancel" to={`/org/${orgSlug}/sales`} />
+            {salesWritable && !isIssued && captureAvailable && (
+              <HeaderButton
+                label={showCapturePanel ? 'Hide scan' : 'Scan reference invoice'}
+                icon={ScanLine}
+                compact
+                disabled={isSavingDraft || isSavingIssue}
+                onClick={() => setShowCapturePanel((prev) => !prev)}
+              />
+            )}
             {salesWritable && (
               <HeaderButton
                 label="Save draft"
                 icon={Save}
                 compact
                 busy={isSavingDraft}
-                disabled={isSavingIssue}
+                disabled={isSavingIssue || Boolean(pendingLink)}
                 onClick={() => handleSaveInvoice(true)}
               />
             )}
@@ -698,13 +1046,330 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                 icon={Send}
                 variant="primary"
                 busy={isSavingIssue}
-                disabled={isSavingDraft}
+                disabled={isSavingDraft || Boolean(pendingLink)}
                 onClick={() => handleSaveInvoice(false)}
               />
             )}
           </>
         }
       />
+
+      {showCapturePanel && salesWritable && !isIssued && (
+        <div className="mb-6">
+          <DocumentCapturePanel
+            kind="sales-invoice"
+            orgSlug={orgSlug ?? currentOrg.slug}
+            orgCurrency={currentOrg.currency}
+            scopeKey={isEdit ? invoiceId : 'new'}
+            capabilities={captureCapabilities}
+            disabled={isSavingDraft || isSavingIssue}
+            onAccepted={handleCaptureAccepted}
+            onOpenLinkedRecord={(link) => {
+              if (link.targetType === 'invoice') {
+                navigate(`/org/${orgSlug}/sales/${link.targetId}`);
+              }
+            }}
+            onCancel={() => setShowCapturePanel(false)}
+          />
+        </div>
+      )}
+
+      {/* Pending evidence link recovery after a successful invoice save — never repeats SaveSalesInvoice */}
+      {pendingLink && (
+        <div role="alert" className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-300 space-y-2">
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+            <div className="flex-1 space-y-1">
+              <div className="font-semibold">Invoice saved ({pendingLink.invoiceId}), but attaching the source document failed.</div>
+              <p className="text-xs">{pendingLink.error}</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 pl-7">
+            <button
+              type="button"
+              disabled={retryingLink}
+              onClick={() => void linkCaptureToInvoice(pendingLink.captureId, pendingLink.invoiceId, stockWarnings, null)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)] transition disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${retryingLink ? 'animate-spin' : ''}`} />
+              Retry attach evidence
+            </button>
+            <Link
+              to={`/org/${orgSlug}/sales/${pendingLink.invoiceId}`}
+              className="inline-flex items-center gap-1 text-xs font-semibold underline"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              Open saved invoice
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Unrecorded-sale confirmation gate before applying sales reference capture (CFO5) */}
+      {acceptedCapture && !unrecordedSaleConfirmed && (() => {
+        const fields = ((acceptedCapture.acceptedFields ?? acceptedCapture.fields) as SalesCaptureFields | null) ?? {};
+        return (
+          <div role="status" className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-900 dark:text-amber-200 space-y-2.5">
+            <div className="font-semibold text-sm">Confirm new draft from reference document (not historical import)</div>
+            <p>
+              This creates a new AccountGo draft invoice from a reference document. Do not apply an already-recorded or historical sale, as issuing it would duplicate revenue and receivables.
+              {fields.sourceInvoiceNo ? (
+                <> Source invoice # <strong className="font-mono">{fields.sourceInvoiceNo}</strong> will be kept as a reference only and will not replace AccountGo invoice numbering.</>
+              ) : (
+                <> AccountGo invoice numbering remains untouched.</>
+              )}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setUnrecordedSaleConfirmed(true);
+                  applyConfirmedSalesCapture(acceptedCapture);
+                }}
+                className="px-3.5 py-1.5 font-semibold rounded-lg bg-[var(--brand-primary)] text-white hover:opacity-90 transition"
+              >
+                Confirm sale is not already recorded & apply to draft
+              </button>
+              <button
+                type="button"
+                onClick={() => setAcceptedCapture(null)}
+                className="px-3 py-1.5 font-semibold rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Customer suggestion confirmation (exact client-side active match only, never creates a client) */}
+      {suggestedCustomer && (
+        <div role="status" className="mb-4 rounded-xl border border-[var(--brand-ring)]/40 bg-[var(--brand-subtle)]/40 p-3.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span>
+            Suggested client match from scan: <strong className="text-[var(--text-main)]">{suggestedCustomer.name}</strong>
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedCustomerId(suggestedCustomer.id);
+                setSuggestedCustomer(null);
+              }}
+              className="px-3 py-1.5 font-semibold rounded-lg bg-[var(--brand-primary)] text-white hover:opacity-90 transition"
+            >
+              Confirm client
+            </button>
+            <button
+              type="button"
+              onClick={() => setSuggestedCustomer(null)}
+              className="px-2.5 py-1.5 font-semibold rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Explicit due-date vs payment-term choice */}
+      {pendingDueDate && (
+        <div role="status" className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-800 dark:text-amber-300">
+          <span>
+            Captured due date is <strong>{pendingDueDate}</strong>, but this invoice already uses payment terms. Keep existing terms or use the captured due date?
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setPaymentTermId('');
+                setDueDate(pendingDueDate);
+                setPendingDueDate(null);
+              }}
+              className="px-3 py-1.5 font-semibold rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-main)]"
+            >
+              Use captured due date
+            </button>
+            <button
+              type="button"
+              onClick={() => setPendingDueDate(null)}
+              className="px-2.5 py-1.5 font-semibold rounded-lg text-[var(--text-secondary)]"
+            >
+              Keep existing terms
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Explicit merge choice for populated draft lines */}
+      {pendingLineMerge && (
+        <div role="status" className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-800 dark:text-amber-300">
+          <span>
+            This draft already has line items. Choose how to apply the {pendingLineMerge.length} captured line{pendingLineMerge.length === 1 ? '' : 's'}:
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPendingLineMerge(null)}
+              className="px-3 py-1.5 font-semibold rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-main)]"
+            >
+              Keep existing lines
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLines((prev) => [...prev, ...pendingLineMerge]);
+                setPendingLineMerge(null);
+              }}
+              className="px-3 py-1.5 font-semibold rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-main)]"
+            >
+              Append captured lines
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLines(pendingLineMerge);
+                setPendingLineMerge(null);
+              }}
+              className="px-3 py-1.5 font-semibold rounded-lg bg-amber-600 text-white hover:opacity-90 transition"
+            >
+              Replace existing lines
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Persistent reconciliation & currency/class gate card(s) for linked/accepted captures */}
+      {reviewedCaptures.map((reviewCap) => {
+        const capFields = ((reviewCap.acceptedFields ?? reviewCap.fields) as SalesCaptureFields | null) ?? {};
+        const capGates = evaluateFinancialApplyGates(reviewCap, currentOrg.currency, ambiguousCurrencyConfirmed);
+        const capDisc = getDiscrepancyForCapture(reviewCap);
+        const capAcked = isCaptureAcknowledged(reviewCap);
+        return (
+          <section
+            key={reviewCap.id}
+            aria-label={`Captured document review ${reviewCap.id}`}
+            className="mb-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 shadow-sm space-y-3 text-xs"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="font-semibold text-sm text-[var(--text-main)]">
+                Captured source review ({reviewCap.id})
+                {capFields.sourceInvoiceNo && (
+                  <span className="ml-2 font-mono text-xs text-[var(--text-secondary)]">
+                    Source #{capFields.sourceInvoiceNo}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--text-secondary)]">
+                <span>Source currency: <strong className="text-[var(--text-main)]">{capGates.sourceCurrency ?? currentOrg.currency ?? '—'}</strong></span>
+                <span>·</span>
+                <span>
+                  Price basis:{' '}
+                  <strong className="text-[var(--text-main)]">
+                    {capGates.priceBasis === 'inclusive'
+                      ? 'Tax-inclusive'
+                      : capGates.priceBasis === 'exclusive'
+                        ? 'Tax-exclusive'
+                        : 'Unknown'}
+                  </strong>
+                </span>
+              </div>
+            </div>
+
+            {capGates.reasons.length > 0 && (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 space-y-1.5 text-amber-800 dark:text-amber-300">
+                {capGates.reasons.map((reason, idx) => (
+                  <p key={idx}>{reason}</p>
+                ))}
+                {capGates.ambiguousCurrency && !ambiguousCurrencyConfirmed && capGates.canApplyNonMonetary && acceptedCapture?.id === reviewCap.id && unrecordedSaleConfirmed && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAmbiguousCurrencyConfirmed(true);
+                      applyCapturedMonetaryLines(capFields);
+                    }}
+                    className="mt-1 px-3 py-1.5 font-semibold rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-main)]"
+                  >
+                    Confirm amounts are in {currentOrg.currency || 'workspace currency'} and apply lines
+                  </button>
+                )}
+              </div>
+            )}
+
+            {capGates.priceBasis === 'inclusive' && (
+              <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-amber-800 dark:text-amber-300">
+                Source amounts include tax. Adjust unit prices to tax-exclusive amounts before selecting a tax rate so tax is not added a second time.
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3">
+              <div>
+                <div className="text-[var(--text-muted)]">Source totals</div>
+                <div className="font-mono text-[var(--text-main)] mt-0.5">
+                  Subtotal: {capFields.sourceTotals?.subtotal ?? '—'} · Tax: {capFields.sourceTotals?.taxTotal ?? '—'}
+                </div>
+                <div className="font-mono font-semibold text-[var(--text-main)]">
+                  Source total: {capDisc.sourceGrandTotal !== null ? capDisc.sourceGrandTotal.toFixed(2) : (capFields.sourceTotals?.grandTotal ?? '—')}
+                </div>
+              </div>
+              <div>
+                <div className="text-[var(--text-muted)]">Current invoice form</div>
+                <div className="font-mono text-[var(--text-main)] mt-0.5">
+                  Subtotal: {formatCurrency(calculatedTotals.subtotal)} · Tax: {formatCurrency(calculatedTotals.totalTax)}
+                </div>
+                <div className="font-mono font-semibold text-[var(--text-main)]">
+                  Form total: {formatCurrency(capDisc.formTotal)}
+                </div>
+              </div>
+              <div>
+                <div className="text-[var(--text-muted)]">Difference</div>
+                <div
+                  className={`font-mono font-semibold mt-0.5 ${
+                    capDisc.hasDiscrepancy ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'
+                  }`}
+                >
+                  {capDisc.difference === null
+                    ? 'No source total'
+                    : capDisc.hasDiscrepancy
+                      ? `${capDisc.difference > 0 ? '+' : ''}${formatCurrency(capDisc.difference)}`
+                      : 'Matches source total'}
+                </div>
+              </div>
+            </div>
+
+            {capDisc.hasDiscrepancy && (
+              <label className="flex items-start gap-2.5 rounded-xl border border-rose-500/25 bg-rose-500/10 p-3 text-rose-700 dark:text-rose-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  aria-label={`Acknowledge difference for ${reviewCap.id}`}
+                  checked={capAcked}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setAckSnapshots((prev) => ({
+                        ...prev,
+                        [reviewCap.id]: {
+                          sourceGrandTotal: capDisc.sourceGrandTotal,
+                          formTotal: capDisc.formTotal,
+                        },
+                      }));
+                    } else {
+                      setAckSnapshots((prev) => {
+                        const next = { ...prev };
+                        delete next[reviewCap.id];
+                        return next;
+                      });
+                    }
+                  }}
+                  className="mt-0.5 rounded"
+                />
+                <span>
+                  I have reviewed the difference between the captured source total ({capDisc.sourceGrandTotal?.toFixed(2) ?? capFields.sourceTotals?.grandTotal}) and the current invoice total ({formatCurrency(capDisc.formTotal)}) and acknowledge it for issuing. (Saving a draft does not require acknowledgement; changing amounts resets this acknowledgement.)
+                </span>
+              </label>
+            )}
+          </section>
+        );
+      })}
+
+      {hasDataRouter && <DataRouterPendingLinkBlocker when={Boolean(pendingLink)} />}
 
       {/* Notifications */}
       {errorBanner && (
@@ -991,7 +1656,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
               </thead>
               <tbody className="divide-y divide-[var(--border-subtle)] text-sm">
                 {lines.map((line, idx) => {
-                  const lineTotal = invoiceLineAmounts(line.quantity, line.amount, line.discount, 0).subtotal;
+                  const lineTotal = invoiceLineAmounts(line.quantity, Number(line.amount) || 0, line.discount, 0).subtotal;
                   const linked = line.itemId ? catalogItems.find((ci) => ci.id === line.itemId) : undefined;
                   const isCatalogLinked = Boolean(linked && linked.description !== 'Service / Product');
                   const requestedQuantity = lines.filter(other => other.itemId === line.itemId)
@@ -1094,27 +1759,60 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                       <td className="py-2.5 px-3 text-right">
                         <input
                           type="number"
+                          aria-label={`Line ${idx + 1} quantity`}
                           min="1"
                           step="any"
                           value={line.quantity}
-                          onChange={(e) =>
-                            handleLineChange(idx, 'quantity', parseFloat(e.target.value) || 0)
-                          }
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0;
+                            setLines((prev) => prev.map((item, i) => (i === idx ? { ...item, quantity: val, missingQuantityDefaulted: false } : item)));
+                          }}
                           className="w-full h-9 px-2.5 text-sm text-right bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
                         />
+                        {line.missingQuantityDefaulted && (
+                          <p className="mt-0.5 text-[10px] text-amber-600 dark:text-amber-400 text-right">
+                            Defaulted to 1
+                          </p>
+                        )}
                       </td>
 
                       <td className="py-2.5 px-3 text-right">
                         <input
                           type="number"
+                          aria-label={`Line ${idx + 1} unit price`}
                           min="0"
                           step="0.01"
                           value={line.amount}
-                          onChange={(e) =>
-                            handleLineChange(idx, 'amount', parseFloat(e.target.value) || 0)
-                          }
-                          className="w-full h-9 px-2.5 text-sm text-right bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition"
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            if (raw === '') {
+                              setLines((prev) =>
+                                prev.map((item, i) =>
+                                  i === idx ? { ...item, amount: '', captureAmountWarning: 'Enter a valid unit price before saving.' } : item
+                                )
+                              );
+                            } else {
+                              const parsed = parseFloat(raw);
+                              setLines((prev) =>
+                                prev.map((item, i) =>
+                                  i === idx
+                                    ? {
+                                        ...item,
+                                        amount: Number.isFinite(parsed) ? parsed : '',
+                                        captureAmountWarning: Number.isFinite(parsed) ? undefined : 'Enter a valid unit price before saving.',
+                                      }
+                                    : item
+                                )
+                              );
+                            }
+                          }}
+                          className={`w-full h-9 px-2.5 text-sm text-right bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--brand-ring)] focus:outline-none text-[var(--text-main)] transition ${line.captureAmountWarning ? '!border-rose-500/60' : ''}`}
                         />
+                        {line.captureAmountWarning && (
+                          <p className="mt-0.5 text-[10px] text-rose-500 text-right">
+                            {line.captureAmountWarning}
+                          </p>
+                        )}
                       </td>
 
                       <td className="py-2.5 px-3 text-right">

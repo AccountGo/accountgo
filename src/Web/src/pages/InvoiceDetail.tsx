@@ -46,6 +46,12 @@ import { recoverPendingEmail, sendInvoiceEmailRequest } from '../lib/invoiceEmai
 import type { PendingEmailAttempt } from '../lib/customEmail';
 import { useEmailCapabilities } from '../lib/useEmailCapabilities';
 import { RecordHistoryButton, RecordHistoryPanel, useRecordHistory } from '../components/RecordHistoryPanel';
+import { InvoiceCaptureEvidence } from '../components/InvoiceCaptureEvidence';
+import {
+  computeCaptureDiscrepancy,
+  DocumentCaptureView,
+  SalesCaptureFields,
+} from '../components/document-capture/fields';
 import { shortRef } from '../lib/shortRef';
 
 const formatDateTime = (iso: string) =>
@@ -376,6 +382,16 @@ export const InvoiceDetail: React.FC = () => {
 
   // Issue Draft Invoice, optionally emailing it (and emailing issued invoices again later)
   const [isSubmittingIssue, setIsSubmittingIssue] = useState<boolean>(false);
+  const [linkedCaptures, setLinkedCaptures] = useState<DocumentCaptureView[]>([]);
+  const [detailAckSnapshots, setDetailAckSnapshots] = useState<
+    Record<string, { sourceGrandTotal: number | null; formTotal: number }>
+  >({});
+  const [serverReconciliation, setServerReconciliation] = useState<
+    Record<string, { sourceGrandTotal: number; formTotal: number; difference: number }>
+  >({});
+  const handleCapturesLoaded = useCallback((items: DocumentCaptureView[]) => {
+    setLinkedCaptures(items);
+  }, []);
   const [sendDialogMode, setSendDialogMode] = useState<'issue' | 'send' | null>(null);
   const [isSendingEmail, setIsSendingEmail] = useState<boolean>(false);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -427,19 +443,75 @@ export const InvoiceDetail: React.FC = () => {
   /** Issues the draft and returns the number it was given. */
   const issueInvoice = async (): Promise<string> => {
     if (!invoice) return '';
+    const invoiceGrandTotal = invoice.totalAmountAfterTax ?? invoice.amount;
+    const captureReviews = linkedCaptures.map((c) => {
+      const fields = (c.acceptedFields ?? {}) as SalesCaptureFields;
+      const override = serverReconciliation[c.id];
+      const disc = override
+        ? {
+            sourceGrandTotal: override.sourceGrandTotal,
+            formTotal: override.formTotal,
+            difference: override.difference,
+            hasDiscrepancy: Math.abs(override.difference) > 0.005,
+          }
+        : computeCaptureDiscrepancy(fields.sourceTotals ?? null, invoiceGrandTotal);
+      const snap = detailAckSnapshots[c.id];
+      const acknowledged = Boolean(
+        snap &&
+          snap.sourceGrandTotal === disc.sourceGrandTotal &&
+          snap.formTotal === disc.formTotal
+      );
+      return {
+        captureId: c.id,
+        sourceGrandTotal: disc.sourceGrandTotal,
+        formTotal: disc.formTotal,
+        discrepancyAcknowledged: acknowledged,
+      };
+    });
+
     // Every issue path must honor the number shown on the page or in the dialog.
     const expected = !invoice.no && issueNumber ? `&expectedNo=${encodeURIComponent(issueNumber)}` : '';
     const res = await authFetch(`/api/Sales/IssueSalesInvoice?id=${invoice.id}${expected}`, {
       method: 'POST',
+      ...(captureReviews.length > 0
+        ? {
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ captureReviews }),
+          }
+        : {}),
     });
 
     const data = await res.json().catch(() => null);
     if (!res.ok) {
+      if (res.status === 409 && data?.code === 'DOCUMENT_REVIEW_REQUIRED') {
+        const nextOverrides: Record<string, { sourceGrandTotal: number; formTotal: number; difference: number }> = {};
+        if (Array.isArray(data.discrepancies)) {
+          for (const d of data.discrepancies) {
+            if (d?.captureId && typeof d.sourceGrandTotal === 'number' && typeof d.formTotal === 'number') {
+              nextOverrides[d.captureId] = {
+                sourceGrandTotal: d.sourceGrandTotal,
+                formTotal: d.formTotal,
+                difference: typeof d.difference === 'number' ? d.difference : d.formTotal - d.sourceGrandTotal,
+              };
+            }
+          }
+        } else if (data?.captureId && typeof data.sourceGrandTotal === 'number' && typeof data.formTotal === 'number') {
+          nextOverrides[data.captureId] = {
+            sourceGrandTotal: data.sourceGrandTotal,
+            formTotal: data.formTotal,
+            difference: typeof data.difference === 'number' ? data.difference : data.formTotal - data.sourceGrandTotal,
+          };
+        }
+        if (Object.keys(nextOverrides).length > 0) {
+          setServerReconciliation((prev) => ({ ...prev, ...nextOverrides }));
+        }
+        throw new Error(data?.detail || 'The invoice total differs from one or more linked source documents. Acknowledge each difference before issuing.');
+      }
       if (data?.code === 'number_changed' && data?.next) {
         setIssueNumber(data.next);
         if (!sendDialogMode) throw new Error(`${data.message || 'The next invoice number has changed.'} Click Issue invoice again to confirm #${data.next}.`);
       }
-      throw new Error(data?.message || 'Failed to issue invoice.');
+      throw new Error(data?.message || data?.detail || 'Failed to issue invoice.');
     }
     setStockWarnings(Array.isArray(data?.warnings) ? data.warnings.filter((warning: unknown): warning is string => typeof warning === 'string') : []);
     setPostingError(typeof data?.postingError === 'string' ? data.postingError : null);
@@ -1144,6 +1216,75 @@ export const InvoiceDetail: React.FC = () => {
           )}
         </div>
       )}
+
+      {/* Draft Reconciliation Acknowledgements + Supporting Source Evidence (Hidden on Print) */}
+      {invoice.status === 'Draft' && salesWritable && hasPermission('sales.invoices.post') && (() => {
+        const invoiceGrandTotal = invoice.totalAmountAfterTax ?? invoice.amount;
+        const discrepantCaptures = linkedCaptures
+          .map((c) => {
+            const f = (c.acceptedFields ?? {}) as SalesCaptureFields;
+            const override = serverReconciliation[c.id];
+            const disc = override
+              ? {
+                  sourceGrandTotal: override.sourceGrandTotal,
+                  formTotal: override.formTotal,
+                  difference: override.difference,
+                  hasDiscrepancy: Math.abs(override.difference) > 0.005,
+                }
+              : computeCaptureDiscrepancy(f.sourceTotals ?? null, invoiceGrandTotal);
+            return { capture: c, fields: f, disc };
+          })
+          .filter((item) => item.disc.hasDiscrepancy);
+
+        if (discrepantCaptures.length === 0) return null;
+
+        return (
+          <section aria-label="Reconciliation acknowledgement" className="no-print mt-6 rounded-xl border border-rose-500/25 bg-rose-500/10 p-4 text-xs text-rose-700 dark:text-rose-300 space-y-2.5">
+            {discrepantCaptures.map(({ capture, fields, disc }) => {
+              const snap = detailAckSnapshots[capture.id];
+              const checked = Boolean(
+                snap &&
+                  snap.sourceGrandTotal === disc.sourceGrandTotal &&
+                  snap.formTotal === disc.formTotal
+              );
+              return (
+                <label key={capture.id} className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    aria-label={`Acknowledge difference for ${capture.id}`}
+                    checked={checked}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setDetailAckSnapshots((prev) => ({
+                          ...prev,
+                          [capture.id]: {
+                            sourceGrandTotal: disc.sourceGrandTotal,
+                            formTotal: disc.formTotal,
+                          },
+                        }));
+                      } else {
+                        setDetailAckSnapshots((prev) => {
+                          const next = { ...prev };
+                          delete next[capture.id];
+                          return next;
+                        });
+                      }
+                    }}
+                    className="mt-0.5 rounded"
+                  />
+                  <span>
+                    Linked source document ({capture.id}) total is {disc.sourceGrandTotal?.toFixed(2) ?? fields.sourceTotals?.grandTotal}, while this draft invoice total is {formatCurrency(disc.formTotal)} (difference {disc.difference !== null ? `${disc.difference > 0 ? '+' : ''}${formatCurrency(disc.difference)}` : '—'}). I have reviewed this difference and acknowledge it for issuing.
+                  </span>
+                </label>
+              );
+            })}
+          </section>
+        );
+      })()}
+
+      <div className="no-print mt-6">
+        <InvoiceCaptureEvidence invoiceId={invoice.id} onCapturesLoaded={handleCapturesLoaded} />
+      </div>
 
       {/* Record Payment Modal */}
       <ModalShell

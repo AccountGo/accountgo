@@ -28,6 +28,8 @@ export const MAX_TEXT_LENGTH = 2_000;
 export const MAX_LINE_DESCRIPTION_LENGTH = 1_000;
 export const MAX_VENDOR_INVOICE_NO_LENGTH = 50;
 export const MAX_REFERENCE_NO_LENGTH = 100;
+export const MAX_SALES_SOURCE_INVOICE_NO_LENGTH = 200;
+export const MAX_SALES_REFERENCE_NO_LENGTH = 200;
 export const MAX_DECIMAL_SIGNIFICANT_DIGITS = 18;
 export const MAX_DECIMAL_SCALE = 4;
 export const LOW_CONFIDENCE_THRESHOLD = 0.75;
@@ -241,6 +243,10 @@ export function isFinancialKind(kind: string): kind is FinancialCaptureKind {
 
 export function isVendorKind(kind: string): kind is 'expense-receipt' | 'purchase-invoice' {
   return kind === 'expense-receipt' || kind === 'purchase-invoice';
+}
+
+export function isSalesKind(kind: string): kind is 'sales-invoice' {
+  return kind === 'sales-invoice';
 }
 
 export function isLowConfidence(confidence: number | null | undefined): boolean {
@@ -505,6 +511,154 @@ export function validateVendorFieldsForAccept(
     }
     if (paymentHints.paymentMethod) cleanHints.paymentMethod = paymentHints.paymentMethod.slice(0, 100);
     if (Object.keys(cleanHints).length > 0) payload.paymentHints = cleanHints;
+  }
+
+  return { valid: errors.length === 0, errors, payload };
+}
+
+export interface SalesAcceptValidationResult {
+  valid: boolean;
+  errors: string[];
+  payload: SalesCaptureFields;
+}
+
+/**
+ * Validates and normalizes sales-invoice review fields before POST /accept,
+ * mirroring DocumentCaptureFieldSchemas.SalesFields exactly (no paymentHints).
+ */
+export function validateSalesFieldsForAccept(
+  header: {
+    customerName: string;
+    sourceInvoiceNo: string;
+    date: string;
+    dueDate: string;
+    referenceNo: string;
+    currency: string;
+    notes: string;
+  },
+  lines: EditableLineDraft[],
+  sourceTotals?: CaptureSourceTotals | null
+): SalesAcceptValidationResult {
+  const errors: string[] = [];
+
+  if (!isValidIsoDate(header.date)) {
+    errors.push('Enter a valid document date in YYYY-MM-DD format before accepting.');
+  }
+  if (header.dueDate.trim() && !isValidIsoDate(header.dueDate)) {
+    errors.push('Due date must be in YYYY-MM-DD format or left blank.');
+  }
+  if (header.customerName.trim().length > MAX_TEXT_LENGTH) {
+    errors.push(`Customer name can be at most ${MAX_TEXT_LENGTH} characters.`);
+  }
+  if (header.sourceInvoiceNo.trim().length > MAX_SALES_SOURCE_INVOICE_NO_LENGTH) {
+    errors.push(`Source invoice # can be at most ${MAX_SALES_SOURCE_INVOICE_NO_LENGTH} characters.`);
+  }
+  if (header.referenceNo.trim().length > MAX_SALES_REFERENCE_NO_LENGTH) {
+    errors.push(`Reference can be at most ${MAX_SALES_REFERENCE_NO_LENGTH} characters.`);
+  }
+  if (header.notes.trim().length > MAX_TEXT_LENGTH) {
+    errors.push(`Notes can be at most ${MAX_TEXT_LENGTH} characters.`);
+  }
+  const normalizedCurrency = header.currency.trim()
+    ? header.currency.trim().toLowerCase() === 'unknown'
+      ? 'unknown'
+      : header.currency.trim().toUpperCase()
+    : null;
+  if (normalizedCurrency && !isValidCurrencyCode(normalizedCurrency)) {
+    errors.push('Currency must be a 3-letter ISO code (for example USD) or "unknown".');
+  }
+
+  const keptLines: CaptureLineField[] = [];
+  if (lines.length > MAX_FINANCIAL_LINES) {
+    errors.push(`At most ${MAX_FINANCIAL_LINES} lines can be accepted.`);
+  }
+
+  lines.forEach((line, idx) => {
+    const label = `Line ${idx + 1}`;
+    const desc = line.description.trim();
+    const qtyRaw = line.quantity.trim();
+    const amtRaw = line.unitAmount.trim();
+    const srcTotalRaw = line.sourceLineTotal.trim();
+    const discRaw = line.discount.trim();
+    const taxHint = line.taxHint.trim();
+
+    const isBlankLine = !desc && !qtyRaw && !amtRaw && !srcTotalRaw && !discRaw && !taxHint;
+    if (isBlankLine) return;
+
+    if (!desc && (amtRaw || srcTotalRaw)) {
+      errors.push(`${label} has an amount but no description. Add a description or clear the line.`);
+    }
+    if (desc.length > MAX_LINE_DESCRIPTION_LENGTH) {
+      errors.push(`${label} description can be at most ${MAX_LINE_DESCRIPTION_LENGTH} characters.`);
+    }
+
+    let finalQty = '1';
+    let missingQtyDefaulted = line.missingQuantityDefaulted;
+    if (!qtyRaw) {
+      finalQty = '1';
+      missingQtyDefaulted = true;
+    } else {
+      const parsedQty = parseStrictDecimal(qtyRaw);
+      if (!parsedQty.valid || parsedQty.numeric === null) {
+        errors.push(`${label} quantity: ${parsedQty.reason ?? 'Enter a valid quantity.'}`);
+      } else if (parsedQty.numeric <= 0) {
+        errors.push(`${label} quantity must be greater than zero.`);
+      } else {
+        finalQty = parsedQty.normalized!;
+      }
+    }
+
+    if (!amtRaw) {
+      errors.push(`${label} requires a unit amount (no zero is invented automatically).`);
+    }
+    const parsedAmt = parseStrictDecimal(amtRaw);
+    if (amtRaw && !parsedAmt.valid) {
+      errors.push(`${label} unit amount: ${parsedAmt.reason}`);
+    }
+
+    const parsedSrcTotal = parseStrictDecimal(srcTotalRaw);
+    if (srcTotalRaw && !parsedSrcTotal.valid) {
+      errors.push(`${label} source line total: ${parsedSrcTotal.reason}`);
+    }
+
+    const parsedDisc = parseStrictDecimal(discRaw);
+    if (discRaw && (!parsedDisc.valid || (parsedDisc.numeric !== null && (parsedDisc.numeric < 0 || parsedDisc.numeric > 100)))) {
+      errors.push(`${label} discount must be between 0 and 100.`);
+    }
+
+    const normalizedLine: CaptureLineField = {};
+    if (desc) normalizedLine.description = desc;
+    normalizedLine.quantity = finalQty;
+    if (parsedAmt.normalized !== null) normalizedLine.unitAmount = parsedAmt.normalized;
+    if (parsedSrcTotal.normalized !== null) normalizedLine.sourceLineTotal = parsedSrcTotal.normalized;
+    if (taxHint) normalizedLine.taxHint = taxHint.slice(0, 200);
+    if (parsedDisc.normalized !== null) normalizedLine.discount = parsedDisc.normalized;
+    if (line.priceBasis) normalizedLine.priceBasis = line.priceBasis;
+    if (missingQtyDefaulted) normalizedLine.missingQuantityDefaulted = true;
+    keptLines.push(normalizedLine);
+  });
+
+  const payload: SalesCaptureFields = {
+    date: header.date.trim(),
+  };
+  if (header.customerName.trim()) payload.customerName = header.customerName.trim();
+  if (header.sourceInvoiceNo.trim()) payload.sourceInvoiceNo = header.sourceInvoiceNo.trim();
+  if (header.dueDate.trim()) payload.dueDate = header.dueDate.trim();
+  if (header.referenceNo.trim()) payload.referenceNo = header.referenceNo.trim();
+  if (normalizedCurrency) payload.currency = normalizedCurrency;
+  if (header.notes.trim()) payload.notes = header.notes.trim();
+  if (keptLines.length > 0) payload.lines = keptLines;
+  if (sourceTotals && Object.values(sourceTotals).some((v) => v !== null && v !== undefined && v !== '')) {
+    const cleanTotals: CaptureSourceTotals = {};
+    for (const key of ['subtotal', 'taxTotal', 'grandTotal', 'discountTotal', 'additionalCharges'] as const) {
+      const val = sourceTotals[key];
+      if (typeof val === 'string' && val.trim() !== '') {
+        const parsed = parseStrictDecimal(val);
+        if (parsed.valid && parsed.normalized !== null) cleanTotals[key] = parsed.normalized;
+      }
+    }
+    if (sourceTotals.priceBasis) cleanTotals.priceBasis = sourceTotals.priceBasis;
+    if (Object.keys(cleanTotals).length > 0) payload.sourceTotals = cleanTotals;
   }
 
   return { valid: errors.length === 0, errors, payload };
