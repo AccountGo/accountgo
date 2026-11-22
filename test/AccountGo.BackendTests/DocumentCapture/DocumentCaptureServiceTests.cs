@@ -127,9 +127,12 @@ public sealed class DocumentCaptureServiceTests
 
         var metadata = await Assert.ThrowsAsync<DocumentCaptureServiceException>(() => harness.Service.GetAsync(captureId, CancellationToken.None));
         var bytes = await Assert.ThrowsAsync<DocumentCaptureServiceException>(() => harness.Service.GetBytesAsync(captureId, CancellationToken.None));
+        var dedupe = await Assert.ThrowsAsync<DocumentCaptureServiceException>(() =>
+            harness.Service.UploadAsync("bank", 1, "image/png", CreatePng(), "bank-view-only-dedupe", CancellationToken.None));
 
         Assert.Equal("DOCUMENT_PERMISSION_REQUIRED", metadata.ErrorCode);
         Assert.Equal("DOCUMENT_PERMISSION_REQUIRED", bytes.ErrorCode);
+        Assert.Equal("DOCUMENT_PERMISSION_REQUIRED", dedupe.ErrorCode);
     }
 
     [Fact]

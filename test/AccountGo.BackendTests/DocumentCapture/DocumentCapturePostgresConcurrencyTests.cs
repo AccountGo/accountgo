@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
+using Npgsql;
 using Newtonsoft.Json.Linq;
 using SkiaSharp;
 using Xunit;
@@ -179,44 +180,81 @@ public sealed class DocumentCapturePostgresConcurrencyTests
             captureId = await db.DocumentCaptures.Where(row => row.PublicId == view.Id).Select(row => row.Id).SingleAsync();
             await db.DocumentCaptures.Where(row => row.Id == captureId)
                 .ExecuteUpdateAsync(update => update.SetProperty(row => row.ExpiresAt, DateTime.UtcNow.AddDays(-8)));
+            await db.Database.ExecuteSqlRawAsync("""
+                CREATE FUNCTION test_capture_accept_pause() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN
+                    IF NEW."Status" = 'accepted' THEN PERFORM pg_sleep(0.35); END IF;
+                    RETURN NEW;
+                END $$;
+                """);
+            await db.Database.ExecuteSqlRawAsync("""
+                CREATE TRIGGER test_capture_accept_pause BEFORE UPDATE ON "DocumentCaptures"
+                FOR EACH ROW EXECUTE FUNCTION test_capture_accept_pause();
+                """);
         }
 
-        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var accept = Task.Run(async () =>
         {
-            await gate.Task;
             await using var db = new PostgresApiDbContext(options, tenant);
-            try
-            {
-                await CreateService(db, tenant, CreateEntitlement(), captureOptions)
-                    .AcceptAsync(captureId, "{\"date\":\"2026-11-20\"}", CancellationToken.None);
-                return "accepted";
-            }
-            catch (DocumentCaptureServiceException exception) { return exception.ErrorCode; }
+            return await CreateService(db, tenant, CreateEntitlement(), captureOptions)
+                .AcceptAsync(captureId, "{\"date\":\"2026-11-20\"}", CancellationToken.None);
         });
+        await using var monitor = new NpgsqlConnection(postgres.ConnectionString);
+        await monitor.OpenAsync();
+        await WaitForPgActivityAsync(monitor, "UPDATE%DocumentCaptures%", TimeSpan.FromSeconds(10));
         var purge = Task.Run(async () =>
         {
-            await gate.Task;
             await using var db = new PostgresApiDbContext(options, tenant);
             await new DocumentCaptureRetentionService(db, new DocumentCaptureAdmissionLock(db))
                 .PurgeAsync(DateTime.UtcNow, CancellationToken.None);
         });
-        gate.SetResult();
+        await WaitForPgLockWaitAsync(monitor, TimeSpan.FromSeconds(10));
         await Task.WhenAll(accept, purge);
 
         await using var verify = new PostgresApiDbContext(options, tenant);
         var capture = await verify.DocumentCaptures.SingleAsync(row => row.Id == captureId);
         var hasBytes = await verify.DocumentCaptureBlobs.AnyAsync(row => row.CaptureId == captureId);
-        if (capture.Status == "accepted")
+        Assert.Equal("accepted", capture.Status);
+        Assert.True(hasBytes, "An accepted capture must retain its evidence bytes when purge races acceptance.");
+        await verify.Database.ExecuteSqlRawAsync("DROP TRIGGER test_capture_accept_pause ON \"DocumentCaptures\";");
+        await verify.Database.ExecuteSqlRawAsync("DROP FUNCTION test_capture_accept_pause();");
+    }
+
+    private static async Task WaitForPgActivityAsync(NpgsqlConnection connection, string queryPattern, TimeSpan timeout)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT EXISTS (
+                SELECT 1 FROM pg_stat_activity
+                WHERE datname = current_database() AND pid <> pg_backend_pid()
+                    AND state = 'active' AND query ILIKE @queryPattern)
+            """;
+        command.Parameters.AddWithValue("queryPattern", queryPattern);
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
         {
-            Assert.Equal("accepted", await accept);
-            Assert.True(hasBytes, "An accepted capture must retain its evidence bytes when purge races acceptance.");
+            if (Equals(await command.ExecuteScalarAsync(), true)) return;
+            await Task.Delay(5);
         }
-        else
+        throw new TimeoutException($"PostgreSQL did not enter the expected command: {queryPattern}");
+    }
+
+    private static async Task WaitForPgLockWaitAsync(NpgsqlConnection connection, TimeSpan timeout)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT EXISTS (
+                SELECT 1 FROM pg_stat_activity
+                WHERE datname = current_database() AND pid <> pg_backend_pid()
+                    AND state = 'active' AND wait_event_type = 'Lock' AND query ILIKE '%FOR UPDATE%')
+            """;
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
         {
-            Assert.Equal("DOCUMENT_BYTES_UNAVAILABLE", await accept);
-            Assert.False(hasBytes);
+            if (Equals(await command.ExecuteScalarAsync(), true)) return;
+            await Task.Delay(5);
         }
+        throw new TimeoutException("Retention did not contend on the company row lock held by accept.");
     }
 
     [PostgresOnlyFact]
