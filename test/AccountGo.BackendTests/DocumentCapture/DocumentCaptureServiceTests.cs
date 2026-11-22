@@ -116,6 +116,38 @@ public sealed class DocumentCaptureServiceTests
         Assert.Single(await harness.Db.DocumentCaptureAttempts.ToListAsync());
     }
 
+    [Theory]
+    [InlineData("original")]
+    [InlineData("new-key")]
+    public async Task Upload_LocalOcrReplayCandidateBecomesFailedBeforeAdmissionReturnsBusyWithoutWrites(string key)
+    {
+        using var harness = new Harness(enabled: true);
+        var source = CreatePng();
+        await harness.Service.UploadAsync("purchase-invoice", 1, "image/png", source, "original", CancellationToken.None);
+        var realLock = new DocumentCaptureAdmissionLock(harness.Db);
+        var admissionLock = new Mock<IDocumentCaptureAdmissionLock>();
+        admissionLock.Setup(value => value.AcquireCompanyAsync(harness.Tenant.RequireCompanyId(), It.IsAny<CancellationToken>()))
+            .Returns(async (int companyId, CancellationToken token) =>
+            {
+                await harness.Db.DocumentCaptures.Where(capture => capture.IdempotencyKey == "original")
+                    .ExecuteUpdateAsync(setters => setters.SetProperty(capture => capture.Status, "failed"), token);
+                return await realLock.AcquireCompanyAsync(companyId, token);
+            });
+        using var extractor = new LocalOcrDocumentFieldExtractor(Options.Create(new DocumentCaptureOptions()));
+        using var occupied = await extractor.AdmitAsync(1, CancellationToken.None);
+        var service = harness.CreateService(extractor, admissionLock: admissionLock.Object);
+
+        var error = await Assert.ThrowsAsync<DocumentCaptureServiceException>(() =>
+            service.UploadAsync("purchase-invoice", 1, "image/png", source, key, CancellationToken.None));
+
+        Assert.Equal((429, "DOCUMENT_DECODE_BUSY"), (error.StatusCode, error.ErrorCode));
+        var capture = Assert.Single(await harness.Db.DocumentCaptures.AsNoTracking().ToListAsync());
+        Assert.Equal("failed", capture.Status);
+        Assert.Equal(1, capture.ExtractionGeneration);
+        Assert.Equal(1, await harness.Db.DocumentCaptureAttempts.CountAsync());
+        Assert.Equal(1, await harness.Db.DocumentCaptureBlobs.CountAsync());
+    }
+
     [Fact]
     public async Task BankReadsRequireSensitiveManagePermissionEvenWhenViewIsGranted()
     {
@@ -922,8 +954,8 @@ public sealed class DocumentCaptureServiceTests
         }
 
         public DocumentCaptureService CreateService(IDocumentFieldExtractor extractor, ISecurityAuditService? audit = null, TimeProvider? timeProvider = null,
-            Microsoft.Extensions.Logging.ILogger<DocumentCaptureService>? logger = null) =>
-            new(Db, new DocumentCaptureAdmissionLock(Db), extractor, _entitlement, PublicIds.Object,
+            Microsoft.Extensions.Logging.ILogger<DocumentCaptureService>? logger = null, IDocumentCaptureAdmissionLock? admissionLock = null) =>
+            new(Db, admissionLock ?? new DocumentCaptureAdmissionLock(Db), extractor, _entitlement, PublicIds.Object,
                 _tenant, _configuredOptions, logger ?? NullLogger<DocumentCaptureService>.Instance, audit, timeProvider);
 
         public void Dispose()

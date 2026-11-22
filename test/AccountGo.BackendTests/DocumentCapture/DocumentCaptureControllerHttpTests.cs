@@ -136,21 +136,33 @@ public sealed class DocumentCaptureControllerHttpTests : IAsyncLifetime
         }));
         using var client = factory.CreateClient();
         using var watchdog = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+        using var seedResponse = await UploadAsync(6, _client);
+        Assert.Equal(HttpStatusCode.OK, seedResponse.StatusCode);
+        using var seedBody = JsonDocument.Parse(await seedResponse.Content.ReadAsStringAsync());
+        var expectedId = seedBody.RootElement.GetProperty("id").GetString();
 
         var first = UploadAsync(0);
         Task<HttpResponseMessage>[] queued = [];
         try
         {
             await started.Task.WaitAsync(watchdog.Token);
-            queued = Enumerable.Range(1, 4).Select(UploadAsync).ToArray();
+            queued = Enumerable.Range(1, 4).Select(number => UploadAsync(number)).ToArray();
             while (extractor.WaitingCount < 4)
                 await Task.Delay(10, watchdog.Token);
 
-            Assert.Equal((1, 1), await CountRowsAsync());
+            Assert.Equal((2, 2), await CountRowsAsync());
+            foreach (var key in new[] { "ocr-queue-6", "ocr-queue-duplicate" })
+            {
+                using var replay = await UploadAsync(6, key: key).WaitAsync(TimeSpan.FromSeconds(3));
+                Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+                using var body = JsonDocument.Parse(await replay.Content.ReadAsStringAsync());
+                Assert.Equal(expectedId, body.RootElement.GetProperty("id").GetString());
+            }
+            Assert.Equal((2, 2), await CountRowsAsync());
             using var rejected = await UploadAsync(5);
             Assert.Equal(HttpStatusCode.TooManyRequests, rejected.StatusCode);
             Assert.Equal("DOCUMENT_DECODE_BUSY", await ReadProblemCodeAsync(rejected));
-            Assert.Equal((1, 1), await CountRowsAsync());
+            Assert.Equal((2, 2), await CountRowsAsync());
         }
         finally
         {
@@ -162,17 +174,17 @@ public sealed class DocumentCaptureControllerHttpTests : IAsyncLifetime
             }
         }
 
-        Assert.Equal((5, 5), await CountRowsAsync());
+        Assert.Equal((6, 6), await CountRowsAsync());
         using var retry = await UploadAsync(5);
         Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
-        Assert.Equal((6, 6), await CountRowsAsync());
+        Assert.Equal((7, 7), await CountRowsAsync());
 
-        async Task<HttpResponseMessage> UploadAsync(int number)
+        async Task<HttpResponseMessage> UploadAsync(int number, HttpClient? uploadClient = null, string? key = null)
         {
             using var request = NewRequest(HttpMethod.Post, "/api/document-captures");
-            request.Headers.Add("Idempotency-Key", $"ocr-queue-{number}");
+            request.Headers.Add("Idempotency-Key", key ?? $"ocr-queue-{number}");
             request.Content = CreateUploadForm("purchase-invoice", CreatePng(0xFFCCDD00u + (uint)number), "image/png");
-            return await client.SendAsync(request, watchdog.Token);
+            return await (uploadClient ?? client).SendAsync(request, watchdog.Token);
         }
 
         async Task<(int Attempts, int Captures)> CountRowsAsync()
