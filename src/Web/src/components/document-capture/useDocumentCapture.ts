@@ -259,6 +259,11 @@ export function useDocumentCapture({
           await announceEntitlementDenial(res);
           const body = await res.json().catch(() => null);
           if (!isCurrent(scope, gen)) return null;
+          if (res.status === 403) {
+            setCapture(null);
+            revokePreview();
+            setSelectedFile(null);
+          }
           setError(describeCaptureError(body?.code, res.status));
           return null;
         }
@@ -300,6 +305,11 @@ export function useDocumentCapture({
           await announceEntitlementDenial(res);
           const body = await res.json().catch(() => null);
           if (!isCurrent(scope, gen)) return null;
+          if (res.status === 403) {
+            setCapture(null);
+            revokePreview();
+            setSelectedFile(null);
+          }
           setError(describeCaptureError(body?.code, res.status));
           return null;
         }
@@ -349,6 +359,8 @@ export function useDocumentCapture({
         }
         const view: DocumentCaptureView = await res.json();
         if (!isCurrent(scope, gen)) return null;
+        revokePreview();
+        setSelectedFile(null);
         setCapture(view);
         return view;
       } catch {

@@ -30,6 +30,10 @@ export const MAX_VENDOR_INVOICE_NO_LENGTH = 50;
 export const MAX_REFERENCE_NO_LENGTH = 100;
 export const MAX_SALES_SOURCE_INVOICE_NO_LENGTH = 200;
 export const MAX_SALES_REFERENCE_NO_LENGTH = 200;
+export const MAX_BANK_ACCOUNT_NUMBER_LENGTH = 64;
+export const MAX_BANK_ROUTING_NUMBER_LENGTH = 32;
+export const MAX_BANK_IBAN_LENGTH = 64;
+export const MAX_BANK_SWIFT_LENGTH = 32;
 export const MAX_DECIMAL_SIGNIFICANT_DIGITS = 18;
 export const MAX_DECIMAL_SCALE = 4;
 export const LOW_CONFIDENCE_THRESHOLD = 0.75;
@@ -247,6 +251,24 @@ export function isVendorKind(kind: string): kind is 'expense-receipt' | 'purchas
 
 export function isSalesKind(kind: string): kind is 'sales-invoice' {
   return kind === 'sales-invoice';
+}
+
+export function isBankKind(kind: string): kind is 'bank' {
+  return kind === 'bank';
+}
+
+/**
+ * Mirrors backend DocumentCaptureAccessPolicy for kind='bank':
+ * requires banking.accounts.manage permission AND at least one of sales, purchases, or financials modules.
+ */
+export function canAccessBankCapture(
+  hasPermission: (permission: string) => boolean,
+  hasModule: (module: 'sales' | 'purchases' | 'financials') => boolean
+): boolean {
+  return (
+    hasPermission('banking.accounts.manage') &&
+    (hasModule('sales') || hasModule('purchases') || hasModule('financials'))
+  );
 }
 
 export function isLowConfidence(confidence: number | null | undefined): boolean {
@@ -660,6 +682,63 @@ export function validateSalesFieldsForAccept(
     if (sourceTotals.priceBasis) cleanTotals.priceBasis = sourceTotals.priceBasis;
     if (Object.keys(cleanTotals).length > 0) payload.sourceTotals = cleanTotals;
   }
+
+  return { valid: errors.length === 0, errors, payload };
+}
+
+export interface BankAcceptValidationResult {
+  valid: boolean;
+  errors: string[];
+  payload: BankCaptureFields;
+}
+
+/**
+ * Validates and normalizes bank review fields before POST /accept,
+ * mirroring DocumentCaptureFieldSchemas.BankFields exactly (no opening balance or date).
+ */
+export function validateBankFieldsForAccept(header: {
+  name: string;
+  bankName: string;
+  accountNumber: string;
+  routingNumber: string;
+  iban: string;
+  swift: string;
+}): BankAcceptValidationResult {
+  const errors: string[] = [];
+
+  const name = header.name.trim();
+  const bankName = header.bankName.trim();
+  const accountNumber = header.accountNumber.trim();
+  const routingNumber = header.routingNumber.trim();
+  const iban = header.iban.trim();
+  const swift = header.swift.trim();
+
+  if (name.length > MAX_TEXT_LENGTH) {
+    errors.push(`Account name can be at most ${MAX_TEXT_LENGTH} characters.`);
+  }
+  if (bankName.length > MAX_TEXT_LENGTH) {
+    errors.push(`Bank name can be at most ${MAX_TEXT_LENGTH} characters.`);
+  }
+  if (accountNumber.length > MAX_BANK_ACCOUNT_NUMBER_LENGTH) {
+    errors.push(`Account number can be at most ${MAX_BANK_ACCOUNT_NUMBER_LENGTH} characters.`);
+  }
+  if (routingNumber.length > MAX_BANK_ROUTING_NUMBER_LENGTH) {
+    errors.push(`Routing number can be at most ${MAX_BANK_ROUTING_NUMBER_LENGTH} characters.`);
+  }
+  if (iban.length > MAX_BANK_IBAN_LENGTH) {
+    errors.push(`IBAN can be at most ${MAX_BANK_IBAN_LENGTH} characters.`);
+  }
+  if (swift.length > MAX_BANK_SWIFT_LENGTH) {
+    errors.push(`SWIFT / BIC can be at most ${MAX_BANK_SWIFT_LENGTH} characters.`);
+  }
+
+  const payload: BankCaptureFields = {};
+  if (name) payload.name = name;
+  if (bankName) payload.bankName = bankName;
+  if (accountNumber) payload.accountNumber = accountNumber;
+  if (routingNumber) payload.routingNumber = routingNumber;
+  if (iban) payload.iban = iban;
+  if (swift) payload.swift = swift;
 
   return { valid: errors.length === 0, errors, payload };
 }

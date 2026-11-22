@@ -1,9 +1,15 @@
 import React, { useEffect, useId, useState } from 'react';
-import { Landmark, Loader2, X } from 'lucide-react';
+import { Landmark, Loader2, ScanLine, X } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { ModalShell } from './ModalShell';
 import { buildCreatePayload } from '../lib/bankingForm';
 import { localToday } from '../lib/businessDays';
+import { DocumentCapturePanel } from './document-capture/DocumentCapturePanel';
+import type {
+  BankCaptureFields,
+  DocumentCaptureCapabilities,
+  DocumentCaptureView,
+} from './document-capture/fields';
 import type { BankAccount, CreateBankAccountPayload, EligiblePostingAccount, UpdateBankAccountPayload } from '../types/banking';
 
 const inputClass =
@@ -13,12 +19,25 @@ const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-[v
 export const BankAccountFormDialog: React.FC<{
   account?: BankAccount;
   hasFinancials: boolean;
+  /** Workspace slug for scoping document capture requests. */
+  orgSlug?: string;
+  /** Caller-checked bank permission + module OR gate for document capture. */
+  canScanBankDetails?: boolean;
   /** Pre-selected adopt when taking over a single cash-history group. */
   defaultAdoptAccountId?: string | null;
   leaveCashHistoryUnassigned?: boolean;
   onSaved: (account: BankAccount, created: boolean) => void;
   onClose: () => void;
-}> = ({ account, hasFinancials, defaultAdoptAccountId = null, leaveCashHistoryUnassigned = false, onSaved, onClose }) => {
+}> = ({
+  account,
+  hasFinancials,
+  orgSlug = '',
+  canScanBankDetails = false,
+  defaultAdoptAccountId = null,
+  leaveCashHistoryUnassigned = false,
+  onSaved,
+  onClose,
+}) => {
   const { authFetch } = useAuth();
   const titleId = useId();
   const editing = !!account;
@@ -46,6 +65,90 @@ export const BankAccountFormDialog: React.FC<{
   const [eligible, setEligible] = useState<EligiblePostingAccount[] | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [captureCapabilities, setCaptureCapabilities] = useState<DocumentCaptureCapabilities | null>(null);
+  const [captureOpen, setCaptureOpen] = useState(false);
+  const [pendingBankCapture, setPendingBankCapture] = useState<BankCaptureFields | null>(null);
+
+  useEffect(() => {
+    setCaptureOpen(false);
+    setPendingBankCapture(null);
+    if (!canScanBankDetails) {
+      setCaptureCapabilities(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch('/api/document-captures/capabilities');
+        if (cancelled) return;
+        if (!res.ok) {
+          setCaptureCapabilities(null);
+          return;
+        }
+        const data: DocumentCaptureCapabilities = await res.json();
+        if (!cancelled) setCaptureCapabilities(data);
+      } catch {
+        if (!cancelled) setCaptureCapabilities(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch, canScanBankDetails, orgSlug, account?.id]);
+
+  const bankCaptureAvailable = Boolean(
+    canScanBankDetails &&
+      captureCapabilities?.enabled &&
+      captureCapabilities.providerAvailable &&
+      captureCapabilities.kinds.includes('bank')
+  );
+
+  const applyBankCaptureFields = (fields: BankCaptureFields, mode: 'replace' | 'fill-blanks') => {
+    const incoming = {
+      name: typeof fields.name === 'string' ? fields.name.trim() : '',
+      bankName: typeof fields.bankName === 'string' ? fields.bankName.trim() : '',
+      accountNumber: typeof fields.accountNumber === 'string' ? fields.accountNumber.trim() : '',
+      routingNumber: typeof fields.routingNumber === 'string' ? fields.routingNumber.trim() : '',
+      iban: typeof fields.iban === 'string' ? fields.iban.trim() : '',
+      swift: typeof fields.swift === 'string' ? fields.swift.trim() : '',
+    };
+    if (incoming.name && (mode === 'replace' || !name.trim())) setName(incoming.name);
+    if (incoming.bankName && (mode === 'replace' || !bankName.trim())) setBankName(incoming.bankName);
+    if (incoming.accountNumber && (mode === 'replace' || !accountNumber.trim())) setAccountNumber(incoming.accountNumber);
+    if (incoming.routingNumber && (mode === 'replace' || !routingNumber.trim())) setRoutingNumber(incoming.routingNumber);
+    if (incoming.iban && (mode === 'replace' || !iban.trim())) setIban(incoming.iban);
+    if (incoming.swift && (mode === 'replace' || !swift.trim())) setSwift(incoming.swift);
+    setPendingBankCapture(null);
+    setCaptureOpen(false);
+  };
+
+  const handleBankCaptureAccepted = (canonical: DocumentCaptureView) => {
+    if (canonical.kind !== 'bank' || canonical.status !== 'accepted' || !canonical.acceptedFields) return;
+    const fields = canonical.acceptedFields as BankCaptureFields;
+    const incoming = {
+      name: typeof fields.name === 'string' ? fields.name.trim() : '',
+      bankName: typeof fields.bankName === 'string' ? fields.bankName.trim() : '',
+      accountNumber: typeof fields.accountNumber === 'string' ? fields.accountNumber.trim() : '',
+      routingNumber: typeof fields.routingNumber === 'string' ? fields.routingNumber.trim() : '',
+      iban: typeof fields.iban === 'string' ? fields.iban.trim() : '',
+      swift: typeof fields.swift === 'string' ? fields.swift.trim() : '',
+    };
+    const hasConflict =
+      (Boolean(incoming.name) && Boolean(name.trim()) && incoming.name !== name.trim()) ||
+      (Boolean(incoming.bankName) && Boolean(bankName.trim()) && incoming.bankName !== bankName.trim()) ||
+      (Boolean(incoming.accountNumber) && Boolean(accountNumber.trim()) && incoming.accountNumber !== accountNumber.trim()) ||
+      (Boolean(incoming.routingNumber) && Boolean(routingNumber.trim()) && incoming.routingNumber !== routingNumber.trim()) ||
+      (Boolean(incoming.iban) && Boolean(iban.trim()) && incoming.iban !== iban.trim()) ||
+      (Boolean(incoming.swift) && Boolean(swift.trim()) && incoming.swift !== swift.trim());
+
+    if (hasConflict) {
+      setPendingBankCapture(incoming);
+      setCaptureOpen(false);
+      return;
+    }
+
+    applyBankCaptureFields(incoming, 'replace');
+  };
 
   useEffect(() => {
     if (!hasFinancials || editing) return;
@@ -198,6 +301,67 @@ export const BankAccountFormDialog: React.FC<{
         {error && (
           <div role="alert" className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs text-rose-500">
             {error}
+          </div>
+        )}
+
+        {bankCaptureAvailable && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => setCaptureOpen((open) => !open)}
+                disabled={isSaving}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)] transition disabled:opacity-50"
+              >
+                <ScanLine className="w-3.5 h-3.5 text-[var(--brand-primary)]" />
+                {captureOpen ? 'Hide bank detail scanner' : 'Scan bank details'}
+              </button>
+            </div>
+            {captureOpen && (
+              <DocumentCapturePanel
+                kind="bank"
+                orgSlug={orgSlug}
+                scopeKey={account?.id ?? 'new-bank-account'}
+                capabilities={captureCapabilities}
+                disabled={isSaving}
+                onAccepted={handleBankCaptureAccepted}
+                onCancel={() => setCaptureOpen(false)}
+              />
+            )}
+          </div>
+        )}
+
+        {pendingBankCapture && (
+          <div
+            role="status"
+            className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-800 dark:text-amber-200 space-y-2"
+          >
+            <p className="font-semibold">
+              This form already has bank details. Choose how to apply the accepted capture (opening balance and date are never changed):
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => applyBankCaptureFields(pendingBankCapture, 'replace')}
+                className="px-3 py-1.5 font-semibold rounded-lg bg-[var(--brand-primary)] text-white hover:opacity-90 transition"
+              >
+                Replace existing values
+              </button>
+              <button
+                type="button"
+                onClick={() => applyBankCaptureFields(pendingBankCapture, 'fill-blanks')}
+                className="px-3 py-1.5 font-semibold rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)] transition"
+              >
+                Keep existing, fill blanks only
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingBankCapture(null)}
+                className="px-3 py-1.5 font-semibold rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-main)] transition"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         )}
 

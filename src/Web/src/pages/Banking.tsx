@@ -9,6 +9,7 @@ import { OutstandingAgingCard } from '../components/OutstandingAgingCard';
 import { useAuth } from '../auth/AuthContext';
 import { useTenantContext } from '../components/Gating';
 import { needsCashHistoryStep } from '../lib/bankingForm';
+import { canAccessBankCapture } from '../components/document-capture/fields';
 import type { TenantContextType } from '../types';
 import type { BankAccount, BankAccountsList, UnassignedCash } from '../types/banking';
 import { bankTypeLabel } from '../types/banking';
@@ -227,6 +228,8 @@ const Banking: React.FC = () => {
         <BankAccountFormDialog
           account={editAccount}
           hasFinancials={hasFinancials}
+          orgSlug={currentOrg.slug}
+          canScanBankDetails={canAccessBankCapture(hasPermission, hasModule)}
           defaultAdoptAccountId={adoptHint}
           leaveCashHistoryUnassigned={leaveCashHistoryUnassigned}
           onSaved={async () => {

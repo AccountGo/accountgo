@@ -27,10 +27,12 @@ import {
   EditableLineDraft,
   evaluateFinancialApplyGates,
   getFieldDescriptors,
+  isBankKind,
   isSalesKind,
   isSupportedSchemaVersion,
   isVendorKind,
   KIND_LABELS,
+  validateBankFieldsForAccept,
   validateSalesFieldsForAccept,
   validateVendorFieldsForAccept,
   VendorCaptureFields,
@@ -258,6 +260,26 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
       return;
     }
 
+    if (isBankKind(capture.kind)) {
+      const checked = validateBankFieldsForAccept({
+        name: headerValues.name ?? '',
+        bankName: headerValues.bankName ?? '',
+        accountNumber: headerValues.accountNumber ?? '',
+        routingNumber: headerValues.routingNumber ?? '',
+        iban: headerValues.iban ?? '',
+        swift: headerValues.swift ?? '',
+      });
+      if (!checked.valid) {
+        setValidationErrors(checked.errors);
+        return;
+      }
+      const canonical = await accept(checked.payload as Record<string, unknown>);
+      if (canonical) {
+        onAccepted(canonical);
+      }
+      return;
+    }
+
     setValidationErrors([`No typed review schema handler is registered in this panel for kind "${capture.kind}".`]);
   };
 
@@ -268,8 +290,10 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
 
   const descriptors = capture ? getFieldDescriptors(capture.kind, capture.schemaVersion) : [];
   const schemaSupported = capture ? isSupportedSchemaVersion(capture.schemaVersion) : true;
-  const kindHasTypedHandler = capture ? (isVendorKind(capture.kind) || isSalesKind(capture.kind)) : true;
-  const gates = capture ? evaluateFinancialApplyGates(capture, orgCurrency) : null;
+  const kindHasTypedHandler = capture
+    ? isVendorKind(capture.kind) || isSalesKind(capture.kind) || isBankKind(capture.kind)
+    : true;
+  const gates = capture && !isBankKind(capture.kind) ? evaluateFinancialApplyGates(capture, orgCurrency) : null;
   const isAlreadyLinked = Boolean(capture?.link);
 
   return (
@@ -371,8 +395,9 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
         </div>
       )}
 
-      {/* Local preview (image object URL or PDF filename + page count) */}
-      {(localPreviewUrl || selectedFile?.type === 'application/pdf' || capture?.contentType === 'application/pdf') && (
+      {/* Local preview (image object URL or PDF filename + page count); hidden once rejected */}
+      {capture?.status !== 'rejected' &&
+        (localPreviewUrl || selectedFile?.type === 'application/pdf' || capture?.contentType === 'application/pdf') && (
         <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3 flex items-center gap-4">
           {localPreviewUrl ? (
             <img
@@ -531,6 +556,13 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Bank detail review guidance */}
+          {schemaSupported && isBankKind(capture.kind) && (
+            <div className="rounded-xl border border-sky-500/25 bg-sky-500/10 p-3 text-xs text-sky-900 dark:text-sky-200">
+              Bank capture populates bank details only. Opening balance, opening-balance date, and saving remain manual.
             </div>
           )}
 

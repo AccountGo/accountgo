@@ -224,17 +224,20 @@ describe('DocumentCapturePanel & fields.ts', () => {
     expect((screen.getByRole('button', { name: /Accept & apply to draft/i }) as HTMLButtonElement).disabled).toBe(true);
     unmount();
 
-    // Non-vendor kind without typed handler in PR 2 also disables Accept
-    const bankCapture = makeFakeExtractorReadyCapture({ kind: 'bank', fields: { name: 'Main' } });
+    // Kind without a typed review schema handler in PR 2-4 (assistant-attachment) disables Accept
+    const assistantCapture = makeFakeExtractorReadyCapture({
+      kind: 'assistant-attachment',
+      fields: { fields: [{ label: 'Note', value: 'Masked', confidence: null, box: null }] },
+    });
     authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === '/api/document-captures/capabilities') {
-        return makeJsonResponse({ ...enabledCapabilities, kinds: ['bank'] });
+        return makeJsonResponse({ ...enabledCapabilities, kinds: ['assistant-attachment'] });
       }
-      if (url === '/api/document-captures' && init?.method === 'POST') return makeJsonResponse(bankCapture);
+      if (url === '/api/document-captures' && init?.method === 'POST') return makeJsonResponse(assistantCapture);
       return makeJsonResponse({}, 404);
     });
 
-    render(<DocumentCapturePanel kind="bank" orgSlug="acme" onAccepted={vi.fn()} />);
+    render(<DocumentCapturePanel kind="assistant-attachment" orgSlug="acme" onAccepted={vi.fn()} />);
     await waitFor(() => expect(screen.getByLabelText('Upload image or PDF')).toBeTruthy());
     fireEvent.change(screen.getByLabelText('Upload image or PDF'), {
       target: { files: [new File(['b'], 'b.png', { type: 'image/png' })] },
