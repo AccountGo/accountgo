@@ -11,6 +11,7 @@ using Core.Tenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -18,6 +19,7 @@ using Npgsql;
 using Newtonsoft.Json.Linq;
 using SkiaSharp;
 using Xunit;
+using CaptureEntity = Core.Domain.DocumentCapture;
 
 namespace AccountGo.BackendTests.DocumentCapture;
 
@@ -163,6 +165,98 @@ public sealed class DocumentCapturePostgresConcurrencyTests
             Assert.False(view.CanAccept);
         }
     }
+
+    [PostgresOnlyFact]
+    public async Task RetentionSkipsBusyCompanyAndContinuesWithOtherCompanyResidue()
+    {
+        using var postgres = PostgresTestDatabase.CreateIfConfigured()!;
+        var tenant = new TestTenantContext(CompanyId);
+        var options = new DbContextOptionsBuilder<PostgresApiDbContext>().UseNpgsql(postgres.ConnectionString).Options;
+        await CreateCompanyAsync(options, tenant);
+        int deletedCompanyId;
+        await using (var db = new PostgresApiDbContext(options, tenant))
+        {
+            var deletedCompany = new Company
+            {
+                Name = "Deleted Capture Co", CompanyCode = "CAPDEL", Slug = "capture-deleted",
+                DeletedAt = DateTime.UtcNow.AddDays(-1)
+            };
+            db.Companies.Add(deletedCompany);
+            await db.SaveChangesAsync();
+            deletedCompanyId = deletedCompany.Id;
+        }
+
+        var captureOptions = CaptureOptions();
+        var entitlement = CreateEntitlement();
+        int busyCaptureId;
+        int deletedCaptureId;
+        var now = DateTime.UtcNow;
+        await using (var db = new PostgresApiDbContext(options, tenant))
+        {
+            var busyCapture = await CreateService(db, tenant, entitlement, captureOptions)
+                .UploadAsync("purchase-invoice", 1, "image/png", CreatePng(23), "retention-busy-a", CancellationToken.None);
+            busyCaptureId = await db.DocumentCaptures.Where(row => row.PublicId == busyCapture.Id)
+                .Select(row => row.Id).SingleAsync();
+            await db.DocumentCaptures.Where(row => row.Id == busyCaptureId)
+                .ExecuteUpdateAsync(update => update.SetProperty(row => row.ExpiresAt, now.AddDays(-8)));
+            await db.DocumentCaptureAttempts.Where(row => row.CaptureId == busyCaptureId)
+                .ExecuteUpdateAsync(update => update.SetProperty(row => row.ReservedAt, now.AddHours(-49)));
+        }
+        var deletedTenant = new TestTenantContext(deletedCompanyId);
+        await using (var db = new PostgresApiDbContext(options, deletedTenant))
+        {
+            var deletedCapture = NewRetentionCapture(deletedCompanyId, "cap_retention_deleted", now);
+            db.DocumentCaptures.Add(deletedCapture);
+            await db.SaveChangesAsync();
+            deletedCaptureId = deletedCapture.Id;
+            db.DocumentCaptureBlobs.Add(new DocumentCaptureBlob
+            {
+                CompanyId = deletedCompanyId, CaptureId = deletedCaptureId, DocumentBytes = [4, 5, 6]
+            });
+            db.DocumentCaptureAttempts.Add(NewAttempt(deletedCaptureId, 1, now.AddHours(-49), deletedCompanyId));
+            await db.SaveChangesAsync();
+        }
+
+        await using var blockerDb = new PostgresApiDbContext(options, tenant);
+        await using var held = await new DocumentCaptureAdmissionLock(blockerDb)
+            .AcquireCompanyAsync(CompanyId, CancellationToken.None);
+        await using var retentionDb = new PostgresApiDbContext(options, tenant);
+        var logger = new RetentionCapturingLogger();
+        var retention = new DocumentCaptureRetentionService(retentionDb,
+            new DocumentCaptureAdmissionLock(retentionDb), logger: logger);
+
+        var purged = await retention.PurgeAsync(DateTime.UtcNow, CancellationToken.None);
+
+        Assert.Equal(1, purged);
+        Assert.True(await retentionDb.DocumentCaptures.IgnoreQueryFilters().AnyAsync(row => row.Id == busyCaptureId));
+        Assert.True(await retentionDb.DocumentCaptureBlobs.IgnoreQueryFilters().AnyAsync(row => row.CaptureId == busyCaptureId));
+        Assert.True(await retentionDb.DocumentCaptureAttempts.IgnoreQueryFilters().AnyAsync(row => row.CaptureId == busyCaptureId));
+        Assert.False(await retentionDb.DocumentCaptures.IgnoreQueryFilters().AnyAsync(row => row.Id == deletedCaptureId));
+        Assert.False(await retentionDb.DocumentCaptureBlobs.IgnoreQueryFilters().AnyAsync(row => row.CaptureId == deletedCaptureId));
+        Assert.False(await retentionDb.DocumentCaptureAttempts.IgnoreQueryFilters().AnyAsync(row => row.CaptureId == deletedCaptureId));
+        Assert.Single(logger.Messages);
+        Assert.Contains("2 locked items", logger.Messages[0], StringComparison.Ordinal);
+    }
+
+    private static CaptureEntity NewRetentionCapture(int companyId, string publicId, DateTime now) => new()
+    {
+        CompanyId = companyId,
+        PublicId = publicId,
+        Kind = "purchase-invoice",
+        SchemaVersion = 1,
+        Status = "ready",
+        SourceHash = new string('a', 64),
+        ContentHash = new string('b', 64),
+        NormalizationVersion = "image-normalization-v2",
+        ContentType = "image/png",
+        ByteCount = 3,
+        PageCount = 1,
+        RequestFingerprint = new string('c', 64),
+        ExtractionGeneration = 1,
+        CreatedBy = "creator-1",
+        CreatedAt = now.AddDays(-9),
+        ExpiresAt = now.AddDays(-8)
+    };
 
     [PostgresOnlyFact]
     public async Task AbandonedPurgeRacingAcceptNeverLeavesAcceptedCaptureWithoutBytes()
@@ -553,9 +647,9 @@ public sealed class DocumentCapturePostgresConcurrencyTests
         Assert.Equal(2, await verify.DocumentCaptureBlobs.CountAsync());
     }
 
-    private static DocumentCaptureAttempt NewAttempt(int captureId, int generation, DateTime reservedAt) => new()
+    private static DocumentCaptureAttempt NewAttempt(int captureId, int generation, DateTime reservedAt, int companyId = CompanyId) => new()
     {
-        CompanyId = CompanyId,
+        CompanyId = companyId,
         CaptureId = captureId,
         Generation = generation,
         ReservedAt = reservedAt
@@ -628,13 +722,13 @@ public sealed class DocumentCapturePostgresConcurrencyTests
         }
     }
 
-    private static IEntitlementService CreateEntitlement()
+    private static IEntitlementService CreateEntitlement(int companyId = CompanyId)
     {
         var snapshot = new EntitlementSnapshot(true, "invoicing", "invoicing", false, [], [], [], null,
             new HashSet<string> { FeatureKeys.DocumentCapture }, "invoicing");
         var mock = new Mock<IEntitlementService>();
-        mock.Setup(service => service.Get(CompanyId)).Returns(snapshot);
-        mock.Setup(service => service.Evaluate(CompanyId, It.IsAny<EntitlementAction>()))
+        mock.Setup(service => service.Get(companyId)).Returns(snapshot);
+        mock.Setup(service => service.Evaluate(companyId, It.IsAny<EntitlementAction>()))
             .Returns(new EntitlementDecision(true, null, null));
         return mock.Object;
     }
@@ -672,5 +766,14 @@ public sealed class DocumentCapturePostgresConcurrencyTests
             if (!PostgresTestDatabase.IsConfigured)
                 Skip = $"Set {PostgresTestDatabase.EnvironmentVariable} to run required PostgreSQL concurrency coverage.";
         }
+    }
+
+    private sealed class RetentionCapturingLogger : ILogger<DocumentCaptureRetentionService>
+    {
+        public List<string> Messages { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter) => Messages.Add(formatter(state, exception));
     }
 }

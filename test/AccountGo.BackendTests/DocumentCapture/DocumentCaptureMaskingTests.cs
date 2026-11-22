@@ -16,7 +16,7 @@ public sealed class DocumentCaptureMaskingTests
     [InlineData("A021000021Z", "A••••Z")]
     [InlineData("2026-11-21", "2026-11-21")]
     [InlineData("Due 2026-11-21; account 12345678", "Due 2026-11-21; account ••••")]
-    [InlineData("20261121", "20261121")]
+    [InlineData("20261121", "••••")]
     [InlineData("20261321", "••••")]
     [InlineData("account 123456789012", "account ••••")]
     [InlineData("account 1234 5678 9012", "account ••••")]

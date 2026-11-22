@@ -23,6 +23,7 @@ using Xunit;
 
 namespace AccountGo.BackendTests.DocumentCapture;
 
+[Collection(DocumentCaptureResourceCollection.Name)]
 public sealed class DocumentCaptureServiceTests
 {
     [Fact]
@@ -741,18 +742,21 @@ public sealed class DocumentCaptureServiceTests
         var audit = new Mock<ISecurityAuditService>();
         audit.Setup(service => service.LogEventAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<int?>(), It.IsAny<object?>()))
-            .Callback<string, string?, string?, int?, object?>((_, _, _, _, payload) => events.Add(
-                System.Text.Json.JsonSerializer.Serialize(payload)))
+            .Callback<string, string?, string?, int?, object?>((eventType, _, _, _, payload) => events.Add(
+                eventType + " " + System.Text.Json.JsonSerializer.Serialize(payload)))
             .Returns(Task.CompletedTask);
         var secureTenant = new[]
         {
             SystemPermissions.BankingAccountsManage,
-            SystemPermissions.PurchasesBillsView
+            SystemPermissions.PurchasesBillsView,
+            SystemPermissions.PurchasesBillsCreate
         };
         harness.Tenant.Permissions = new HashSet<string>(secureTenant);
         var bankExtractor = new StaticExtractor("{\"bankName\":\"Fixture Bank\",\"routingNumber\":\"021000021\",\"accountNumber\":\"123456789012\",\"iban\":\"GB82WEST12345698765432\"}");
         var service = harness.CreateService(bankExtractor, audit.Object, logger: logger);
         await service.UploadAsync("bank", 1, "image/png", CreatePng(), "sensitive-bank", CancellationToken.None);
+        var logsBeforeFailure = logger.Messages.Count;
+        var auditBeforeFailure = events.Count;
         try
         {
             await harness.CreateService(new SensitiveFailingExtractor(), audit.Object, logger: logger)
@@ -760,12 +764,24 @@ public sealed class DocumentCaptureServiceTests
         }
         catch (DocumentCaptureServiceException) { }
 
+        Assert.True(logger.Messages.Count > logsBeforeFailure, "The provider failure path did not produce a log entry.");
+        Assert.True(events.Count > auditBeforeFailure, "The provider failure path did not produce an audit entry.");
+        Assert.Contains(events, item => item.Contains("document.capture.failed", StringComparison.Ordinal));
+
+        var noteService = harness.CreateService(new StaticExtractor("{\"date\":\"2026-11-20\"}"), audit.Object, logger: logger);
+        var noteUpload = await noteService.UploadAsync("purchase-invoice", 1, "image/png", CreatePng(1), "sensitive-note", CancellationToken.None);
+        var noteCaptureId = await harness.Db.DocumentCaptures.Where(capture => capture.PublicId == noteUpload.Id)
+            .Select(capture => capture.Id).SingleAsync();
+        await noteService.AcceptAsync(noteCaptureId,
+            "{\"date\":\"2026-11-20\",\"notes\":\"account 123456789012\"}", CancellationToken.None);
+
         var observed = string.Join("\n", logger.Messages.Concat(events));
         Assert.DoesNotContain("021000021", observed, StringComparison.Ordinal);
         Assert.DoesNotContain("123456789012", observed, StringComparison.Ordinal);
         Assert.DoesNotContain("GB82WEST12345698765432", observed, StringComparison.Ordinal);
         Assert.DoesNotContain("provider failure body", observed, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Fixture Bank", observed, StringComparison.Ordinal);
+        Assert.DoesNotContain("account 123456789012", observed, StringComparison.Ordinal);
     }
 
     [Fact]

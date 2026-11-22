@@ -259,6 +259,8 @@ public static class AccountGoApp
                 : new Api.DocumentCaptures.UnconfiguredDocumentFieldExtractor();
         });
         builder.Services.AddScoped<Api.DocumentCaptures.DocumentCaptureAdmissionLock>();
+        builder.Services.AddScoped<Api.DocumentCaptures.IDocumentCaptureAdmissionLock>(serviceProvider =>
+            serviceProvider.GetRequiredService<Api.DocumentCaptures.DocumentCaptureAdmissionLock>());
         builder.Services.AddScoped<Api.DocumentCaptures.DocumentCaptureService>();
         builder.Services.AddScoped<Api.DocumentCaptures.DocumentCaptureRetentionService>();
         builder.Services.AddHostedService<Api.DocumentCaptures.DocumentCaptureRetentionWorker>();

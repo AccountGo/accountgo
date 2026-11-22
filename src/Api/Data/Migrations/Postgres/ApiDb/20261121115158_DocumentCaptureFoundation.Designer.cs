@@ -882,7 +882,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.HasIndex("CompanyId", "PublicId")
                         .IsUnique();
 
-                    b.HasIndex("CompanyId", "Status", "ExpiresAt");
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("IX_DocumentCaptures_ExpiresAt_Unaccepted")
+                        .HasFilter("\"AcceptedAt\" IS NULL AND \"RejectedAt\" IS NULL AND \"BytesDeletedAt\" IS NULL");
 
                     b.HasIndex("CompanyId", "SourceHash", "Kind", "SchemaVersion", "CreatedAt");
 
@@ -911,7 +913,8 @@ namespace Api.Data.Migrations.Postgres.ApiDb
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CompanyId", "ReservedAt");
+                    b.HasIndex("ReservedAt")
+                        .HasDatabaseName("IX_DocumentCaptureAttempts_ReservedAt");
 
                     b.HasIndex("CompanyId", "CaptureId", "Generation")
                         .IsUnique();

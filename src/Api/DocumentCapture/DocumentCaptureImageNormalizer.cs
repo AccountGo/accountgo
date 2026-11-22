@@ -106,13 +106,13 @@ public static class DocumentCaptureImageNormalizer
             || (long)width * height > DocumentCaptureImageLimits.MaxTotalPixels)
             throw new DocumentCaptureMediaException("DOCUMENT_DIMENSIONS", "Image dimensions exceed the supported limit.");
 
-        var imageInfo = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
-        using var decoded = new SKBitmap(imageInfo);
-        if (codec.GetPixels(imageInfo, decoded.GetPixels()) != SKCodecResult.Success)
-            throw new DocumentCaptureMediaException("DOCUMENT_MALFORMED", "The image is corrupt or incomplete.");
-
-        using var oriented = codec.EncodedOrigin == SKEncodedOrigin.TopLeft ? null : ApplyOrientation(decoded, codec.EncodedOrigin);
-        using var normalized = Resize(oriented ?? decoded);
+        var decodeSize = codec.EncodedFormat == SKEncodedImageFormat.Jpeg
+            ? GetJpegDecodeSize(codec, width, height)
+            : new SKSizeI(width, height);
+        var imageInfo = new SKImageInfo(decodeSize.Width, decodeSize.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
+        using var resized = DecodeAndResize(codec, imageInfo);
+        using var oriented = codec.EncodedOrigin == SKEncodedOrigin.TopLeft ? null : ApplyOrientation(resized, codec.EncodedOrigin);
+        var normalized = oriented ?? resized;
         using var image = SKImage.FromBitmap(normalized);
         var (stored, storedContentType) = EncodeWithinLimit(image)
             ?? throw new DocumentCaptureMediaException("DOCUMENT_TOO_LARGE", "The normalized image exceeds the storage limit.");
@@ -165,6 +165,26 @@ public static class DocumentCaptureImageNormalizer
             ?? throw new DocumentCaptureMediaException("DOCUMENT_NORMALIZATION_FAILED", "The image could not be resized.");
     }
 
+    private static SKSizeI GetJpegDecodeSize(SKCodec codec, int width, int height)
+    {
+        foreach (var scale in new[] { 0.5f, 0.25f, 0.125f })
+        {
+            var scaled = codec.GetScaledDimensions(scale);
+            if (scaled.Width > 0 && scaled.Height > 0
+                && Math.Max(scaled.Width, scaled.Height) >= DocumentCaptureImageLimits.MaxNormalizedDimension)
+                return scaled;
+        }
+        return new SKSizeI(width, height);
+    }
+
+    private static SKBitmap DecodeAndResize(SKCodec codec, SKImageInfo imageInfo)
+    {
+        using var decoded = new SKBitmap(imageInfo);
+        if (codec.GetPixels(imageInfo, decoded.GetPixels()) != SKCodecResult.Success)
+            throw new DocumentCaptureMediaException("DOCUMENT_MALFORMED", "The image is corrupt or incomplete.");
+        return Resize(decoded);
+    }
+
     private static SKBitmap ApplyOrientation(SKBitmap source, SKEncodedOrigin origin)
     {
         var swapsAxes = origin is SKEncodedOrigin.LeftTop or SKEncodedOrigin.RightTop
@@ -181,9 +201,9 @@ public static class DocumentCaptureImageNormalizer
             SKEncodedOrigin.TopRight => (0f, true, false),
             SKEncodedOrigin.BottomRight => (180f, false, false),
             SKEncodedOrigin.BottomLeft => (0f, false, true),
-            SKEncodedOrigin.LeftTop => (90f, true, false),
+            SKEncodedOrigin.LeftTop => (270f, true, false),
             SKEncodedOrigin.RightTop => (90f, false, false),
-            SKEncodedOrigin.RightBottom => (270f, true, false),
+            SKEncodedOrigin.RightBottom => (90f, true, false),
             SKEncodedOrigin.LeftBottom => (270f, false, false),
             _ => (0f, false, false)
         };

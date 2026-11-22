@@ -70,8 +70,7 @@ public static partial class DocumentCaptureMasking
 
     private static bool IsPlausibleDate(string value)
     {
-        var formats = new[] { "yyyy-MM-dd", "yyyyMMdd" };
-        if (!DateOnly.TryParseExact(value, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        if (!DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
             return false;
         return date.Year is >= 1990 and <= 2100;
     }
