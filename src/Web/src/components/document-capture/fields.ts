@@ -24,6 +24,7 @@ export const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 export const MAX_PDF_PAGES = 10;
 export const MAX_FINANCIAL_LINES = 100;
 export const MAX_ASSISTANT_FIELDS = 64;
+export const MAX_ASSISTANT_LABEL_LENGTH = 200;
 export const MAX_TEXT_LENGTH = 2_000;
 export const MAX_LINE_DESCRIPTION_LENGTH = 1_000;
 export const MAX_VENDOR_INVOICE_NO_LENGTH = 50;
@@ -255,6 +256,10 @@ export function isSalesKind(kind: string): kind is 'sales-invoice' {
 
 export function isBankKind(kind: string): kind is 'bank' {
   return kind === 'bank';
+}
+
+export function isAssistantKind(kind: string): kind is 'assistant-attachment' {
+  return kind === 'assistant-attachment';
 }
 
 /**
@@ -741,6 +746,64 @@ export function validateBankFieldsForAccept(header: {
   if (swift) payload.swift = swift;
 
   return { valid: errors.length === 0, errors, payload };
+}
+
+export interface EditableAssistantFieldDraft {
+  id: number;
+  label: string;
+  value: string;
+  confidence: number | null;
+  box: CaptureFieldBox | null;
+}
+
+export interface AssistantAcceptValidationResult {
+  valid: boolean;
+  errors: string[];
+  payload: AssistantCaptureFields;
+}
+
+/**
+ * Validates and normalizes assistant-attachment review fields before POST /accept,
+ * mirroring DocumentCaptureFieldSchemas.ValidateAssistantFields (max 64 fields, label<=200, value<=2000).
+ */
+export function validateAssistantFieldsForAccept(
+  items: EditableAssistantFieldDraft[]
+): AssistantAcceptValidationResult {
+  const errors: string[] = [];
+  if (items.length > MAX_ASSISTANT_FIELDS) {
+    errors.push(`At most ${MAX_ASSISTANT_FIELDS} attachment fields can be accepted.`);
+  }
+
+  const kept: AssistantCaptureFieldItem[] = [];
+  items.forEach((item, idx) => {
+    const label = item.label.trim();
+    const value = item.value.trim();
+    if (!label && !value) return;
+
+    if (label.length > MAX_ASSISTANT_LABEL_LENGTH) {
+      errors.push(`Field ${idx + 1} label can be at most ${MAX_ASSISTANT_LABEL_LENGTH} characters.`);
+    }
+    if (value.length > MAX_TEXT_LENGTH) {
+      errors.push(`Field ${idx + 1} value can be at most ${MAX_TEXT_LENGTH} characters.`);
+    }
+
+    const normalized: AssistantCaptureFieldItem = {};
+    if (label) normalized.label = label;
+    if (value) normalized.value = value;
+    if (typeof item.confidence === 'number' && Number.isFinite(item.confidence) && item.confidence >= 0 && item.confidence <= 1) {
+      normalized.confidence = item.confidence;
+    }
+    if (item.box) {
+      normalized.box = item.box;
+    }
+    kept.push(normalized);
+  });
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    payload: { fields: kept },
+  };
 }
 
 export interface FinancialApplyGates {

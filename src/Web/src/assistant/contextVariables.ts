@@ -44,6 +44,7 @@ export function buildRunStreamBody(
   message: string,
   sessionId: string | undefined,
   contextVariables: Record<string, string>,
+  captureId?: string | null,
 ): Record<string, unknown> {
   const cvs = { ...contextVariables };
   if (sessionId) {
@@ -55,6 +56,9 @@ export function buildRunStreamBody(
   };
   if (sessionId) {
     body.sessionId = sessionId;
+  }
+  if (typeof captureId === 'string' && captureId.trim()) {
+    body.captureId = captureId.trim();
   }
   return body;
 }

@@ -16,6 +16,8 @@ import {
   X,
 } from 'lucide-react';
 import {
+  AssistantCaptureFieldItem,
+  AssistantCaptureFields,
   CaptureLineField,
   CapturePaymentHints,
   CaptureSourceTotals,
@@ -24,14 +26,18 @@ import {
   DocumentCaptureKind,
   DocumentCaptureLinkView,
   DocumentCaptureView,
+  EditableAssistantFieldDraft,
   EditableLineDraft,
   evaluateFinancialApplyGates,
   getFieldDescriptors,
+  isAssistantKind,
   isBankKind,
+  isLowConfidence,
   isSalesKind,
   isSupportedSchemaVersion,
   isVendorKind,
   KIND_LABELS,
+  validateAssistantFieldsForAccept,
   validateBankFieldsForAccept,
   validateSalesFieldsForAccept,
   validateVendorFieldsForAccept,
@@ -57,6 +63,19 @@ export interface DocumentCapturePanelProps {
 }
 
 let lineDraftKey = 1;
+
+function toEditableAssistantFields(
+  source: AssistantCaptureFieldItem[] | null | undefined
+): EditableAssistantFieldDraft[] {
+  if (!source || source.length === 0) return [];
+  return source.map((item) => ({
+    id: lineDraftKey++,
+    label: typeof item.label === 'string' ? item.label : '',
+    value: typeof item.value === 'string' ? item.value : '',
+    confidence: typeof item.confidence === 'number' && Number.isFinite(item.confidence) ? item.confidence : null,
+    box: item.box ?? null,
+  }));
+}
 
 function toEditableLines(source: CaptureLineField[] | null | undefined): EditableLineDraft[] {
   if (!source || source.length === 0) return [];
@@ -123,6 +142,7 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
   const [syncedCaptureKey, setSyncedCaptureKey] = useState<string>('');
   const [headerValues, setHeaderValues] = useState<Record<string, string>>({});
   const [lines, setLines] = useState<EditableLineDraft[]>([]);
+  const [assistantFields, setAssistantFields] = useState<EditableAssistantFieldDraft[]>([]);
   const [sourceTotals, setSourceTotals] = useState<CaptureSourceTotals | null>(null);
   const [paymentHints, setPaymentHints] = useState<CapturePaymentHints | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
@@ -133,6 +153,7 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
     if (!capture) {
       setHeaderValues({});
       setLines([]);
+      setAssistantFields([]);
       setSourceTotals(null);
       setPaymentHints(null);
       setValidationErrors([]);
@@ -154,10 +175,18 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
       if (isVendorKind(capture.kind) || capture.kind === 'sales-invoice') {
         const financial = raw as VendorCaptureFields;
         setLines(toEditableLines(financial.lines));
+        setAssistantFields([]);
         setSourceTotals(financial.sourceTotals ?? null);
         setPaymentHints(financial.paymentHints ?? null);
+      } else if (isAssistantKind(capture.kind)) {
+        const assistant = raw as AssistantCaptureFields;
+        setLines([]);
+        setAssistantFields(toEditableAssistantFields(assistant.fields));
+        setSourceTotals(null);
+        setPaymentHints(null);
       } else {
         setLines([]);
+        setAssistantFields([]);
         setSourceTotals(null);
         setPaymentHints(null);
       }
@@ -280,6 +309,19 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
       return;
     }
 
+    if (isAssistantKind(capture.kind)) {
+      const checked = validateAssistantFieldsForAccept(assistantFields);
+      if (!checked.valid) {
+        setValidationErrors(checked.errors);
+        return;
+      }
+      const canonical = await accept(checked.payload as Record<string, unknown>);
+      if (canonical) {
+        onAccepted(canonical);
+      }
+      return;
+    }
+
     setValidationErrors([`No typed review schema handler is registered in this panel for kind "${capture.kind}".`]);
   };
 
@@ -291,9 +333,12 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
   const descriptors = capture ? getFieldDescriptors(capture.kind, capture.schemaVersion) : [];
   const schemaSupported = capture ? isSupportedSchemaVersion(capture.schemaVersion) : true;
   const kindHasTypedHandler = capture
-    ? isVendorKind(capture.kind) || isSalesKind(capture.kind) || isBankKind(capture.kind)
+    ? isVendorKind(capture.kind) || isSalesKind(capture.kind) || isBankKind(capture.kind) || isAssistantKind(capture.kind)
     : true;
-  const gates = capture && !isBankKind(capture.kind) ? evaluateFinancialApplyGates(capture, orgCurrency) : null;
+  const gates =
+    capture && !isBankKind(capture.kind) && !isAssistantKind(capture.kind)
+      ? evaluateFinancialApplyGates(capture, orgCurrency)
+      : null;
   const isAlreadyLinked = Boolean(capture?.link);
 
   return (
@@ -563,6 +608,94 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
           {schemaSupported && isBankKind(capture.kind) && (
             <div className="rounded-xl border border-sky-500/25 bg-sky-500/10 p-3 text-xs text-sky-900 dark:text-sky-200">
               Bank capture populates bank details only. Opening balance, opening-balance date, and saving remain manual.
+            </div>
+          )}
+
+          {/* Assistant attachment masked fields review */}
+          {schemaSupported && isAssistantKind(capture.kind) && (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-sky-500/25 bg-sky-500/10 p-3 text-xs text-sky-900 dark:text-sky-200">
+                Sensitive numbers are masked automatically, though masking is not complete PII detection. Review, edit, or remove any field before attaching. Only masked text fields are shared with the assistant (never the original image or PDF).
+              </div>
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                  Masked attachment fields
+                </h4>
+                {capture.status !== 'accepted' && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAssistantFields((prev) => [
+                        ...prev,
+                        { id: lineDraftKey++, label: '', value: '', confidence: null, box: null },
+                      ])
+                    }
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--brand-primary)] hover:opacity-80"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add field
+                  </button>
+                )}
+              </div>
+              {assistantFields.length > 0 && (
+                <div className="space-y-2">
+                  {assistantFields.map((item, idx) => (
+                    <div
+                      key={item.id}
+                      className="grid grid-cols-1 sm:grid-cols-[1fr_1.5fr_auto] gap-2 items-start rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-2.5"
+                    >
+                      <div className="space-y-1">
+                        <input
+                          type="text"
+                          aria-label={`Attachment field ${idx + 1} label`}
+                          placeholder="Label"
+                          readOnly={capture.status === 'accepted'}
+                          value={item.label}
+                          onChange={(e) =>
+                            setAssistantFields((prev) =>
+                              prev.map((f, i) => (i === idx ? { ...f, label: e.target.value } : f))
+                            )
+                          }
+                          className="w-full px-2.5 py-1.5 text-xs bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-lg text-[var(--text-main)]"
+                        />
+                        <div className="flex items-center gap-1.5 text-[10px]">
+                          {isLowConfidence(item.confidence) && (
+                            <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 font-semibold">
+                              Check this
+                            </span>
+                          )}
+                          {item.box && (
+                            <span className="text-[var(--text-muted)]">p.{item.box.page}</span>
+                          )}
+                        </div>
+                      </div>
+                      <input
+                        type="text"
+                        aria-label={`Attachment field ${idx + 1} value`}
+                        placeholder="Value"
+                        readOnly={capture.status === 'accepted'}
+                        value={item.value}
+                        onChange={(e) =>
+                          setAssistantFields((prev) =>
+                            prev.map((f, i) => (i === idx ? { ...f, value: e.target.value } : f))
+                          )
+                        }
+                        className="w-full px-2.5 py-1.5 text-xs bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-lg text-[var(--text-main)]"
+                      />
+                      {capture.status !== 'accepted' && (
+                        <button
+                          type="button"
+                          aria-label={`Remove attachment field ${idx + 1}`}
+                          onClick={() => setAssistantFields((prev) => prev.filter((_, i) => i !== idx))}
+                          className="p-1.5 text-[var(--text-muted)] hover:text-rose-500 rounded"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
