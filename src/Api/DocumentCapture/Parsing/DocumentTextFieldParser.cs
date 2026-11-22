@@ -1,0 +1,642 @@
+// Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
+// SPDX-License-Identifier: AGPL-3.0-only
+
+#nullable enable
+using System.Globalization;
+using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+
+namespace Api.DocumentCaptures.Parsing;
+
+public sealed record ParsedFields(string FieldsJson, IReadOnlyList<string> Warnings);
+
+/// <summary>
+/// Pure deterministic C# field parser converting ordered <see cref="TextLine"/> records into schema-valid
+/// capture JSON and warnings for every supported document capture kind. No AI or ML.
+/// </summary>
+public static class DocumentTextFieldParser
+{
+    private const int MaxTotalInputChars = 8_000;
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(200);
+
+    private static readonly Regex TotalKeywordRegex = new(
+        @"(grand\s*total|total\s*amount|amount\s*due|balance\s*due|total\s*\(?rm\)?|\btotal\b|ยอดรวมทั้งสิ้น|ยอดสุทธิ|รวมทั้งสิ้น|ทั้งสิ้น|จำนวนเงินรวม)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+
+    private static readonly Regex NotTotalKeywordRegex = new(
+        @"(sub\s*-?\s*total|total\s*qty|total\s*item|total\s*discount|rounding|change|cash|\btax\b|\bgst\b|\bvat\b|ภาษี|รวมเป็นเงิน)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+
+    private static readonly Regex SubtotalLabelRegex = new(
+        @"(sub\s*-?\s*total|net\s*total|รวมเป็นเงิน|ยอดก่อนภาษี)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+
+    private static readonly Regex TaxLabelRegex = new(
+        @"(\btax\b|\bvat\b|\bgst\b|\bhst\b|\bpst\b|ภาษีมูลค่าเพิ่ม|ภาษี)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+
+    private static readonly Regex TaxHeaderExclusionRegex = new(
+        @"(tax\s*invoice|tax\s*id|tax\s*no|tax\s*date|ใบกำกับภาษี)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+
+    private static readonly Regex TaxInclusiveCueRegex = new(
+        @"(tax\s*incl|incl\.?\s*tax|included|inclusive|รวมภาษีแล้ว)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+
+    private static readonly Regex DateLabelRegex = new(
+        @"(\binvoice\s*date\b|\btax\s*date\b|\bbill\s*date\b|\breceipt\s*date\b|\bissue\s*date\b|\bdate\b|วันที่)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+
+    private static readonly Regex DueDateLabelRegex = new(
+        @"(\bdue\s*date\b|\bpayment\s*due\b|\bdue\b|ครบกำหนด)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+
+    private static readonly Regex InvoiceNumberRegex = new(
+        @"(?:invoice\s*(?:no\.?|number|#)|inv\.?\s*(?:no\.?|#)|receipt\s*(?:no\.?|number|#)|bill\s*(?:no\.?|number|#)|เลขที่)\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9\-_/\.]{1,60})",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+
+    private static readonly Regex InvoiceNumberLabelOnlyRegex = new(
+        @"^(?:invoice\s*(?:no\.?|number|#)|inv\.?\s*(?:no\.?|#)|receipt\s*(?:no\.?|number|#)|bill\s*(?:no\.?|number|#)|เลขที่)\s*[:#]?\s*$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+
+    private static readonly Regex BillToLabelRegex = new(
+        @"^(?:bill\s*to|billed\s*to|sold\s*to|customer|client)\s*[:#-]?\s*(.*)$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+
+    private static readonly Regex VendorPenaltyRegex = new(
+        @"\b(receipt|tax\s*invoice|invoice|copy|cashier|tel|telephone|fax|phone|mobile|email|e-mail|www|http|date|subtotal|total|qty|description|item)\b|@|ใบกำกับภาษี|ใบเสร็จรับเงิน|เลขที่|วันที่",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+
+    private static readonly Regex AddressPatternRegex = new(
+        @"\b\d{1,5}\s+[A-Za-z0-9.\s]{1,30}\b(road|rd\.?|street|st\.?|avenue|ave\.?|blvd\.?|boulevard|lane|ln\.?|drive|dr\.?|way|unit|suite|ste\.?|floor|fl\.?|jalan|jln\.?|soi)\b|ถนน|ซอย",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+
+    private static readonly Regex LegalSuffixRegex = new(
+        @"\b(ltd\.?|limited|llc|l\.l\.c\.?|inc\.?|incorporated|corp\.?|corporation|llp|pte\.?\s*ltd\.?|pte\.?|sdn\.?\s*bhd\.?|gmbh|co\.?,?\s*ltd\.?|co\.)\b|บริษัท.*จำกัด",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+
+    private static readonly Regex PaidCueRegex = new(
+        @"\b(paid|cash|change)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+
+    private static readonly Regex BalanceZeroCueRegex = new(
+        @"(?:balance|amount)\s*due\s*[:#-]?\s*(?:[A-Z]{3}\s*)?[$€£฿]?\s*0(?:[.,]00)?(?![\d.,])",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+
+    private static readonly Regex AmountDueLabelRegex = new(
+        @"(?:amount\s*due|balance\s*due)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+
+    private static readonly Regex AmountPaidLabelRegex = new(
+        @"(?:amount\s*paid|total\s*paid|paid\s*amount)\s*[:#-]?\s*(.*)$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+
+    // Clear table row: <description> <qty> <unitPrice> <lineTotal>
+    private static readonly Regex LineItemRowRegex = new(
+        @"^(.+?)\s+(\d+(?:\.\d{1,4})?)\s+(?:(?:S\$|A\$|C\$|HK\$|NZ\$|RM|Rp|[A-Z]{3})\s*)?[$€£฿]?\s*(\d{1,3}(?:[,\s]\d{3})+|\d+)[.,](\d{2})\s+(?:(?:S\$|A\$|C\$|HK\$|NZ\$|RM|Rp|[A-Z]{3})\s*)?[$€£฿]?\s*(\d{1,3}(?:[,\s]\d{3})+|\d+)[.,](\d{2})\s*$",
+        RegexOptions.CultureInvariant, RegexTimeout);
+
+    public static ParsedFields Parse(string kind, IReadOnlyList<TextLine> lines)
+    {
+        if (!DocumentCaptureFieldSchemas.IsSupportedKind(kind))
+            return new ParsedFields("{}", Array.Empty<string>());
+
+        var normalized = NormalizeBoundedLines(lines);
+        var warnings = new List<string>();
+        Dictionary<string, object?> payload;
+
+        switch (kind)
+        {
+            case "expense-receipt":
+            case "purchase-invoice":
+                payload = ParseFinancial(normalized, isSales: false, warnings);
+                break;
+            case "sales-invoice":
+                payload = ParseFinancial(normalized, isSales: true, warnings);
+                break;
+            case "bank":
+                payload = BankFieldParser.Parse(normalized.Select(l => l.Text).ToList());
+                break;
+            case "assistant-attachment":
+                payload = ParseAssistantAttachment(normalized);
+                break;
+            default:
+                payload = new Dictionary<string, object?>();
+                break;
+        }
+
+        var json = JsonSerializer.Serialize(payload);
+        using var doc = JsonDocument.Parse(json);
+        if (DocumentCaptureFieldSchemas.TryValidate(kind, DocumentCaptureFieldSchemas.CurrentSchemaVersion, doc.RootElement, out var canonical, out _))
+        {
+            return new ParsedFields(canonical, warnings);
+        }
+
+        // Fallback safety net: always return schema-valid JSON even on unexpected edge cases
+        var fallback = kind == "assistant-attachment" ? "{\"fields\":[]}" : "{}";
+        return new ParsedFields(fallback, warnings);
+    }
+
+    private static List<NormalizedLine> NormalizeBoundedLines(IReadOnlyList<TextLine>? lines)
+    {
+        var result = new List<NormalizedLine>();
+        if (lines is null || lines.Count == 0)
+            return result;
+
+        var remaining = MaxTotalInputChars;
+        foreach (var line in lines)
+        {
+            if (remaining <= 0)
+                break;
+            if (line is null)
+                continue;
+
+            var clean = DateAndAmountParser.SanitizeLineText(line.Text);
+            if (string.IsNullOrEmpty(clean))
+                continue;
+
+            if (clean.Length > remaining)
+                clean = clean[..remaining].TrimEnd();
+            if (string.IsNullOrEmpty(clean))
+                continue;
+
+            remaining -= clean.Length;
+            var height = float.IsFinite(line.Y1 - line.Y0) ? Math.Max(0f, line.Y1 - line.Y0) : 0f;
+            result.Add(new NormalizedLine(line.Page, clean, height));
+        }
+
+        return result;
+    }
+
+    private static Dictionary<string, object?> ParseFinancial(
+        List<NormalizedLine> lines,
+        bool isSales,
+        List<string> warnings)
+    {
+        var fields = new Dictionary<string, object?>(StringComparer.Ordinal);
+        if (lines.Count == 0)
+        {
+            fields["lines"] = Array.Empty<object>();
+            return fields;
+        }
+
+        var texts = lines.Select(l => l.Text).ToList();
+
+        // Party name
+        var party = isSales ? ExtractSalesCustomer(texts) : ExtractVendorName(lines);
+        if (!string.IsNullOrWhiteSpace(party))
+        {
+            fields[isSales ? "customerName" : "vendorName"] = Truncate(party, DocumentCaptureFieldSchemas.MaxTextLength);
+        }
+
+        // Invoice / receipt number
+        var docNo = ExtractInvoiceNumber(texts);
+        if (!string.IsNullOrWhiteSpace(docNo))
+        {
+            fields[isSales ? "sourceInvoiceNo" : "vendorInvoiceNo"] = Truncate(docNo, 200);
+        }
+
+        // Dates
+        var (docDate, dueDate) = ExtractDates(texts);
+        if (docDate is not null)
+            fields["date"] = docDate;
+        if (dueDate is not null)
+            fields["dueDate"] = dueDate;
+
+        // Currency
+        var (currency, ambiguousDollar) = DateAndAmountParser.DetectCurrency(texts);
+        if (currency is not null)
+            fields["currency"] = currency;
+        else if (ambiguousDollar)
+            warnings.Add("CURRENCY_AMBIGUOUS");
+
+        // Totals
+        var (grandTotal, subtotal, taxTotal, isInclusive) = ExtractTotals(texts);
+        if (grandTotal.HasValue || subtotal.HasValue || taxTotal.HasValue)
+        {
+            var totals = new Dictionary<string, object?>(StringComparer.Ordinal);
+            if (subtotal.HasValue) totals["subtotal"] = DateAndAmountParser.FormatDecimal2(subtotal.Value);
+            if (taxTotal.HasValue) totals["taxTotal"] = DateAndAmountParser.FormatDecimal2(taxTotal.Value);
+            if (grandTotal.HasValue) totals["grandTotal"] = DateAndAmountParser.FormatDecimal2(grandTotal.Value);
+            if (isInclusive) totals["priceBasis"] = "inclusive";
+            fields["sourceTotals"] = totals;
+
+            if (subtotal.HasValue && taxTotal.HasValue && grandTotal.HasValue
+                && !isInclusive
+                && Math.Abs(subtotal.Value + taxTotal.Value - grandTotal.Value) > 0.01m)
+            {
+                warnings.Add("TOTALS_INCONSISTENT");
+            }
+        }
+
+        // Lines (emit [] unless clear table pattern exists)
+        var parsedLines = ExtractTableLines(texts);
+        fields["lines"] = parsedLines;
+
+        // Payment hints (bill kinds only)
+        if (!isSales)
+        {
+            var paymentHints = ExtractPaymentHints(texts, dueDate is not null);
+            fields["paymentHints"] = paymentHints;
+        }
+
+        return fields;
+    }
+
+    private static (string? DocDate, string? DueDate) ExtractDates(List<string> lines)
+    {
+        string? labeledDocDate = null;
+        string? fallbackDocDate = null;
+        string? dueDate = null;
+
+        for (var i = 0; i < lines.Count; i++)
+        {
+            var line = lines[i];
+            var next = i + 1 < lines.Count ? lines[i + 1] : null;
+            var isDueLine = SafeIsMatch(DueDateLabelRegex, line);
+
+            if (isDueLine)
+            {
+                dueDate ??= DateAndAmountParser.TryExtractDate(line)
+                    ?? (next is not null ? DateAndAmountParser.TryExtractDate(next) : null);
+                continue;
+            }
+
+            if (labeledDocDate is null && SafeIsMatch(DateLabelRegex, line))
+            {
+                labeledDocDate = DateAndAmountParser.TryExtractDate(line)
+                    ?? (next is not null ? DateAndAmountParser.TryExtractDate(next) : null);
+            }
+
+            if (fallbackDocDate is null)
+            {
+                fallbackDocDate = DateAndAmountParser.TryExtractDate(line);
+            }
+        }
+
+        return (labeledDocDate ?? fallbackDocDate, dueDate);
+    }
+
+    private static (decimal? GrandTotal, decimal? Subtotal, decimal? TaxTotal, bool IsInclusive) ExtractTotals(List<string> lines)
+    {
+        decimal? grandTotal = null;
+        decimal? subtotal = null;
+        decimal? taxTotal = null;
+        var isInclusive = false;
+
+        for (var i = 0; i < lines.Count; i++)
+        {
+            var line = lines[i];
+            var next = i + 1 < lines.Count ? lines[i + 1] : null;
+
+            if (SafeIsMatch(TaxInclusiveCueRegex, line))
+                isInclusive = true;
+
+            // Grand total from total-keyword lines (excluding subtotal/tax/change/cash/rounding/qty)
+            if (SafeIsMatch(TotalKeywordRegex, line) && !SafeIsMatch(NotTotalKeywordRegex, line))
+            {
+                var found = FirstMaxAmountInWindow(line, next);
+                if (found.HasValue)
+                    grandTotal = grandTotal.HasValue ? Math.Max(grandTotal.Value, found.Value) : found.Value;
+            }
+
+            // Subtotal
+            if (!subtotal.HasValue && SafeIsMatch(SubtotalLabelRegex, line))
+            {
+                subtotal = FirstMaxAmountInWindow(line, next);
+            }
+
+            // Tax total (excluding "Tax Invoice", "Tax ID", "Tax Date", etc.)
+            if (!taxTotal.HasValue && SafeIsMatch(TaxLabelRegex, line) && !SafeIsMatch(TaxHeaderExclusionRegex, line))
+            {
+                taxTotal = FirstMaxAmountInWindow(line, next);
+            }
+        }
+
+        // Fallback: largest amount across document if no total-keyword line matched
+        if (!grandTotal.HasValue)
+        {
+            decimal? maxAny = null;
+            foreach (var line in lines)
+            {
+                foreach (var v in DateAndAmountParser.ExtractAmounts(line))
+                    maxAny = maxAny.HasValue ? Math.Max(maxAny.Value, v) : v;
+            }
+            grandTotal = maxAny;
+        }
+
+        return (grandTotal, subtotal, taxTotal, isInclusive);
+    }
+
+    private static decimal? FirstMaxAmountInWindow(string line, string? nextLine)
+    {
+        var sameLine = DateAndAmountParser.ExtractAmounts(line);
+        if (sameLine.Count > 0)
+            return sameLine.Max();
+
+        if (nextLine is not null)
+        {
+            var nextAmounts = DateAndAmountParser.ExtractAmounts(nextLine);
+            if (nextAmounts.Count > 0)
+                return nextAmounts.Max();
+        }
+
+        return null;
+    }
+
+    private static string? ExtractVendorName(List<NormalizedLine> lines)
+    {
+        var page1 = lines.Where(l => l.Page <= 1).Take(8).ToList();
+        var candidates = page1.Count > 0 ? page1 : lines.Take(8).ToList();
+        if (candidates.Count == 0)
+            return null;
+
+        var maxHeight = candidates.Max(c => c.Height);
+        string? bestText = null;
+        var bestScore = double.NegativeInfinity;
+
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            var c = candidates[i];
+            var text = c.Text;
+            var letters = CountLetters(text);
+            var digits = CountDigits(text);
+
+            if (text.Length < 2 || letters < 2)
+                continue;
+
+            double score = 10.0 - i * 1.2;
+
+            if (SafeIsMatch(VendorPenaltyRegex, text))
+                score -= 20.0;
+
+            if (digits >= letters && digits > 0)
+                score -= 15.0;
+
+            if (SafeIsMatch(AddressPatternRegex, text))
+                score -= 18.0;
+
+            if (SafeIsMatch(LegalSuffixRegex, text))
+                score += 8.0;
+
+            if (maxHeight > 0.5f && Math.Abs(c.Height - maxHeight) <= 0.5f)
+                score += 6.0;
+
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestText = text;
+            }
+        }
+
+        return bestScore > -10.0 ? bestText : null;
+    }
+
+    private static string? ExtractSalesCustomer(List<string> lines)
+    {
+        for (var i = 0; i < lines.Count; i++)
+        {
+            try
+            {
+                var m = BillToLabelRegex.Match(lines[i]);
+                if (!m.Success)
+                    continue;
+
+                var inline = m.Groups[1].Value.Trim();
+                if (!string.IsNullOrEmpty(inline) && CountLetters(inline) >= 2 && !SafeIsMatch(AddressPatternRegex, inline))
+                    return inline;
+
+                for (var j = i + 1; j < Math.Min(lines.Count, i + 4); j++)
+                {
+                    var cand = lines[j].Trim();
+                    if (string.IsNullOrEmpty(cand))
+                        continue;
+                    if (CountLetters(cand) >= 2 && !SafeIsMatch(AddressPatternRegex, cand) && !SafeIsMatch(VendorPenaltyRegex, cand))
+                        return cand;
+                }
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                continue;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? ExtractInvoiceNumber(List<string> lines)
+    {
+        for (var i = 0; i < lines.Count; i++)
+        {
+            try
+            {
+                var m = InvoiceNumberRegex.Match(lines[i]);
+                if (m.Success)
+                    return m.Groups[1].Value.Trim();
+
+                if (InvoiceNumberLabelOnlyRegex.IsMatch(lines[i]) && i + 1 < lines.Count)
+                {
+                    var next = lines[i + 1].Trim();
+                    if (next.Length is >= 2 and <= 64 && !next.Contains(' ', StringComparison.Ordinal))
+                        return next;
+                }
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                continue;
+            }
+        }
+
+        return null;
+    }
+
+    private static List<Dictionary<string, object?>> ExtractTableLines(List<string> lines)
+    {
+        var result = new List<Dictionary<string, object?>>();
+        foreach (var line in lines)
+        {
+            if (result.Count >= DocumentCaptureFieldSchemas.MaxFinancialLines)
+                break;
+
+            if (SafeIsMatch(TotalKeywordRegex, line) || SafeIsMatch(SubtotalLabelRegex, line) || SafeIsMatch(TaxLabelRegex, line))
+                continue;
+
+            try
+            {
+                var m = LineItemRowRegex.Match(line);
+                if (!m.Success)
+                    continue;
+
+                var desc = m.Groups[1].Value.Trim();
+                if (desc.Length == 0 || CountLetters(desc) < 2)
+                    continue;
+
+                if (!decimal.TryParse(m.Groups[2].Value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var qty)
+                    || qty <= 0m)
+                    continue;
+
+                var unitStr = StripSeps(m.Groups[3].Value) + "." + m.Groups[4].Value;
+                var totalStr = StripSeps(m.Groups[5].Value) + "." + m.Groups[6].Value;
+                if (!decimal.TryParse(unitStr, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var unit)
+                    || !decimal.TryParse(totalStr, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var lineTotal))
+                    continue;
+
+                if (Math.Abs(Math.Round(qty * unit, 2, MidpointRounding.AwayFromZero) - lineTotal) > 0.01m)
+                    continue;
+
+                result.Add(new Dictionary<string, object?>(StringComparer.Ordinal)
+                {
+                    ["description"] = Truncate(desc, DocumentCaptureFieldSchemas.MaxLineDescriptionLength),
+                    ["quantity"] = DateAndAmountParser.FormatQuantity(qty),
+                    ["unitAmount"] = DateAndAmountParser.FormatDecimal2(unit),
+                    ["sourceLineTotal"] = DateAndAmountParser.FormatDecimal2(lineTotal),
+                });
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                continue;
+            }
+        }
+
+        return result;
+    }
+
+    private static Dictionary<string, object?> ExtractPaymentHints(List<string> lines, bool hasDueDate)
+    {
+        var hints = new Dictionary<string, object?>(StringComparer.Ordinal);
+        var isPaid = false;
+        var hasPositiveAmountDue = false;
+        decimal? amountPaid = null;
+
+        for (var i = 0; i < lines.Count; i++)
+        {
+            var line = lines[i];
+            var next = i + 1 < lines.Count ? lines[i + 1] : null;
+
+            if (SafeIsMatch(PaidCueRegex, line) || SafeIsMatch(BalanceZeroCueRegex, line))
+                isPaid = true;
+
+            if (SafeIsMatch(AmountDueLabelRegex, line))
+            {
+                var amt = FirstMaxAmountInWindow(line, next);
+                if (amt.HasValue && amt.Value > 0m)
+                    hasPositiveAmountDue = true;
+            }
+
+            if (!amountPaid.HasValue)
+            {
+                try
+                {
+                    var paidMatch = AmountPaidLabelRegex.Match(line);
+                    if (paidMatch.Success)
+                    {
+                        var valPart = paidMatch.Groups[1].Value;
+                        var amounts = DateAndAmountParser.ExtractAmounts(valPart);
+                        if (amounts.Count > 0)
+                            amountPaid = amounts.Max();
+                        else if (next is not null)
+                        {
+                            var nextAmounts = DateAndAmountParser.ExtractAmounts(next);
+                            if (nextAmounts.Count > 0)
+                                amountPaid = nextAmounts.Max();
+                        }
+                    }
+                }
+                catch (RegexMatchTimeoutException)
+                {
+                    // ignore
+                }
+            }
+        }
+
+        hints["paymentStatus"] = isPaid
+            ? "paid"
+            : (hasPositiveAmountDue || hasDueDate ? "unpaid" : "unknown");
+
+        if (amountPaid.HasValue)
+            hints["amountPaid"] = DateAndAmountParser.FormatDecimal2(amountPaid.Value);
+
+        return hints;
+    }
+
+    private static Dictionary<string, object?> ParseAssistantAttachment(List<NormalizedLine> lines)
+    {
+        var items = new List<Dictionary<string, object?>>();
+        foreach (var line in lines)
+        {
+            if (items.Count >= DocumentCaptureFieldSchemas.MaxAssistantFields)
+                break;
+
+            var colon = line.Text.IndexOf(':', StringComparison.Ordinal);
+            if (colon <= 0 || colon >= line.Text.Length - 1)
+                continue;
+
+            var label = line.Text[..colon].Trim();
+            var value = line.Text[(colon + 1)..].Trim();
+            if (string.IsNullOrEmpty(label) || string.IsNullOrEmpty(value))
+                continue;
+
+            items.Add(new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["label"] = Truncate(label, 200),
+                ["value"] = Truncate(value, DocumentCaptureFieldSchemas.MaxTextLength),
+            });
+        }
+
+        return new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["fields"] = items,
+        };
+    }
+
+    private static bool SafeIsMatch(Regex regex, string input)
+    {
+        try
+        {
+            return regex.IsMatch(input);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return false;
+        }
+    }
+
+    private static int CountLetters(string text)
+    {
+        var count = 0;
+        foreach (var ch in text)
+        {
+            if (char.IsLetter(ch))
+                count++;
+        }
+        return count;
+    }
+
+    private static int CountDigits(string text)
+    {
+        var count = 0;
+        foreach (var ch in text)
+        {
+            if (ch is >= '0' and <= '9')
+                count++;
+        }
+        return count;
+    }
+
+    private static string StripSeps(string raw)
+    {
+        var sb = new StringBuilder(raw.Length);
+        foreach (var ch in raw)
+        {
+            if (ch is >= '0' and <= '9')
+                sb.Append(ch);
+        }
+        return sb.ToString();
+    }
+
+    private static string Truncate(string text, int maxLength) =>
+        text.Length <= maxLength ? text : text[..maxLength].TrimEnd();
+
+    private sealed record NormalizedLine(int Page, string Text, float Height);
+}
