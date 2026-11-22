@@ -35,6 +35,7 @@ import {
   DocumentCaptureView,
   evaluateFinancialApplyGates,
   findSuggestedVendor,
+  formatSignedCurrencyDifference,
   isValidIsoDate,
   MAX_SALES_REFERENCE_NO_LENGTH,
   parseStrictDecimal,
@@ -169,7 +170,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
 
   // Client picker and the add/edit client dialog (editing: the client being edited)
   const [isCustomerPickerOpen, setIsCustomerPickerOpen] = useState<boolean>(false);
-  const [clientDialog, setClientDialog] = useState<{ client?: Client } | null>(null);
+  const [clientDialog, setClientDialog] = useState<{ client?: Client; initialName?: string } | null>(null);
   const [isLoadingClient, setIsLoadingClient] = useState(false);
   const canManageClients = hasPermission('sales.customers.manage');
   // The line a new catalog item is being added for, from the item picker.
@@ -184,6 +185,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const [unrecordedSaleConfirmed, setUnrecordedSaleConfirmed] = useState(false);
   const [ambiguousCurrencyConfirmed, setAmbiguousCurrencyConfirmed] = useState(false);
   const [suggestedCustomer, setSuggestedCustomer] = useState<CustomerOption | null>(null);
+  const [unmatchedCustomerName, setUnmatchedCustomerName] = useState<string | null>(null);
   const [pendingDueDate, setPendingDueDate] = useState<string | null>(null);
   const [pendingLineMerge, setPendingLineMerge] = useState<FormLineItem[] | null>(null);
   const [ackSnapshots, setAckSnapshots] = useState<
@@ -220,7 +222,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
 
   const formatCurrency = useCallback(
     (val: number) => {
-      return `${currencySymbol}${val.toLocaleString(undefined, {
+      return `${val < 0 ? '-' : ''}${currencySymbol}${Math.abs(val).toLocaleString(undefined, {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       })}`;
@@ -732,6 +734,8 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
 
       const matched = findSuggestedVendor(fields.customerName, customers);
       setSuggestedCustomer(matched && matched.id !== selectedCustomerId ? matched : null);
+      const trimmedCustomerName = typeof fields.customerName === 'string' ? fields.customerName.trim() : '';
+      setUnmatchedCustomerName(!matched && trimmedCustomerName && !selectedCustomerId ? trimmedCustomerName : null);
 
       if (!gates.canApplyNonMonetary) {
         return;
@@ -983,6 +987,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     } else if (selectedCustomerId === client.id) {
       void loadClientDetail(client.id);
     }
+    setUnmatchedCustomerName(null);
     setClientDialog(null);
   };
 
@@ -1170,6 +1175,31 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         </div>
       )}
 
+      {/* Unmatched customer prompt: opens the existing New client dialog pre-filled (never auto-creates) */}
+      {unmatchedCustomerName && !selectedCustomerId && canManageClients && (
+        <div role="status" className="mb-4 rounded-xl border border-[var(--brand-ring)]/40 bg-[var(--brand-subtle)]/40 p-3.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span>
+            No existing client matches <strong className="text-[var(--text-main)]">{unmatchedCustomerName}</strong>.
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setClientDialog({ initialName: unmatchedCustomerName })}
+              className="px-3 py-1.5 font-semibold rounded-lg bg-[var(--brand-primary)] text-white hover:opacity-90 transition"
+            >
+              Create client &ldquo;{unmatchedCustomerName}&rdquo;
+            </button>
+            <button
+              type="button"
+              onClick={() => setUnmatchedCustomerName(null)}
+              className="px-2.5 py-1.5 font-semibold rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Explicit due-date vs payment-term choice */}
       {pendingDueDate && (
         <div role="status" className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-800 dark:text-amber-300">
@@ -1329,7 +1359,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                   {capDisc.difference === null
                     ? 'No source total'
                     : capDisc.hasDiscrepancy
-                      ? `${capDisc.difference > 0 ? '+' : ''}${formatCurrency(capDisc.difference)}`
+                      ? formatSignedCurrencyDifference(capDisc.difference, formatCurrency)
                       : 'Matches source total'}
                 </div>
               </div>
@@ -1984,6 +2014,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         <PartyFormDialog
           role="client"
           party={clientDialog.client}
+          initialName={clientDialog.initialName}
           paymentTerms={paymentTerms}
           onSaved={handleClientSaved}
           onClose={() => setClientDialog(null)}

@@ -22,6 +22,7 @@ import {
   CapturePaymentHints,
   CaptureSourceTotals,
   describeCaptureWarning,
+  describeLinkedCaptureTarget,
   DocumentCaptureCapabilities,
   DocumentCaptureKind,
   DocumentCaptureLinkView,
@@ -346,8 +347,8 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
       aria-label="Document capture"
       className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 shadow-sm space-y-4"
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-[var(--text-main)]">Scan or upload document</h3>
           <p className="text-xs text-[var(--text-secondary)]">
             Extract fields for review. Accepting fills the draft form only and never saves, approves, or posts automatically.
@@ -361,7 +362,7 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
               onCancel();
             }}
             aria-label="Close document capture"
-            className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)] transition"
+            className="shrink-0 p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)] transition"
           >
             <X className="w-4 h-4" />
           </button>
@@ -515,7 +516,7 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
       {capture && isAlreadyLinked && capture.link && (
         <div role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-sm text-amber-700 dark:text-amber-300 flex flex-wrap items-center justify-between gap-3">
           <span>
-            This document was already accepted and linked to an existing {capture.link.targetType} ({capture.link.targetId}).
+            This document was already accepted and linked to {describeLinkedCaptureTarget(capture)}.
           </span>
           {onOpenLinkedRecord && (
             <button

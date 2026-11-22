@@ -220,7 +220,6 @@ export function AssistantSidepanel({ orgSlug = '' }: { orgSlug?: string }) {
                 scopeKey="assistant"
                 capabilities={capabilities}
                 onAccepted={handleAccepted}
-                onCancel={() => setCaptureOpen(false)}
               />
             </div>
           )}

@@ -554,4 +554,23 @@ describe('BankAccountFormDialog document capture integration (PR 4)', () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:bank-preview-1');
     expect(onAccepted).not.toHaveBeenCalled();
   });
+
+  it('does not render a redundant close button inside the bank capture panel when the dialog has a hide toggle (E3)', async () => {
+    authFetch.mockResolvedValue(jsonResponse(bankCaps));
+
+    render(
+      <BankAccountFormDialog
+        hasFinancials={false}
+        orgSlug="acme"
+        canScanBankDetails={true}
+        onSaved={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: /Scan bank details/i }));
+    await screen.findByRole('button', { name: /Choose image or PDF/i });
+    expect(screen.getByRole('button', { name: /Hide bank detail scanner/i })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Close document capture/i })).toBeNull();
+  });
 });

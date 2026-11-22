@@ -50,6 +50,7 @@ import { InvoiceCaptureEvidence } from '../components/InvoiceCaptureEvidence';
 import {
   computeCaptureDiscrepancy,
   DocumentCaptureView,
+  formatSignedCurrencyDifference,
   SalesCaptureFields,
 } from '../components/document-capture/fields';
 import { shortRef } from '../lib/shortRef';
@@ -1273,7 +1274,7 @@ export const InvoiceDetail: React.FC = () => {
                     className="mt-0.5 rounded"
                   />
                   <span>
-                    Linked source document ({capture.id}) total is {disc.sourceGrandTotal?.toFixed(2) ?? fields.sourceTotals?.grandTotal}, while this draft invoice total is {formatCurrency(disc.formTotal)} (difference {disc.difference !== null ? `${disc.difference > 0 ? '+' : ''}${formatCurrency(disc.difference)}` : '—'}). I have reviewed this difference and acknowledge it for issuing.
+                    Linked source document ({capture.id}) total is {disc.sourceGrandTotal?.toFixed(2) ?? fields.sourceTotals?.grandTotal}, while this draft invoice total is {formatCurrency(disc.formTotal)} (difference {disc.difference !== null ? formatSignedCurrencyDifference(disc.difference, formatCurrency) : '—'}). I have reviewed this difference and acknowledge it for issuing.
                   </span>
                 </label>
               );

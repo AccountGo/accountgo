@@ -662,4 +662,31 @@ describe('InvoiceEdit & InvoiceDetail document capture integration (PR 3)', () =
     expect(invalid.errors.some((e) => e.includes('greater than zero'))).toBe(true);
     expect(invalid.errors.some((e) => e.includes('plain decimal number'))).toBe(true);
   });
+
+  it('offers Create client pre-filled with the captured name when no exact client matches and never auto-creates (E4)', async () => {
+    setupInvoiceEditMocks(() =>
+      makeSalesCapture({
+        fields: {
+          customerName: 'New Horizon LLC',
+          sourceInvoiceNo: 'NH-55',
+          date: '2026-11-10',
+          currency: 'USD',
+          lines: [{ description: 'Advisory', quantity: '1', unitAmount: '100.00' }],
+          sourceTotals: { subtotal: '100.00', grandTotal: '100.00', priceBasis: 'exclusive' },
+        },
+      })
+    );
+
+    renderWithRouter('/org/acme/sales/new');
+    await scanAndAccept();
+    await confirmUnrecordedSale();
+
+    const createBtn = await screen.findByRole('button', { name: /Create client “New Horizon LLC”/i });
+    expect(authFetch.mock.calls.some(([u]) => String(u).includes('Client') && String(u).includes('Save'))).toBe(false);
+
+    fireEvent.click(createBtn);
+    const nameInput = (await screen.findByDisplayValue('New Horizon LLC')) as HTMLInputElement;
+    expect(nameInput).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /New client/i })).toBeTruthy();
+  });
 });

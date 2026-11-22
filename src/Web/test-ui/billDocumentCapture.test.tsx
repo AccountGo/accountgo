@@ -673,4 +673,34 @@ describe('BillEdit & BillDetail document capture integration', () => {
     await waitFor(() => expect(screen.getByText(/is approved and counted as owed/i)).toBeTruthy());
     expect(lastApproveBody.captureReviews).toHaveLength(2);
   });
+
+  it('offers Create vendor pre-filled with the captured name when no exact vendor matches and never auto-creates (E4)', async () => {
+    setupBillEditMocks(() =>
+      makeCapture({
+        fields: {
+          vendorName: 'Blue Bean Coffee Supply',
+          vendorInvoiceNo: 'BB-100',
+          date: '2026-11-10',
+          currency: 'USD',
+          lines: [{ description: 'Coffee beans', quantity: '1', unitAmount: '50.00' }],
+          sourceTotals: { subtotal: '50.00', grandTotal: '50.00', priceBasis: 'exclusive' },
+        },
+      })
+    );
+
+    renderWithRouter('/org/acme/purchases/new');
+    fireEvent.click(await screen.findByRole('button', { name: /Scan receipt \/ bill/i }));
+    fireEvent.change(screen.getByLabelText('Upload image or PDF'), {
+      target: { files: [new File(['png'], 'bb.png', { type: 'image/png' })] },
+    });
+    fireEvent.click(await screen.findByRole('button', { name: /Accept & apply to draft/i }));
+
+    const createBtn = await screen.findByRole('button', { name: /Create vendor “Blue Bean Coffee Supply”/i });
+    expect(authFetch.mock.calls.some(([u]) => String(u).includes('Vendor') && String(u).includes('Save'))).toBe(false);
+
+    fireEvent.click(createBtn);
+    const nameInput = (await screen.findByDisplayValue('Blue Bean Coffee Supply')) as HTMLInputElement;
+    expect(nameInput).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /New vendor/i })).toBeTruthy();
+  });
 });

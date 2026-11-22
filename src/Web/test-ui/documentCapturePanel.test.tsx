@@ -7,8 +7,10 @@ import { DocumentCapturePanel } from '../src/components/document-capture/Documen
 import {
   computeCaptureDiscrepancy,
   describeCaptureError,
+  describeLinkedCaptureTarget,
   DocumentCaptureCapabilities,
   DocumentCaptureView,
+  formatSignedCurrencyDifference,
   parseStrictDecimal,
   validateVendorFieldsForAccept,
 } from '../src/components/document-capture/fields';
@@ -480,5 +482,54 @@ describe('DocumentCapturePanel & fields.ts', () => {
     expect(describeCaptureError('DOCUMENT_DECODE_BUSY', 429).canRetryUpload).toBe(true);
     expect(describeCaptureError('DOCUMENT_BYTES_UNAVAILABLE', 409).canRetryAccept).toBe(false);
     expect(describeCaptureError('DOCUMENT_REVIEW_REQUIRED', 409).code).toBe('DOCUMENT_REVIEW_REQUIRED');
+  });
+
+  it('formats negative reconciliation differences as -$10.00 (never $-10.00) (E1)', () => {
+    const fmt = (val: number) =>
+      `${val < 0 ? '-' : ''}$${Math.abs(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    expect(formatSignedCurrencyDifference(-10, fmt)).toBe('-$10.00');
+    expect(formatSignedCurrencyDifference(10, fmt)).toBe('+$10.00');
+    expect(formatSignedCurrencyDifference(0, fmt)).toBe('$0.00');
+  });
+
+  it('shows a human-readable linked target label instead of the raw public id on duplicate notices (E2)', async () => {
+    const onOpenLinkedRecord = vi.fn();
+    const linked = makeFakeExtractorReadyCapture({
+      status: 'accepted',
+      fields: null,
+      acceptedFields: {
+        date: '2026-11-10',
+        vendorName: 'Blue Bean Coffee Supply',
+        vendorInvoiceNo: 'INV-42',
+      },
+      canAccept: false,
+      canApply: true,
+      link: { targetType: 'bill', targetId: 'bill_01m8secret00000000000001', linkedAt: '2026-11-10T11:00:00Z' },
+    });
+    expect(describeLinkedCaptureTarget(linked)).toBe('bill #INV-42 from Blue Bean Coffee Supply');
+
+    authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/document-captures/capabilities') return makeJsonResponse(enabledCapabilities);
+      if (url === '/api/document-captures' && init?.method === 'POST') return makeJsonResponse(linked);
+      return makeJsonResponse({}, 404);
+    });
+
+    render(
+      <DocumentCapturePanel
+        kind="purchase-invoice"
+        orgSlug="acme"
+        onAccepted={vi.fn()}
+        onOpenLinkedRecord={onOpenLinkedRecord}
+      />
+    );
+    await waitFor(() => expect(screen.getByLabelText('Upload image or PDF')).toBeTruthy());
+    fireEvent.change(screen.getByLabelText('Upload image or PDF'), {
+      target: { files: [new File(['dup'], 'dup.png', { type: 'image/png' })] },
+    });
+
+    const notice = await screen.findByText(/linked to bill #INV-42 from Blue Bean Coffee Supply/i);
+    expect(notice.textContent).not.toContain('bill_01m8secret');
+    fireEvent.click(screen.getByRole('button', { name: /Open linked record/i }));
+    expect(onOpenLinkedRecord).toHaveBeenCalledWith(linked.link);
   });
 });

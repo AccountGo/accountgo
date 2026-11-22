@@ -17,6 +17,7 @@ import { BillCaptureEvidence } from '../components/BillCaptureEvidence';
 import {
   computeCaptureDiscrepancy,
   DocumentCaptureView,
+  formatSignedCurrencyDifference,
   VendorCaptureFields,
 } from '../components/document-capture/fields';
 import { RecordHistoryButton, RecordHistoryPanel, useRecordHistory } from '../components/RecordHistoryPanel';
@@ -71,7 +72,8 @@ export const BillDetail: React.FC = () => {
 
   const currencySymbol = getCurrencySymbol(currentOrg.currency);
   const formatCurrency = useCallback(
-    (val: number) => `${currencySymbol}${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    (val: number) =>
+      `${val < 0 ? '-' : ''}${currencySymbol}${Math.abs(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
     [currencySymbol]
   );
   const formatDate = (value?: string | null) =>
@@ -616,7 +618,7 @@ export const BillDetail: React.FC = () => {
                     className="mt-0.5 rounded"
                   />
                   <span>
-                    Linked source document ({capture.id}) total is {disc.sourceGrandTotal?.toFixed(2) ?? fields.sourceTotals?.grandTotal}, while this draft bill total is {formatCurrency(disc.formTotal)} (difference {disc.difference !== null ? `${disc.difference > 0 ? '+' : ''}${formatCurrency(disc.difference)}` : '—'}). I have reviewed this difference and acknowledge it for approval.
+                    Linked source document ({capture.id}) total is {disc.sourceGrandTotal?.toFixed(2) ?? fields.sourceTotals?.grandTotal}, while this draft bill total is {formatCurrency(disc.formTotal)} (difference {disc.difference !== null ? formatSignedCurrencyDifference(disc.difference, formatCurrency) : '—'}). I have reviewed this difference and acknowledge it for approval.
                   </span>
                 </label>
               );

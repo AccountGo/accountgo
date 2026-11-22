@@ -263,6 +263,50 @@ export function isAssistantKind(kind: string): kind is 'assistant-attachment' {
 }
 
 /**
+ * Formats a signed currency difference using the host page's currency formatter so
+ * negative values render as "-$10.00" (never "$-10.00") and positive values as "+$10.00".
+ */
+export function formatSignedCurrencyDifference(
+  diff: number,
+  formatCurrency: (val: number) => string
+): string {
+  const absFormatted = formatCurrency(Math.abs(diff));
+  if (diff > 0) return `+${absFormatted}`;
+  if (diff < 0) return `-${absFormatted}`;
+  return absFormatted;
+}
+
+/**
+ * Produces a human-readable label for an already-linked capture target (vendor bill #, vendor,
+ * source invoice #, or customer) without exposing the raw public ID in visible text.
+ */
+export function describeLinkedCaptureTarget(capture: DocumentCaptureView): string {
+  const targetType = capture.link?.targetType ?? 'record';
+  const raw = (capture.acceptedFields ?? capture.fields ?? {}) as Record<string, unknown>;
+  const str = (key: string) => (typeof raw[key] === 'string' ? raw[key].trim() : '');
+
+  if (targetType === 'bill') {
+    const billNo = str('vendorInvoiceNo');
+    const vendor = str('vendorName');
+    if (billNo && vendor) return `bill #${billNo} from ${vendor}`;
+    if (billNo) return `bill #${billNo}`;
+    if (vendor) return `bill from ${vendor}`;
+    return 'an existing bill';
+  }
+
+  if (targetType === 'invoice') {
+    const invNo = str('sourceInvoiceNo');
+    const customer = str('customerName');
+    if (invNo && customer) return `invoice #${invNo} for ${customer}`;
+    if (invNo) return `invoice #${invNo}`;
+    if (customer) return `invoice for ${customer}`;
+    return 'an existing invoice';
+  }
+
+  return `an existing ${targetType}`;
+}
+
+/**
  * Mirrors backend DocumentCaptureAccessPolicy for kind='bank':
  * requires banking.accounts.manage permission AND at least one of sales, purchases, or financials modules.
  */

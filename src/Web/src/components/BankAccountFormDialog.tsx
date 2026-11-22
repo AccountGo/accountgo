@@ -325,7 +325,6 @@ export const BankAccountFormDialog: React.FC<{
                 capabilities={captureCapabilities}
                 disabled={isSaving}
                 onAccepted={handleBankCaptureAccepted}
-                onCancel={() => setCaptureOpen(false)}
               />
             )}
           </div>
