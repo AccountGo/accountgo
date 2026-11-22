@@ -330,9 +330,11 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
   const reviewedCaptures = useMemo<DocumentCaptureView[]>(() => {
     const map = new Map<string, DocumentCaptureView>();
     for (const c of linkedCaptures) map.set(c.id, c);
-    if (acceptedCapture) map.set(acceptedCapture.id, acceptedCapture);
+    if (acceptedCapture && !pendingLineMerge) {
+      map.set(acceptedCapture.id, acceptedCapture);
+    }
     return Array.from(map.values());
-  }, [linkedCaptures, acceptedCapture]);
+  }, [linkedCaptures, acceptedCapture, pendingLineMerge]);
 
   const getDiscrepancyForCapture = useCallback(
     (capture: DocumentCaptureView) => {

@@ -703,4 +703,33 @@ describe('BillEdit & BillDetail document capture integration', () => {
     expect(nameInput).toBeTruthy();
     expect(screen.getByRole('heading', { name: /New vendor/i })).toBeTruthy();
   });
+
+  it('hides the reconciliation card and acknowledgement while a pending line merge choice is unresolved (E5)', async () => {
+    setupBillEditMocks(() =>
+      makeCapture({
+        fields: {
+          vendorName: 'Acme Supply',
+          vendorInvoiceNo: 'INV-99',
+          date: '2026-11-10',
+          currency: 'USD',
+          lines: [{ description: 'Scanned item', quantity: '1', unitAmount: '300.00' }],
+          sourceTotals: { subtotal: '300.00', grandTotal: '300.00', priceBasis: 'exclusive' },
+        },
+      })
+    );
+
+    renderWithRouter('/org/acme/purchases/new');
+    await waitFor(() => expect(screen.getByLabelText('Line 1 description')).toBeTruthy());
+    fireEvent.change(screen.getByLabelText('Line 1 description'), { target: { value: 'Existing line' } });
+    fireEvent.change(screen.getByLabelText('Line 1 unit cost'), { target: { value: '75' } });
+
+    await scanAndAccept();
+
+    await screen.findByRole('button', { name: /Replace existing lines/i });
+    expect(screen.queryByText(/Captured source review/i)).toBeNull();
+    expect(screen.queryByLabelText(/Acknowledge difference for/i)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Keep existing lines/i }));
+    expect(await screen.findByText(/Captured source review/i)).toBeTruthy();
+  });
 });

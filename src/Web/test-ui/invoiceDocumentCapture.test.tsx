@@ -689,4 +689,30 @@ describe('InvoiceEdit & InvoiceDetail document capture integration (PR 3)', () =
     expect(nameInput).toBeTruthy();
     expect(screen.getByRole('heading', { name: /New client/i })).toBeTruthy();
   });
+
+  it('hides the reconciliation card and acknowledgement until unrecorded-sale confirmation is accepted and hides it on cancel (E5)', async () => {
+    setupInvoiceEditMocks(() =>
+      makeSalesCapture({
+        fields: {
+          customerName: 'Northwind Co',
+          sourceInvoiceNo: 'OLD-77',
+          date: '2026-11-10',
+          currency: 'USD',
+          lines: [{ description: 'Consulting', quantity: '1', unitAmount: '300.00' }],
+          sourceTotals: { subtotal: '300.00', grandTotal: '300.00', priceBasis: 'exclusive' },
+        },
+      })
+    );
+
+    renderWithRouter('/org/acme/sales/new');
+    await scanAndAccept();
+
+    await screen.findByRole('button', { name: /Confirm sale is not already recorded/i });
+    expect(screen.queryByText(/Captured source review/i)).toBeNull();
+    expect(screen.queryByLabelText(/Acknowledge difference for/i)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Cancel$/i }));
+    expect(screen.queryByText(/Captured source review/i)).toBeNull();
+    expect(screen.queryByLabelText(/Acknowledge difference for/i)).toBeNull();
+  });
 });
