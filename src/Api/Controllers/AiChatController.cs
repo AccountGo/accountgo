@@ -6,9 +6,11 @@ using System.Security.Claims;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Api.Data;
 using Api.Service.Ai;
 using Core.Domain;
 using Core.Tenancy;
+using Dto.Common;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -33,6 +35,7 @@ namespace Api.Controllers
         ITenantContext tenantContext,
         IAdministrationService administrationService,
         IPlanCatalog plans,
+        ApiDbContext db,
         ILogger<AiChatController> logger) : BaseController
     {
         private readonly IAnterAgentRunnerClient _anterClient = anterClient
@@ -45,6 +48,8 @@ namespace Api.Controllers
             ?? throw new ArgumentNullException(nameof(administrationService));
         private readonly IPlanCatalog _plans = plans
             ?? throw new ArgumentNullException(nameof(plans));
+        private readonly ApiDbContext _db = db
+            ?? throw new ArgumentNullException(nameof(db));
         private readonly ILogger<AiChatController> _logger = logger
             ?? throw new ArgumentNullException(nameof(logger));
 
@@ -53,6 +58,10 @@ namespace Api.Controllers
             public string? Message { get; set; }
             public string? SessionId { get; set; }
             public Dictionary<string, string>? ContextVariables { get; set; }
+            [PublicId("cap")]
+            public int? CaptureId { get; set; }
+            [Newtonsoft.Json.JsonExtensionData]
+            public Dictionary<string, object?>? AdditionalProperties { get; set; }
         }
 
         public sealed class ApprovalRequest
@@ -100,7 +109,29 @@ namespace Api.Controllers
                 return;
             }
 
+            if (AssistantAttachmentMessageBuilder.ContainsForbiddenClientAttachmentData(body?.AdditionalProperties))
+            {
+                Response.StatusCode = StatusCodes.Status400BadRequest;
+                await Response.WriteAsJsonAsync(
+                    new { code = "DOCUMENT_ATTACHMENT_INVALID", detail = "Client-supplied attachment fields or bytes are not allowed." },
+                    cancellationToken);
+                return;
+            }
+
             var companyId = _tenantContext.CompanyId.Value;
+            if (body?.CaptureId is { } captureId)
+            {
+                var attached = await AssistantAttachmentMessageBuilder.TryAppendAttachmentAsync(
+                    _db, companyId, userId, captureId, message, cancellationToken);
+                if (!attached.Succeeded)
+                {
+                    Response.StatusCode = attached.ErrorStatusCode;
+                    await Response.WriteAsJsonAsync(attached.ErrorBody, cancellationToken);
+                    return;
+                }
+                message = attached.CombinedMessage!;
+            }
+
             var companySlug = _tenantContext.CompanySlug ?? $"company-{companyId}";
             var scopedUserId = AnterRunStreamBody.BuildScopedUserId(companyId, userId);
             var callerAssertion = _assertionService.MintAssertion(userId, companyId, companySlug);
