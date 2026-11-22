@@ -741,8 +741,18 @@ public sealed class DocumentCaptureService(
         }
     }
 
+    internal static IQueryable<DocumentCapture> LiveCompanyCaptures(ApiDbContext db, int companyId)
+    {
+        var liveCompany = LiveCompany(db, companyId);
+        return db.DocumentCaptures.AsNoTracking()
+            .Where(capture => capture.CompanyId == companyId && liveCompany.Any());
+    }
+
     private Task<bool> IsCompanyLiveAsync(int companyId, CancellationToken cancellationToken) =>
-        db.Companies.IgnoreQueryFilters().AnyAsync(company => company.Id == companyId && company.DeletedAt == null, cancellationToken);
+        LiveCompany(db, companyId).AnyAsync(cancellationToken);
+
+    private static IQueryable<Company> LiveCompany(ApiDbContext db, int companyId) =>
+        db.Companies.IgnoreQueryFilters().Where(company => company.Id == companyId && company.DeletedAt == null);
 
     private async Task<int> ResolveTargetAsync(string publicId, string expectedPrefix, CancellationToken cancellationToken)
     {

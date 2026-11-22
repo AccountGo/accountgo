@@ -5,6 +5,7 @@
 using System.Globalization;
 using System.Text.Json;
 using Api.Data;
+using Api.DocumentCaptures;
 using Api.PublicIds;
 using Core.Domain;
 using Core.Tenancy;
@@ -295,10 +296,7 @@ public static class CaptureReviewReconciler
     }
 
     private static DocumentCapture? LoadLiveCapture(ApiDbContext db, int companyId, int captureId) =>
-        db.DocumentCaptures.AsNoTracking()
-            .SingleOrDefault(c => c.CompanyId == companyId
-                && c.Id == captureId
-                && db.Companies.IgnoreQueryFilters().Any(company => company.Id == companyId && company.DeletedAt == null));
+        DocumentCaptureService.LiveCompanyCaptures(db, companyId).SingleOrDefault(c => c.Id == captureId);
 
     internal static decimal? ExtractCanonicalSourceGrandTotal(string? acceptedFieldsJson)
     {

@@ -80,12 +80,8 @@ public static partial class AssistantAttachmentMessageBuilder
         string userMessage,
         CancellationToken cancellationToken)
     {
-        var capture = await db.DocumentCaptures.AsNoTracking()
-            .SingleOrDefaultAsync(c =>
-                c.CompanyId == companyId
-                && c.Id == captureId
-                && db.Companies.IgnoreQueryFilters().Any(company => company.Id == companyId && company.DeletedAt == null),
-                cancellationToken)
+        var capture = await DocumentCaptureService.LiveCompanyCaptures(db, companyId)
+            .SingleOrDefaultAsync(c => c.Id == captureId, cancellationToken)
             .ConfigureAwait(false);
 
         if (capture is null || !string.Equals(capture.CreatedBy, userId, StringComparison.Ordinal))
