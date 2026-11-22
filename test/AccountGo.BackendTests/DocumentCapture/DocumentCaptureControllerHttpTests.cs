@@ -15,9 +15,12 @@ using Core.Entitlements;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Moq;
 using UglyToad.PdfPig.Writer;
 using Xunit;
 
@@ -429,6 +432,86 @@ public sealed class DocumentCaptureControllerHttpTests : IAsyncLifetime
         finally
         {
             fixtures["purchase-invoice"] = original;
+        }
+    }
+
+    [Fact]
+    public async Task HostedFeatureDenialUsesTheStandardEntitlementProblemOverHttp()
+    {
+        var denial = new EntitlementDecision(false, "FEATURE_NOT_ENTITLED", "Upgrade required.",
+            RequiredFeature: FeatureKeys.DocumentCapture, UpgradeAvailable: true, EffectivePlan: "hosted");
+        var entitlement = new Mock<IEntitlementService>();
+        entitlement.Setup(service => service.Get(It.IsAny<int>())).Returns(new EntitlementSnapshot(true, "hosted", "hosted",
+            false, [], [], [], null, new HashSet<string>(), "hosted"));
+        entitlement.Setup(service => service.Evaluate(It.IsAny<int>(), It.IsAny<EntitlementAction>()))
+            .Returns((int _, EntitlementAction action) => action is EntitlementAction.Feature ? denial : new EntitlementDecision(true, null, null));
+        entitlement.SetupGet(service => service.Options).Returns(new EntitlementsOptions { SupportEmail = "support@example.test" });
+
+        using var hostedFactory = _factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<IEntitlementService>();
+            services.AddSingleton(entitlement.Object);
+        }));
+        using var hostedClient = hostedFactory.CreateClient();
+        using var request = NewRequest(HttpMethod.Post, "/api/document-captures");
+        request.Content = CreateUploadForm("purchase-invoice", CreatePng(0xFF224466), "image/png");
+        using var response = await hostedClient.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("FEATURE_NOT_ENTITLED", problem.RootElement.GetProperty("code").GetString());
+        Assert.Equal("support@example.test", problem.RootElement.GetProperty("contact").GetString());
+        Assert.True(problem.RootElement.GetProperty("upgradeAvailable").GetBoolean());
+        Assert.Equal(FeatureKeys.DocumentCapture, problem.RootElement.GetProperty("requiredFeature").GetString());
+        Assert.True(problem.RootElement.TryGetProperty("type", out _));
+        Assert.True(problem.RootElement.TryGetProperty("title", out _));
+        Assert.Equal(403, problem.RootElement.GetProperty("status").GetInt32());
+    }
+
+    [Fact]
+    public async Task RuntimeFlagOffKeepsExistingEvidenceRoutesAvailableOverHttp()
+    {
+        var accepted = await UploadAsync(CreatePng(0xFF123321), "flag-off-accepted");
+        var acceptedId = accepted.GetProperty("id").GetString()!;
+        using (var request = NewRequest(HttpMethod.Post, $"/api/document-captures/{acceptedId}/accept"))
+        {
+            request.Content = JsonContent.Create(new { fields = new { date = "2026-11-20", vendorName = "Review" } });
+            using var response = await _client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+        var readyForAccept = (await UploadAsync(CreatePng(0xFF223322), "flag-off-block-accept")).GetProperty("id").GetString()!;
+        var readyForReject = (await UploadAsync(CreatePng(0xFF323322), "flag-off-reject")).GetProperty("id").GetString()!;
+        var billId = await SeedBillAsync();
+
+        using var disabledFactory = _factory.WithWebHostBuilder(builder => builder.UseSetting("DocumentCapture:Enabled", "false"));
+        using var disabledClient = disabledFactory.CreateClient();
+        using (var request = NewRequest(HttpMethod.Post, "/api/document-captures"))
+        {
+            request.Content = CreateUploadForm("purchase-invoice", CreatePng(0xFF423322), "image/png");
+            using var response = await disabledClient.SendAsync(request);
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+            Assert.Equal("DOCUMENT_CAPTURE_UNCONFIGURED", await ReadProblemCodeAsync(response));
+        }
+        foreach (var path in new[] { $"/api/document-captures/{acceptedId}", $"/api/document-captures/{acceptedId}/bytes" })
+        {
+            using var request = NewRequest(HttpMethod.Get, path);
+            using var response = await disabledClient.SendAsync(request);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+        using (var request = NewRequest(HttpMethod.Post, $"/api/document-captures/{readyForAccept}/accept"))
+        {
+            request.Content = JsonContent.Create(new { fields = new { date = "2026-11-20", vendorName = "Review" } });
+            using var response = await disabledClient.SendAsync(request);
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+            Assert.Equal("DOCUMENT_CAPTURE_DISABLED", await ReadProblemCodeAsync(response));
+        }
+        using (var request = NewRequest(HttpMethod.Post, $"/api/document-captures/{readyForReject}/reject"))
+        using (var response = await disabledClient.SendAsync(request))
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using (var request = NewRequest(HttpMethod.Post, $"/api/document-captures/{acceptedId}/link"))
+        {
+            request.Content = JsonContent.Create(new { targetType = "bill", targetId = billId });
+            using var response = await disabledClient.SendAsync(request);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         }
     }
 
