@@ -11,6 +11,10 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ## [Unreleased]
 
+### Fixed
+
+- Notices and banners now use readable colours in the dark theme when the device itself is in light mode.
+
 ## [0.3.0] - 2026-11-21
 
 Release notes: https://github.com/AccountGo/accountgo/releases/tag/v0.3.0
