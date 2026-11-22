@@ -713,8 +713,89 @@ public sealed class DocumentTextFieldParserTests
         Assert.Equal("INV-42", fields[0].GetProperty("value").GetString());
     }
 
+    // --- L1: tendered amounts and amountPaid > grandTotal + 0.01 omit amountPaid ---
+
     [Fact]
-    public void Parse_SyntheticTruthCleanText_Scores18Of18OnVendorDateAndTotal()
+    public void Parse_PaymentHints_L1_TenderedAmountExceedingGrandTotalOmitsAmountPaidAndKeepsPaid()
+    {
+        var lines = new[]
+        {
+            Line("Corner Cafe"),
+            Line("TOTAL 42.50"),
+            Line("TOTAL PAID 100.00"),
+            Line("TENDERED 100.00"),
+            Line("CHANGE 57.50"),
+        };
+
+        var root = ParseAndValidate("expense-receipt", lines, out _);
+        Assert.Equal("42.50", root.GetProperty("sourceTotals").GetProperty("grandTotal").GetString());
+        var hints = root.GetProperty("paymentHints");
+        Assert.Equal("paid", hints.GetProperty("paymentStatus").GetString());
+        Assert.False(hints.TryGetProperty("amountPaid", out _));
+
+        var tenderedOnly = ParseAndValidate("expense-receipt", [
+            Line("Corner Cafe"),
+            Line("TOTAL 42.50"),
+            Line("TENDERED 42.50"),
+        ], out _);
+        var tenderedHints = tenderedOnly.GetProperty("paymentHints");
+        Assert.Equal("paid", tenderedHints.GetProperty("paymentStatus").GetString());
+        Assert.False(tenderedHints.TryGetProperty("amountPaid", out _));
+    }
+
+    // --- L2: real tax-inclusive receipts recognised without TOTALS_INCONSISTENT ---
+
+    [Fact]
+    public void Parse_Totals_L2_VatRateIncludedLineRecognisedAsInclusiveWithoutWarning()
+    {
+        var lines = new[]
+        {
+            Line("Corner Bistro"),
+            Line("Subtotal EUR 42.50"),
+            Line("VAT 19% included 6.79"),
+            Line("TOTAL EUR 42.50"),
+        };
+
+        var root = ParseAndValidate("expense-receipt", lines, out var warnings);
+        var totals = root.GetProperty("sourceTotals");
+        Assert.Equal("42.50", totals.GetProperty("subtotal").GetString());
+        Assert.Equal("6.79", totals.GetProperty("taxTotal").GetString());
+        Assert.Equal("42.50", totals.GetProperty("grandTotal").GetString());
+        Assert.Equal("inclusive", totals.GetProperty("priceBasis").GetString());
+        Assert.DoesNotContain("TOTALS_INCONSISTENT", warnings);
+
+        var implicitInclusive = ParseAndValidate("expense-receipt", [
+            Line("Corner Bistro"),
+            Line("Subtotal EUR 42.50"),
+            Line("VAT 19%: EUR 6.79"),
+            Line("TOTAL EUR 42.50"),
+        ], out var implicitWarnings);
+        Assert.Equal("inclusive", implicitInclusive.GetProperty("sourceTotals").GetProperty("priceBasis").GetString());
+        Assert.DoesNotContain("TOTALS_INCONSISTENT", implicitWarnings);
+    }
+
+    // --- L3: vendor and customer length (<= 120) and letter-ratio (>= 40%) bounds ---
+
+    [Fact]
+    public void Parse_Party_L3_RejectsOverlongAndLowLetterRatioCandidates()
+    {
+        var repeated = string.Concat(Enumerable.Repeat("a 1 1.00 ", 900))[..8_000];
+        var hostileRoot = ParseAndValidate("purchase-invoice", [Line(repeated)], out _);
+        Assert.False(hostileRoot.TryGetProperty("vendorName", out _));
+
+        var overlong = new string('A', 121);
+        var overlongVendor = ParseAndValidate("purchase-invoice", [Line(overlong), Line("Total: EUR 10.00")], out _);
+        Assert.False(overlongVendor.TryGetProperty("vendorName", out _));
+
+        var overlongCustomer = ParseAndValidate("sales-invoice", [Line("Seller Co"), Line("Bill To:"), Line(overlong), Line("Total: EUR 10.00")], out _);
+        Assert.False(overlongCustomer.TryGetProperty("customerName", out _));
+
+        var lowLetterRatio = ParseAndValidate("purchase-invoice", [Line("AB 1234567890"), Line("Total: EUR 10.00")], out _);
+        Assert.False(lowLetterRatio.TryGetProperty("vendorName", out _));
+    }
+
+    [Fact]
+    public void Parse_SyntheticTruthCleanText_Scores18Of18OnVendorDateAndTotalWithNoTotalsInconsistent()
     {
         var truthPath = Path.GetFullPath(Path.Combine(
             AppContext.BaseDirectory, "..", "..", "..", "..", "..",
@@ -731,6 +812,7 @@ public sealed class DocumentTextFieldParserTests
 
         foreach (var entry in entries)
         {
+            var id = entry.GetProperty("id").GetString()!;
             var vendor = entry.GetProperty("vendor").GetString()!;
             var invoiceNo = entry.GetProperty("invoiceNo").GetString()!;
             var isoDate = entry.GetProperty("date").GetString()!;
@@ -757,7 +839,8 @@ public sealed class DocumentTextFieldParserTests
                 Line($"{(isThai ? "ยอดรวมทั้งสิ้น" : "TOTAL")}: {sym}{total}", y0: 220, y1: 242),
             };
 
-            var parsed = ParseAndValidate(kind, lines, out _);
+            var parsed = ParseAndValidate(kind, lines, out var warnings);
+            Assert.True(!warnings.Contains("TOTALS_INCONSISTENT"), $"Unexpected TOTALS_INCONSISTENT on synthetic fixture {id}");
             if (parsed.TryGetProperty("vendorName", out var v) && v.GetString() == vendor) vendorHits++;
             if (parsed.TryGetProperty("date", out var d) && d.GetString() == isoDate) dateHits++;
             if (parsed.TryGetProperty("sourceTotals", out var st)

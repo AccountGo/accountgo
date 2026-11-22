@@ -41,6 +41,11 @@ public static class DocumentTextFieldParser
         @"(?:(?:tax|vat|gst)\s*(?:incl\.?|included|inclusive)|incl\.?\s*(?:tax|vat|gst)|including\s+(?:tax|vat|gst)|รวมภาษีแล้ว)",
         LinearI);
 
+    // L2: any inclusive cue on a tax line (e.g., "VAT 19% included 6.79")
+    private static readonly Regex InclusiveWordRegex = new(
+        @"(?:\bincl\.?|\bincluded\b|\binclusive\b|รวมภาษีแล้ว)",
+        LinearI);
+
     private static readonly Regex SubtotalLabelRegex = new(
         @"(?:sub\s*-?\s*total|net\s*total|รวมเป็นเงิน|ยอดก่อนภาษี)",
         LinearI);
@@ -276,22 +281,29 @@ public static class DocumentTextFieldParser
         }
 
         // Totals
+        decimal? parsedGrandTotal = null;
         if (!isTimedOut())
         {
             var (grandTotal, subtotal, taxTotal, isInclusive, usedUnlabeledFallback) = ExtractTotals(texts);
+            parsedGrandTotal = grandTotal;
             if (usedUnlabeledFallback)
                 warnings.Add("TOTAL_UNLABELED");
 
             if (grandTotal.HasValue || subtotal.HasValue || taxTotal.HasValue)
             {
-                // K5: if subtotal + tax == total (within 0.01), tax is on top -> never mark inclusive.
+                // K5 + L2:
+                // - if subtotal + tax == total (within 0.01), tax is on top -> never mark inclusive.
+                // - if subtotal == total (within 0.01) and tax > 0, treat as inclusive and do not warn.
+                // - warn TOTALS_INCONSISTENT only when neither relation holds.
                 var taxOnTopMatches = subtotal.HasValue && taxTotal.HasValue && grandTotal.HasValue
                     && Math.Abs(subtotal.Value + taxTotal.Value - grandTotal.Value) <= 0.01m;
+                var inclusiveShapeMatches = subtotal.HasValue && taxTotal.HasValue && grandTotal.HasValue
+                    && taxTotal.Value > 0m && Math.Abs(subtotal.Value - grandTotal.Value) <= 0.01m;
+
                 if (taxOnTopMatches)
                     isInclusive = false;
-
-                var inclusiveMatches = isInclusive && subtotal.HasValue && taxTotal.HasValue && grandTotal.HasValue
-                    && taxTotal.Value > 0m && Math.Abs(subtotal.Value - grandTotal.Value) <= 0.01m;
+                else if (inclusiveShapeMatches)
+                    isInclusive = true;
 
                 var totals = new Dictionary<string, object?>(StringComparer.Ordinal);
                 if (subtotal.HasValue) totals["subtotal"] = DateAndAmountParser.FormatDecimal2(subtotal.Value);
@@ -302,7 +314,7 @@ public static class DocumentTextFieldParser
 
                 if (subtotal.HasValue && taxTotal.HasValue && grandTotal.HasValue
                     && !taxOnTopMatches
-                    && !inclusiveMatches)
+                    && !inclusiveShapeMatches)
                 {
                     warnings.Add("TOTALS_INCONSISTENT");
                 }
@@ -315,7 +327,7 @@ public static class DocumentTextFieldParser
         // Payment hints (bill kinds only)
         if (!isSales && !isTimedOut())
         {
-            fields["paymentHints"] = ExtractPaymentHints(texts, dueDate is not null);
+            fields["paymentHints"] = ExtractPaymentHints(texts, dueDate is not null, parsedGrandTotal);
         }
 
         return fields;
@@ -409,8 +421,12 @@ public static class DocumentTextFieldParser
                 subtotal = FirstMaxAmountInWindow(line, next);
             }
 
-            // K4: exclude registration/ID labels from tax lines
-            if (!taxTotal.HasValue && !isTotalLine && TaxLabelRegex.IsMatch(line) && !TaxHeaderExclusionRegex.IsMatch(line))
+            // K4 + L2: exclude registration/ID labels from tax lines; detect inclusive cues on tax lines
+            var isTaxLine = !isTotalLine && TaxLabelRegex.IsMatch(line) && !TaxHeaderExclusionRegex.IsMatch(line);
+            if (isTaxLine && InclusiveWordRegex.IsMatch(line))
+                isInclusive = true;
+
+            if (!taxTotal.HasValue && isTaxLine)
             {
                 taxTotal = FirstMaxAmountInWindow(line, next);
             }
@@ -467,11 +483,11 @@ public static class DocumentTextFieldParser
         {
             var c = candidates[i];
             var text = c.Text;
+            if (!IsValidPartyCandidateShape(text))
+                continue;
+
             var letters = CountLetters(text);
             var digits = CountDigits(text);
-
-            if (text.Length < 2 || letters < 2)
-                continue;
 
             double score = 10.0 - i * 1.2;
 
@@ -497,7 +513,7 @@ public static class DocumentTextFieldParser
             }
         }
 
-        return bestScore > -10.0 ? bestText : null;
+        return bestScore > 0.0 ? bestText : null;
     }
 
     // K12: anchored labels, skip Customer Service/ID, reject digit-heavy / phone-like candidates.
@@ -530,15 +546,35 @@ public static class DocumentTextFieldParser
 
     private static bool IsValidCustomerCandidate(string cand)
     {
-        if (string.IsNullOrWhiteSpace(cand))
+        if (!IsValidPartyCandidateShape(cand))
             return false;
         var letters = CountLetters(cand);
         var digits = CountDigits(cand);
-        if (letters < 2 || digits >= letters)
+        if (digits >= letters)
             return false;
         if (AddressPatternRegex.IsMatch(cand) || VendorPenaltyRegex.IsMatch(cand))
             return false;
         return true;
+    }
+
+    // L3: vendor and customer candidates must be <= 120 chars and at least 40% letters among non-space chars.
+    private static bool IsValidPartyCandidateShape(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text) || text.Length < 2 || text.Length > 120)
+            return false;
+
+        var letters = 0;
+        var nonSpace = 0;
+        foreach (var ch in text)
+        {
+            if (char.IsWhiteSpace(ch))
+                continue;
+            nonSpace++;
+            if (char.IsLetter(ch))
+                letters++;
+        }
+
+        return letters >= 2 && nonSpace > 0 && letters * 5 >= nonSpace * 2;
     }
 
     private static string? ExtractInvoiceNumber(List<string> lines)
@@ -607,8 +643,9 @@ public static class DocumentTextFieldParser
         return result;
     }
 
-    // K2: strong paid cues only, negations never count, positive amount due always wins (unpaid or partial).
-    private static Dictionary<string, object?> ExtractPaymentHints(List<string> lines, bool hasDueDate)
+    // K2 + L1: strong paid cues only, negations never count, positive amount due always wins;
+    // tendered amounts and amountPaid > grandTotal + 0.01 never fill amountPaid (keep paid status).
+    private static Dictionary<string, object?> ExtractPaymentHints(List<string> lines, bool hasDueDate, decimal? grandTotal)
     {
         var hints = new Dictionary<string, object?>(StringComparer.Ordinal);
         var isPaid = false;
@@ -640,7 +677,7 @@ public static class DocumentTextFieldParser
                     hasPositiveAmountDue = true;
             }
 
-            if (!amountPaid.HasValue)
+            if (!amountPaid.HasValue && !line.Contains("tender", StringComparison.OrdinalIgnoreCase))
             {
                 var paidMatch = AmountPaidLabelRegex.Match(line);
                 if (paidMatch.Success)
@@ -657,6 +694,13 @@ public static class DocumentTextFieldParser
                     }
                 }
             }
+        }
+
+        // L1: if labelled amountPaid exceeds grandTotal by > 0.01, it is cash tendered, not document payment.
+        if (amountPaid.HasValue && grandTotal.HasValue && amountPaid.Value > grandTotal.Value + 0.01m)
+        {
+            isPaid = true;
+            amountPaid = null;
         }
 
         string status;
