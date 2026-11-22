@@ -73,7 +73,7 @@ namespace Dto.Sales
         /// <summary>Emails sent to the customer about this invoice, newest first.</summary>
         public List<InvoiceEmailItemDto> Emails { get; set; } = new();
         /// <summary>Optional document-capture review contexts bound to current totals when saving or issuing (max 10).</summary>
-        public List<Dto.Purchasing.CaptureReviewContext>? CaptureReviews { get; set; }
+        public List<Dto.DocumentCapture.CaptureReviewContext>? CaptureReviews { get; set; }
 
         public SalesInvoice()
         {
@@ -172,7 +172,7 @@ namespace Dto.Sales
     /// <summary>Optional request body for <c>POST /api/Sales/IssueSalesInvoice</c> when issuing a draft with linked captures.</summary>
     public class IssueSalesInvoiceRequest
     {
-        public List<Dto.Purchasing.CaptureReviewContext>? CaptureReviews { get; set; }
+        public List<Dto.DocumentCapture.CaptureReviewContext>? CaptureReviews { get; set; }
     }
 
     public class DisplayFlags

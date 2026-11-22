@@ -140,7 +140,7 @@ public sealed class PurchasingBillCaptureReviewTests : MultiTenancyPhase3TestBas
         bill.Status = "Draft";
         bill.CaptureReviews =
         [
-            new Dto.Purchasing.CaptureReviewContext
+            new Dto.DocumentCapture.CaptureReviewContext
             {
                 CaptureId = captureId,
                 SourceGrandTotal = 110m,
@@ -169,7 +169,7 @@ public sealed class PurchasingBillCaptureReviewTests : MultiTenancyPhase3TestBas
         bill.Status = "Open";
         bill.CaptureReviews =
         [
-            new Dto.Purchasing.CaptureReviewContext
+            new Dto.DocumentCapture.CaptureReviewContext
             {
                 CaptureId = captureId,
                 SourceGrandTotal = 110m,
@@ -193,7 +193,7 @@ public sealed class PurchasingBillCaptureReviewTests : MultiTenancyPhase3TestBas
         bill.Lines[0].Amount = 120m;
         bill.CaptureReviews =
         [
-            new Dto.Purchasing.CaptureReviewContext
+            new Dto.DocumentCapture.CaptureReviewContext
             {
                 CaptureId = captureId,
                 SourceGrandTotal = 110m,
@@ -212,7 +212,7 @@ public sealed class PurchasingBillCaptureReviewTests : MultiTenancyPhase3TestBas
         // Current acknowledgement succeeds, leaves AmountPaid = 0 / no payment, and writes audit event.
         bill.CaptureReviews =
         [
-            new Dto.Purchasing.CaptureReviewContext
+            new Dto.DocumentCapture.CaptureReviewContext
             {
                 CaptureId = captureId,
                 SourceGrandTotal = 110m,
@@ -248,7 +248,7 @@ public sealed class PurchasingBillCaptureReviewTests : MultiTenancyPhase3TestBas
         bill.Status = "Open";
         bill.CaptureReviews =
         [
-            new Dto.Purchasing.CaptureReviewContext
+            new Dto.DocumentCapture.CaptureReviewContext
             {
                 CaptureId = captureId,
                 SourceGrandTotal = 110m,
@@ -279,7 +279,7 @@ public sealed class PurchasingBillCaptureReviewTests : MultiTenancyPhase3TestBas
         // Client initially sends unacknowledged review (or mismatched total).
         bill.CaptureReviews =
         [
-            new Dto.Purchasing.CaptureReviewContext
+            new Dto.DocumentCapture.CaptureReviewContext
             {
                 CaptureId = captureId,
                 SourceGrandTotal = 1.09m,
@@ -303,7 +303,7 @@ public sealed class PurchasingBillCaptureReviewTests : MultiTenancyPhase3TestBas
         // Resending with the exact server-reported values succeeds.
         bill.CaptureReviews =
         [
-            new Dto.Purchasing.CaptureReviewContext
+            new Dto.DocumentCapture.CaptureReviewContext
             {
                 CaptureId = captureId,
                 SourceGrandTotal = serverSource,
@@ -335,7 +335,7 @@ public sealed class PurchasingBillCaptureReviewTests : MultiTenancyPhase3TestBas
         {
             CaptureReviews =
             [
-                new Dto.Purchasing.CaptureReviewContext
+                new Dto.DocumentCapture.CaptureReviewContext
                 {
                     CaptureId = cap1Id,
                     SourceGrandTotal = 100m,
@@ -357,14 +357,14 @@ public sealed class PurchasingBillCaptureReviewTests : MultiTenancyPhase3TestBas
         {
             CaptureReviews =
             [
-                new Dto.Purchasing.CaptureReviewContext
+                new Dto.DocumentCapture.CaptureReviewContext
                 {
                     CaptureId = cap1Id,
                     SourceGrandTotal = 100m,
                     FormTotal = 150m,
                     DiscrepancyAcknowledged = true,
                 },
-                new Dto.Purchasing.CaptureReviewContext
+                new Dto.DocumentCapture.CaptureReviewContext
                 {
                     CaptureId = cap2Id,
                     SourceGrandTotal = 60m,
@@ -441,7 +441,7 @@ public sealed class PurchasingBillCaptureReviewTests : MultiTenancyPhase3TestBas
 
         var bill = NewBill(vendor.Id, ("Item", 1m, 50m, null));
         bill.Status = "Open";
-        bill.CaptureReviews = [new Dto.Purchasing.CaptureReviewContext { CaptureId = bankCaptureId }];
+        bill.CaptureReviews = [new Dto.DocumentCapture.CaptureReviewContext { CaptureId = bankCaptureId }];
         var res = await SaveBill(bill);
         Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
         Assert.Contains("DOCUMENT_REVIEW_INVALID", await res.Content.ReadAsStringAsync());
@@ -455,7 +455,7 @@ public sealed class PurchasingBillCaptureReviewTests : MultiTenancyPhase3TestBas
 
         var bill = NewBill(vendor.Id, ("Item", 1m, 50m, null));
         bill.Status = "Open";
-        bill.CaptureReviews = [new Dto.Purchasing.CaptureReviewContext { CaptureId = readyCaptureId }];
+        bill.CaptureReviews = [new Dto.DocumentCapture.CaptureReviewContext { CaptureId = readyCaptureId }];
         var res = await SaveBill(bill);
         Assert.Equal(HttpStatusCode.Conflict, res.StatusCode);
         Assert.Contains("DOCUMENT_STATE_CONFLICT", await res.Content.ReadAsStringAsync());
@@ -471,7 +471,7 @@ public sealed class PurchasingBillCaptureReviewTests : MultiTenancyPhase3TestBas
 
         var bill = NewBill(vendor.Id, ("Item", 1m, 50m, null));
         bill.Status = "Open";
-        bill.CaptureReviews = [new Dto.Purchasing.CaptureReviewContext { CaptureId = linkedCaptureId }];
+        bill.CaptureReviews = [new Dto.DocumentCapture.CaptureReviewContext { CaptureId = linkedCaptureId }];
         var res = await SaveBill(bill);
         Assert.Equal(HttpStatusCode.Conflict, res.StatusCode);
         Assert.Contains("DOCUMENT_LINK_CONFLICT", await res.Content.ReadAsStringAsync());
@@ -487,8 +487,8 @@ public sealed class PurchasingBillCaptureReviewTests : MultiTenancyPhase3TestBas
         bill.Status = "Open";
         bill.CaptureReviews =
         [
-            new Dto.Purchasing.CaptureReviewContext { CaptureId = capId },
-            new Dto.Purchasing.CaptureReviewContext { CaptureId = capId },
+            new Dto.DocumentCapture.CaptureReviewContext { CaptureId = capId },
+            new Dto.DocumentCapture.CaptureReviewContext { CaptureId = capId },
         ];
         var res = await SaveBill(bill);
         Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);

@@ -174,7 +174,7 @@ public sealed class SalesInvoiceCaptureReviewTests : MultiTenancyPhase3TestBase
         invoice.ReferenceNo = "EXT-100";
         invoice.CaptureReviews =
         [
-            new Dto.Purchasing.CaptureReviewContext
+            new Dto.DocumentCapture.CaptureReviewContext
             {
                 CaptureId = captureId,
                 SourceGrandTotal = 110m,
@@ -200,7 +200,7 @@ public sealed class SalesInvoiceCaptureReviewTests : MultiTenancyPhase3TestBase
         var invoice = NewInvoice(customerId, "Open", ("Consulting", 1m, 110m, tax10));
         invoice.CaptureReviews =
         [
-            new Dto.Purchasing.CaptureReviewContext
+            new Dto.DocumentCapture.CaptureReviewContext
             {
                 CaptureId = captureId,
                 SourceGrandTotal = 110m,
@@ -231,7 +231,7 @@ public sealed class SalesInvoiceCaptureReviewTests : MultiTenancyPhase3TestBase
         var invoice = NewInvoice(customerId, "Open", ("Consulting", 1m, 120m, tax10));
         invoice.CaptureReviews =
         [
-            new Dto.Purchasing.CaptureReviewContext
+            new Dto.DocumentCapture.CaptureReviewContext
             {
                 CaptureId = captureId,
                 SourceGrandTotal = 110m,
@@ -259,7 +259,7 @@ public sealed class SalesInvoiceCaptureReviewTests : MultiTenancyPhase3TestBase
         invoice.ReferenceNo = "REF-999";
         invoice.CaptureReviews =
         [
-            new Dto.Purchasing.CaptureReviewContext
+            new Dto.DocumentCapture.CaptureReviewContext
             {
                 CaptureId = captureId,
                 SourceGrandTotal = 110m,
@@ -293,7 +293,7 @@ public sealed class SalesInvoiceCaptureReviewTests : MultiTenancyPhase3TestBase
         var invoice = NewInvoice(customerId, "Open", ("Consulting", 1m, 100m, tax10));
         invoice.CaptureReviews =
         [
-            new Dto.Purchasing.CaptureReviewContext
+            new Dto.DocumentCapture.CaptureReviewContext
             {
                 CaptureId = captureId,
                 SourceGrandTotal = 110m,
@@ -318,7 +318,7 @@ public sealed class SalesInvoiceCaptureReviewTests : MultiTenancyPhase3TestBase
         var invoice = NewInvoice(customerId, "Open", ("A", 1m, 0.33m, tax10), ("B", 1m, 0.33m, tax10), ("C", 1m, 0.33m, tax10));
         invoice.CaptureReviews =
         [
-            new Dto.Purchasing.CaptureReviewContext
+            new Dto.DocumentCapture.CaptureReviewContext
             {
                 CaptureId = captureId,
                 SourceGrandTotal = 1.09m,
@@ -341,7 +341,7 @@ public sealed class SalesInvoiceCaptureReviewTests : MultiTenancyPhase3TestBase
 
         invoice.CaptureReviews =
         [
-            new Dto.Purchasing.CaptureReviewContext
+            new Dto.DocumentCapture.CaptureReviewContext
             {
                 CaptureId = captureId,
                 SourceGrandTotal = serverSource,
@@ -369,7 +369,7 @@ public sealed class SalesInvoiceCaptureReviewTests : MultiTenancyPhase3TestBase
         {
             CaptureReviews =
             [
-                new Dto.Purchasing.CaptureReviewContext
+                new Dto.DocumentCapture.CaptureReviewContext
                 {
                     CaptureId = cap1Id,
                     SourceGrandTotal = 100m,
@@ -390,14 +390,14 @@ public sealed class SalesInvoiceCaptureReviewTests : MultiTenancyPhase3TestBase
         {
             CaptureReviews =
             [
-                new Dto.Purchasing.CaptureReviewContext
+                new Dto.DocumentCapture.CaptureReviewContext
                 {
                     CaptureId = cap1Id,
                     SourceGrandTotal = 100m,
                     FormTotal = 150m,
                     DiscrepancyAcknowledged = true,
                 },
-                new Dto.Purchasing.CaptureReviewContext
+                new Dto.DocumentCapture.CaptureReviewContext
                 {
                     CaptureId = cap2Id,
                     SourceGrandTotal = 60m,
@@ -467,7 +467,7 @@ public sealed class SalesInvoiceCaptureReviewTests : MultiTenancyPhase3TestBase
         var (billCapId, _) = SeedSalesCapture(kind: "expense-receipt", status: "accepted", acceptedFieldsJson: """{"date":"2026-11-10"}""");
 
         var invoice = NewInvoice(customerId, "Open", ("Item", 1m, 50m, null));
-        invoice.CaptureReviews = [new Dto.Purchasing.CaptureReviewContext { CaptureId = billCapId }];
+        invoice.CaptureReviews = [new Dto.DocumentCapture.CaptureReviewContext { CaptureId = billCapId }];
         var res = await SaveInvoice(invoice);
         Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
         Assert.Contains("DOCUMENT_REVIEW_INVALID", await res.Content.ReadAsStringAsync());
@@ -480,7 +480,7 @@ public sealed class SalesInvoiceCaptureReviewTests : MultiTenancyPhase3TestBase
         var (readyCapId, _) = SeedSalesCapture(status: "ready", acceptedFieldsJson: """{"date":"2026-11-10"}""");
 
         var invoice = NewInvoice(customerId, "Open", ("Item", 1m, 50m, null));
-        invoice.CaptureReviews = [new Dto.Purchasing.CaptureReviewContext { CaptureId = readyCapId }];
+        invoice.CaptureReviews = [new Dto.DocumentCapture.CaptureReviewContext { CaptureId = readyCapId }];
         var res = await SaveInvoice(invoice);
         Assert.Equal(HttpStatusCode.Conflict, res.StatusCode);
         Assert.Contains("DOCUMENT_STATE_CONFLICT", await res.Content.ReadAsStringAsync());
@@ -495,7 +495,7 @@ public sealed class SalesInvoiceCaptureReviewTests : MultiTenancyPhase3TestBase
         SeedInvoiceCaptureLink(linkedCapId, otherInvoice.Id);
 
         var invoice = NewInvoice(customerId, "Open", ("Item", 1m, 50m, null));
-        invoice.CaptureReviews = [new Dto.Purchasing.CaptureReviewContext { CaptureId = linkedCapId }];
+        invoice.CaptureReviews = [new Dto.DocumentCapture.CaptureReviewContext { CaptureId = linkedCapId }];
         var res = await SaveInvoice(invoice);
         Assert.Equal(HttpStatusCode.Conflict, res.StatusCode);
         Assert.Contains("DOCUMENT_LINK_CONFLICT", await res.Content.ReadAsStringAsync());
@@ -510,8 +510,8 @@ public sealed class SalesInvoiceCaptureReviewTests : MultiTenancyPhase3TestBase
         var invoice = NewInvoice(customerId, "Open", ("Item", 1m, 50m, null));
         invoice.CaptureReviews =
         [
-            new Dto.Purchasing.CaptureReviewContext { CaptureId = capId },
-            new Dto.Purchasing.CaptureReviewContext { CaptureId = capId },
+            new Dto.DocumentCapture.CaptureReviewContext { CaptureId = capId },
+            new Dto.DocumentCapture.CaptureReviewContext { CaptureId = capId },
         ];
         var res = await SaveInvoice(invoice);
         Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);

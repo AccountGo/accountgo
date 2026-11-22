@@ -2104,7 +2104,12 @@ namespace Api.Controllers
                 tx.Dispose();
 
                 if (acknowledgedDiscrepancies.Count > 0)
-                    RecordInvoiceCaptureDiscrepancyAcknowledgements(salesInvoice.PublicId, acknowledgedDiscrepancies);
+                {
+                    var audit = _securityAudit ?? HttpContext?.RequestServices?.GetService(typeof(Api.Service.ISecurityAuditService)) as Api.Service.ISecurityAuditService;
+                    Api.Service.CaptureReviewReconciler.RecordDiscrepancyAcknowledgements(
+                        audit, _logger, _tenantContext, GetUserNameFromRequestHeader(),
+                        "invoice.capture_discrepancy.acknowledged", "invoice", "invoiceId", salesInvoice.PublicId, acknowledgedDiscrepancies);
+                }
 
                 // Auto-post to GL if issued (not draft) and not already posted
                 string? postingError = null;
@@ -2540,7 +2545,12 @@ namespace Api.Controllers
                 tx.Dispose();
 
                 if (reviewResult.AcknowledgedDiscrepancies.Count > 0)
-                    RecordInvoiceCaptureDiscrepancyAcknowledgements(invoice.PublicId, reviewResult.AcknowledgedDiscrepancies);
+                {
+                    var audit = _securityAudit ?? HttpContext?.RequestServices?.GetService(typeof(Api.Service.ISecurityAuditService)) as Api.Service.ISecurityAuditService;
+                    Api.Service.CaptureReviewReconciler.RecordDiscrepancyAcknowledgements(
+                        audit, _logger, _tenantContext, GetUserNameFromRequestHeader(),
+                        "invoice.capture_discrepancy.acknowledged", "invoice", "invoiceId", invoice.PublicId, reviewResult.AcknowledgedDiscrepancies);
+                }
 
                 string? postingError = null;
                 if (!invoice.GeneralLedgerHeaderId.HasValue)
@@ -2554,47 +2564,6 @@ namespace Api.Controllers
                     return StatusCode(numberProblem.Status, new { message = numberProblem.Message, code = numberProblem.Code });
                 _logger.LogError(ex, "Failed to issue invoice {InvoiceId}", id);
                 return BadRequest(new { message = ex.Message });
-            }
-        }
-
-        private void RecordInvoiceCaptureDiscrepancyAcknowledgements(
-            string invoicePublicId,
-            IReadOnlyList<Api.Service.AcknowledgedCaptureDiscrepancy> acknowledgements)
-        {
-            var audit = _securityAudit ?? HttpContext?.RequestServices?.GetService(typeof(Api.Service.ISecurityAuditService)) as Api.Service.ISecurityAuditService;
-            if (audit is null || acknowledgements.Count == 0)
-                return;
-
-            try
-            {
-                var actor = _tenantContext.UserId ?? GetUserNameFromRequestHeader();
-                var companyId = _tenantContext.RequireCompanyId();
-                foreach (var ack in acknowledgements)
-                {
-                    audit.LogEventAsync(
-                        "invoice.capture_discrepancy.acknowledged",
-                        "success",
-                        actor,
-                        companyId,
-                        new
-                        {
-                            invoiceId = invoicePublicId,
-                            captureId = ack.CapturePublicId,
-                            sourceGrandTotal = ack.SourceGrandTotal,
-                            formTotal = ack.FormTotal,
-                            difference = ack.Difference,
-                            actor,
-                        }).GetAwaiter().GetResult();
-                }
-            }
-            catch (Exception ex)
-            {
-                // Best effort: the invoice issue is already committed, so an audit failure must never turn it into a 500.
-                _logger.LogWarning(
-                    ex,
-                    "Failed to record capture discrepancy acknowledgement audit events for invoice {InvoicePublicId} (count={Count}).",
-                    invoicePublicId,
-                    acknowledgements.Count);
             }
         }
 
