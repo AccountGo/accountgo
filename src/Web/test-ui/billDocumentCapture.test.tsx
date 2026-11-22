@@ -232,23 +232,47 @@ async function scanAndAccept(fileName = 'receipt.png', type = 'image/png') {
 }
 
 describe('BillEdit & BillDetail document capture integration', () => {
-  it('fetches capabilities only once, handles tax-inclusive & paid receipt, invalidates ack on edit, blocks route leave while link pending, and retries link after 504 without repeating SaveBill', async () => {
-    const capture = makeCapture();
-    const counters = setupBillEditMocks(() => capture, { linkFailStatus: 504 });
+  it('fetches capabilities only once across BillEdit and DocumentCapturePanel (G10)', async () => {
+    const counters = setupBillEditMocks(() => makeCapture());
 
     renderWithRouter('/org/acme/purchases/new');
     await scanAndAccept();
 
-    // Capabilities fetched only once (G10)
+    await waitFor(() => expect(screen.getByText(/Captured source review/i)).toBeTruthy());
     expect(counters.getCapFetches()).toBe(1);
+  });
+
+  it('shows tax-inclusive guidance and requires explicit vendor confirmation', async () => {
+    setupBillEditMocks(() => makeCapture());
+
+    renderWithRouter('/org/acme/purchases/new');
+    await scanAndAccept();
 
     await waitFor(() => expect(screen.getByText(/Suggested vendor match from scan/i)).toBeTruthy());
     expect(screen.getByText(/Source amounts include tax/i)).toBeTruthy();
-    expect(screen.getByText(/does not record a payment or settle it/i)).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: /Confirm vendor/i }));
+    await waitFor(() => expect(screen.queryByText(/Suggested vendor match from scan/i)).toBeNull());
+    expect(screen.getByText('Acme Supply')).toBeTruthy();
+  });
 
-    // Add 10% tax on 110 -> form total becomes 121 (discrepancy of +11 vs source 110)
+  it('shows paid-receipt non-settlement notice pointing to existing payment and banking workflows', async () => {
+    setupBillEditMocks(() => makeCapture());
+
+    renderWithRouter('/org/acme/purchases/new');
+    await scanAndAccept();
+
+    await waitFor(() => expect(screen.getByText(/does not record a payment or settle it/i)).toBeTruthy());
+    expect(screen.getByRole('link', { name: /Banking/i })).toBeTruthy();
+  });
+
+  it('invalidates discrepancy acknowledgement whenever form amounts change', async () => {
+    setupBillEditMocks(() => makeCapture());
+
+    renderWithRouter('/org/acme/purchases/new');
+    await scanAndAccept();
+
+    await waitFor(() => expect(screen.getByLabelText('Line 1 tax')).toBeTruthy());
     fireEvent.change(screen.getByLabelText('Line 1 tax'), { target: { value: 'tax_10' } });
     await waitFor(() => expect(screen.getByLabelText(/Acknowledge difference/i)).toBeTruthy());
 
@@ -256,23 +280,40 @@ describe('BillEdit & BillDetail document capture integration', () => {
     fireEvent.click(ackCheckbox);
     expect(ackCheckbox.checked).toBe(true);
 
-    // Edit amount -> acknowledgement resets
     fireEvent.change(screen.getByLabelText('Line 1 unit cost'), { target: { value: '120' } });
     expect((screen.getByLabelText(/Acknowledge difference/i) as HTMLInputElement).checked).toBe(false);
+  });
 
-    // Draft save succeeds with unresolved discrepancy; link returns 504
+  it('shows route-leave confirmation while an accepted capture link is pending (G9)', async () => {
+    setupBillEditMocks(() => makeCapture(), { linkFailStatus: 504 });
+
+    renderWithRouter('/org/acme/purchases/new');
+    await scanAndAccept();
+    await waitFor(() => expect(screen.getByRole('button', { name: /Confirm vendor/i })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /Confirm vendor/i }));
+
+    fireEvent.click(screen.getByRole('button', { name: /Save draft/i }));
+    await waitFor(() => expect(screen.getByText(/attaching the source document failed/i)).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('link', { name: /Cancel/i }));
+    await waitFor(() => expect(screen.getByText(/Leave without attaching source document/i)).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /^Cancel$/i }));
+    await waitFor(() => expect(screen.queryByText(/Leave without attaching source document/i)).toBeNull());
+  });
+
+  it('retries only evidence linking after a 504 without repeating SaveBill', async () => {
+    const counters = setupBillEditMocks(() => makeCapture(), { linkFailStatus: 504 });
+
+    renderWithRouter('/org/acme/purchases/new');
+    await scanAndAccept();
+    await waitFor(() => expect(screen.getByRole('button', { name: /Confirm vendor/i })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /Confirm vendor/i }));
+
     fireEvent.click(screen.getByRole('button', { name: /Save draft/i }));
     await waitFor(() => expect(screen.getByText(/attaching the source document failed/i)).toBeTruthy());
     expect(counters.getSaveBillCalls()).toBe(1);
     expect(counters.getLinkCalls()).toBe(1);
 
-    // Attempting to navigate away while link is pending triggers route-leave confirmation (G9)
-    fireEvent.click(screen.getByRole('link', { name: /Cancel/i }));
-    await waitFor(() => expect(screen.getByText(/Leave without attaching source document/i)).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: /^Cancel$/i }));
-    await waitFor(() => expect(screen.queryByText(/Leave without attaching source document/i)).toBeNull());
-
-    // Retrying attachment succeeds without repeating SaveBill
     fireEvent.click(screen.getByRole('button', { name: /Retry attach evidence/i }));
     await waitFor(() => expect(counters.getLinkCalls()).toBe(2));
     expect(counters.getSaveBillCalls()).toBe(1);
@@ -472,18 +513,20 @@ describe('BillEdit & BillDetail document capture integration', () => {
     ]);
   });
 
-  it('hides capture controls on read-only bill edit and shows evidence on approved BillDetail; supports multiple linked captures on draft BillDetail (G2)', async () => {
+  it('hides capture controls on read-only bill edit', async () => {
     mockOutletContext.canWrite = () => false;
     setupBillEditMocks(() => makeCapture());
 
-    const { unmount } = renderWithRouter('/org/acme/purchases/new');
+    renderWithRouter('/org/acme/purchases/new');
     await waitFor(() => expect(screen.getByText('New bill')).toBeTruthy());
     expect(screen.queryByRole('button', { name: /Scan receipt \/ bill/i })).toBeNull();
-    unmount();
+  });
 
-    // Approved BillDetail shows evidence even when read-only
-    const cap1 = makeCapture({
-      id: 'cap_01multi00000000000000001',
+  it('shows linked evidence, hashes, provenance, and revokes preview URL on approved read-only BillDetail', async () => {
+    mockOutletContext.canWrite = () => false;
+
+    const evidence = makeCapture({
+      id: 'cap_01evid000000000000000001',
       status: 'accepted',
       fields: null,
       acceptedFields: {
@@ -497,6 +540,60 @@ describe('BillEdit & BillDetail document capture integration', () => {
       canApply: false,
       sourceHash: 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
       contentHash: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+    });
+
+    authFetch.mockImplementation(async (url: string) => {
+      if (url.startsWith('/api/Purchasing/Bill?id=')) {
+        return jsonRes({
+          id: 'bill_01approved000000000001',
+          no: 'B-101',
+          vendorId: 'ven_1',
+          vendorName: 'Acme Supply',
+          vendorInvoiceNo: 'RCP-77',
+          date: '2026-11-10',
+          dueDate: '2026-11-10',
+          lines: [{ id: 'bl_1', description: 'Supplies', quantity: 1, amount: 100, taxAmount: 0, subtotal: 100 }],
+          subtotal: 100,
+          totalTax: 0,
+          total: 100,
+          amountPaid: 0,
+          balanceDue: 100,
+          status: 'Open',
+          approved: true,
+          payments: [],
+        });
+      }
+      if (url === '/api/Common/PaymentTerms') return jsonRes([]);
+      if (url === '/api/document-captures/linked/bill/bill_01approved000000000001') return jsonRes([evidence]);
+      if (url === '/api/document-captures/cap_01evid000000000000000001/image') return jsonRes({}, 200);
+      return jsonRes({}, 404);
+    });
+
+    const rendered = renderWithRouter('/org/acme/purchases/bill_01approved000000000001');
+    await waitFor(() => expect(screen.getByText(/Supporting source documents \(1\)/i)).toBeTruthy());
+    expect(screen.getByTitle(evidence.sourceHash)).toBeTruthy();
+    expect(screen.getByTitle(evidence.contentHash)).toBeTruthy();
+    expect(screen.getByText(/fake v1 · image-normalization-v2/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /View image/i }));
+    await waitFor(() => expect(screen.getByAltText('Source evidence cap_01evid000000000000000001')).toBeTruthy());
+    rendered.unmount();
+    expect(mockRevoke).toHaveBeenCalledWith('blob:bill-capture-url');
+  });
+
+  it('requires acknowledging all discrepant linked captures before approving a draft on BillDetail (G2)', async () => {
+    const cap1 = makeCapture({
+      id: 'cap_01multi00000000000000001',
+      status: 'accepted',
+      fields: null,
+      acceptedFields: {
+        vendorName: 'Acme Supply',
+        date: '2026-11-10',
+        currency: 'USD',
+        sourceTotals: { grandTotal: '100.00', priceBasis: 'exclusive' },
+      },
+      canAccept: false,
+      canApply: false,
     });
     const cap2 = makeCapture({
       id: 'cap_01multi00000000000000002',
@@ -512,7 +609,6 @@ describe('BillEdit & BillDetail document capture integration', () => {
       canApply: false,
     });
 
-    mockOutletContext.canWrite = () => true;
     let lastApproveBody: any = null;
     authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url.startsWith('/api/Purchasing/Bill?id=')) {
@@ -536,12 +632,7 @@ describe('BillEdit & BillDetail document capture integration', () => {
         });
       }
       if (url === '/api/Common/PaymentTerms') return jsonRes([]);
-      if (url === '/api/document-captures/linked/bill/bill_01detail00000000000001') {
-        return jsonRes([cap1, cap2]);
-      }
-      if (url === '/api/document-captures/cap_01multi00000000000000001/image') {
-        return jsonRes({}, 200);
-      }
+      if (url === '/api/document-captures/linked/bill/bill_01detail00000000000001') return jsonRes([cap1, cap2]);
       if (url.startsWith('/api/Purchasing/ApproveBill') && init?.method === 'POST') {
         lastApproveBody = JSON.parse(String(init.body));
         const allAcked = lastApproveBody.captureReviews.every((r: any) => r.discrepancyAcknowledged);
@@ -568,10 +659,8 @@ describe('BillEdit & BillDetail document capture integration', () => {
       return jsonRes({}, 404);
     });
 
-    const rendered = renderWithRouter('/org/acme/purchases/bill_01detail00000000000001');
+    renderWithRouter('/org/acme/purchases/bill_01detail00000000000001');
     await waitFor(() => expect(screen.getByText(/Supporting source documents \(2\)/i)).toBeTruthy());
-    expect(screen.getByTitle(cap1.sourceHash)).toBeTruthy();
-    expect(screen.getByTitle(cap1.contentHash)).toBeTruthy();
 
     // Acknowledge only first capture -> ApproveBill returns 409
     fireEvent.click(screen.getByLabelText(/Acknowledge difference for cap_01multi00000000000000001/i));
@@ -583,12 +672,5 @@ describe('BillEdit & BillDetail document capture integration', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Approve$/i }));
     await waitFor(() => expect(screen.getByText(/is approved and counted as owed/i)).toBeTruthy());
     expect(lastApproveBody.captureReviews).toHaveLength(2);
-
-    // View source image and verify revocation on unmount
-    const viewButtons = screen.getAllByRole('button', { name: /View image/i });
-    fireEvent.click(viewButtons[0]);
-    await waitFor(() => expect(screen.getByAltText('Source evidence cap_01multi00000000000000001')).toBeTruthy());
-    rendered.unmount();
-    expect(mockRevoke).toHaveBeenCalledWith('blob:bill-capture-url');
   });
 });
