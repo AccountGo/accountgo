@@ -47,7 +47,7 @@ When capture is enabled, a background worker parses a tiny embedded PDF once aft
 
 Set `DocumentCapture:Enabled=true` and `DocumentCapture:Extractor=local-ocr` to
 enable reading on a self-hosted instance with the worker installed. By default
-the extractor setting is empty. The API image bundles the worker, its PDFium
+the extractor setting is empty. The API image bundles a ReadyToRun worker, its PDFium
 libraries, and the pinned PP-OCRv5 mobile detection and English recognition
 models. For a local build, publish `src/Api.CaptureWorker/Api.CaptureWorker.csproj`
 and set `DocumentCapture:Extractor:WorkerPath` to the absolute path of the
@@ -71,9 +71,15 @@ samples resident memory every 100 ms, and reads at most 256 KiB of output.
 It kills and reaps the process tree on cancellation or a limit breach.
 `DocumentCapture:Extractor:MaxWorkerMemoryMb` defaults to 1,024 MiB.
 `DocumentCapture:Extractor:MaxConcurrency` defaults to 1 and accepts 1–4.
-Gate contention returns `429 DOCUMENT_DECODE_BUSY`, deadline expiry returns
-`503 DOCUMENT_BUSY` with `Retry-After: 1`, and excess memory or output returns
-`422 DOCUMENT_TOO_COMPLEX`. `DocumentCapture:Extractor:IntraOpThreads` defaults
+The instance queues up to four waiters per worker slot for up to 15 seconds.
+A full queue or an expired wait returns `429 DOCUMENT_DECODE_BUSY` before a
+capture or quota attempt is written. The worker deadline returns
+`503 DOCUMENT_BUSY`, and a worker failure returns `503 DOCUMENT_PROVIDER_UNAVAILABLE`.
+Both responses include `Retry-After: 1`. An unreadable document returns
+`422 DOCUMENT_UNREADABLE`; excess memory or output returns `422 DOCUMENT_TOO_COMPLEX`.
+Each extraction logs its outcome, exit code, queue and run times, peak sampled
+RSS, page count, OCR page count, and line count.
+`DocumentCapture:Extractor:IntraOpThreads` defaults
 to 2. The worker uses one inter-op thread. The CPU memory arena is enabled by
 default and can be disabled with `DocumentCapture:Extractor:EnableCpuMemoryArena=false`.
 
@@ -84,16 +90,18 @@ for lite capacity.
 
 ### Measured resource envelope
 
-Local OCR development-host measurements used a macOS ARM64 worker with two
-intra-op threads. Across 65 synthetic single-page English images, each timed
-run started a fresh process and included model hash verification and loading.
-Other build and test processes were active on the host. Peak RSS is the
-largest child maximum resident set in each group.
+Local OCR development-host measurements used an Apple M1 running macOS 26.6.2
+and an ARM64 Release worker published with ReadyToRun. The worker ran with two
+intra-op threads. No builds or test suites were running during the benchmark.
+Normal macOS background activity continued. Each of the 65 synthetic single-page
+English images ran once with the arena on and once with it off, alternating the
+order. Each timed run started a fresh process and included model hash verification
+and loading. Peak RSS is the largest child maximum resident set in each group.
 
 | CPU memory arena | Pages | Median seconds per page | p95 seconds per page | Peak RSS |
 |---|---:|---:|---:|---:|
-| On (default) | 65 | 3.194 | 8.142 | 248,053,760 bytes |
-| Off | 65 | 3.414 | 9.949 | 253,640,704 bytes |
+| On (default) | 65 | 0.698 | 0.870 | 252,805,120 bytes |
+| Off | 65 | 0.697 | 0.870 | 254,230,528 bytes |
 
 The English image evaluation matched vendor, date, and total on all 65 fixtures.
 The PDF text-layer evaluation matched all three fields on all 18 fixtures.
