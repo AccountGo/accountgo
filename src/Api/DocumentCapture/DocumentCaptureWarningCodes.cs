@@ -18,6 +18,8 @@ public static class DocumentCaptureWarningCodes
         "PAYMENT_STATUS_UNKNOWN",
         "OCR_PARTIAL_PAGES",
         "TOTALS_INCONSISTENT",
+        "TOTAL_UNLABELED",
+        "PARSE_TRUNCATED",
         "REVIEW_REQUIRED"
     };
 

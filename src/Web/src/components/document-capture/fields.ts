@@ -1082,6 +1082,10 @@ export function describeCaptureWarning(code: string): string {
       return 'Some scanned pages were skipped. Check the full document before accepting.';
     case 'TOTALS_INCONSISTENT':
       return 'The extracted subtotal and tax do not match the total. Check the amounts before accepting.';
+    case 'TOTAL_UNLABELED':
+      return 'The reader could not find a labeled total. Verify the suggested amount before accepting.';
+    case 'PARSE_TRUNCATED':
+      return 'The reader could not finish checking all fields. Review the full document and fill in any missing details.';
     case 'LOW_CONFIDENCE':
       return 'Some extracted fields have low confidence — review carefully before accepting.';
     case 'MULTIPLE_DOCUMENTS':
