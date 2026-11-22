@@ -1013,6 +1013,8 @@ export function describeCaptureError(
       return { code: normalized, message: 'The file exceeds the 8 MB limit (or the normalized image exceeds 1.5 MB). Choose a smaller file.', canRetryUpload: false, canCheckStatus: false, canRetryAccept: false };
     case 'DOCUMENT_UNSUPPORTED_TYPE':
       return { code: normalized, message: 'Unsupported file type, encrypted PDF, or PDF over 10 pages. Upload a JPEG, PNG, or unencrypted PDF (1–10 pages).', canRetryUpload: false, canCheckStatus: false, canRetryAccept: false };
+    case 'DOCUMENT_TOO_COMPLEX':
+      return { code: normalized, message: 'This document exceeds the reading limits. Split it into smaller files or enter the details manually.', canRetryUpload: false, canCheckStatus: false, canRetryAccept: false };
     case 'DOCUMENT_MALFORMED':
     case 'DOCUMENT_DIMENSIONS':
     case 'DOCUMENT_MEDIA_MISMATCH':
@@ -1076,6 +1078,10 @@ export function describeCaptureError(
 
 export function describeCaptureWarning(code: string): string {
   switch (code) {
+    case 'OCR_PARTIAL_PAGES':
+      return 'Some scanned pages were skipped. Check the full document before accepting.';
+    case 'TOTALS_INCONSISTENT':
+      return 'The extracted subtotal and tax do not match the total. Check the amounts before accepting.';
     case 'LOW_CONFIDENCE':
       return 'Some extracted fields have low confidence — review carefully before accepting.';
     case 'MULTIPLE_DOCUMENTS':

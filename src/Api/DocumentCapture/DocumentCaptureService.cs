@@ -62,7 +62,7 @@ public sealed class DocumentCaptureService(
     ISecurityAuditService? securityAudit = null,
     TimeProvider? timeProvider = null)
 {
-    private static readonly TimeSpan ExtractorDeadline = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan ExtractorDeadline = CaptureWorkerRunner.Deadline;
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     public async Task<DocumentCaptureView> UploadAsync(
@@ -588,11 +588,9 @@ public sealed class DocumentCaptureService(
     {
         try
         {
-            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            deadline.CancelAfter(ExtractorDeadline);
             var request = new DocumentExtractionRequest(media.Kind, DocumentCaptureFieldSchemas.CurrentSchemaVersion,
                 media.ContentType, media.Bytes, media.PageCount);
-            var extracted = await extractor.ExtractAsync(request, deadline.Token).WaitAsync(ExtractorDeadline, cancellationToken).ConfigureAwait(false);
+            var extracted = await ExtractAsync(request, cancellationToken).ConfigureAwait(false);
             if (string.IsNullOrEmpty(extracted.FieldsJson)
                 || extracted.FieldsJson.Length > DocumentCaptureFieldSchemas.MaxProviderJsonLength
                 || extracted.Warnings is null
@@ -684,9 +682,22 @@ public sealed class DocumentCaptureService(
             else
                 await finalization.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
             db.ChangeTracker.Clear();
+            if (ex is DocumentCaptureServiceException { ErrorCode: "DOCUMENT_BUSY" or "DOCUMENT_DECODE_BUSY" or "DOCUMENT_TOO_COMPLEX" })
+                throw;
         }
 
         return await GetAsync(captureId, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    private async Task<DocumentExtractionResult> ExtractAsync(DocumentExtractionRequest request, CancellationToken cancellationToken)
+    {
+        // Local OCR owns its deadline so it can kill and reap the worker before returning.
+        if (extractor is LocalOcrDocumentFieldExtractor)
+            return await extractor.ExtractAsync(request, cancellationToken).ConfigureAwait(false);
+
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(ExtractorDeadline);
+        return await extractor.ExtractAsync(request, deadline.Token).WaitAsync(ExtractorDeadline, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<PreparedCaptureMedia> PrepareMediaAsync(

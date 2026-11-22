@@ -6,7 +6,7 @@ Status: implementation record for the approved document-capture design. Parser s
 
 - The capture service owns capture state only. It has no dependency on purchasing, sales, banking, payment, or ledger command services. A separate evidence-link operation follows a successful existing save.
 - Stored capture identifiers use registered `cap_` public IDs. Internal capture, party, and target integer IDs never cross API or UI boundaries.
-- `FakeDocumentFieldExtractor` is development/test only. The production adapter remains unconfigured until a later owner instruction names a provider. New extraction is disabled by default; evidence reads remain independently authorized.
+- `LocalOcrDocumentFieldExtractor` is the opt-in self-hosted reader. `FakeDocumentFieldExtractor` is for development and tests. New extraction is disabled by default and evidence reads remain independently authorized.
 - Accepted bytes and fields remain until workspace deletion. Abandoned unaccepted bytes expire after seven days; attempt reservations expire after 48 hours. Rejection deletes bytes only for bank and assistant captures.
 - The runtime flag controls upload, retry, and accept. It does not block reject, linking an already accepted capture, or authorized evidence reads. Provider availability is reported separately and gates upload/extraction, not manual acceptance.
 - The feature grant gates new upload and retry. Accepting an existing capture uses the existing kind-specific write permission and module access, plus the runtime flag; it does not require the new-capture feature grant.
@@ -42,6 +42,45 @@ NuGet audit for the API project found no vulnerable or deprecated SkiaSharp 2.88
 PDF parsing is limited to 8 MiB input, 32 MiB aggregate decoded bytes, 8 MiB per decoded stream, `MaxStackDepth` 64, and a cooperative deadline enforced inside custom filter decoders. The independent PDF parse gate defaults to one slot and has a 500 ms admission wait; it is configurable separately from the four-slot image decode gate. PdfPig 0.1.16 has no per-object or page-tree visit hook; do not claim a per-object count cap. Input and decoded-byte caps bound the available structure data, and adversarial tests establish termination within fixed time and memory ceilings. Never use detached `Task.Run` timeouts.
 
 When capture is enabled, a background worker parses a tiny embedded PDF once after the host signals startup. It uses the configured PDF gate and a separate 15-second cooperative deadline for the embedded fixture. The worker does not delay readiness. A failed warm-up logs a warning without parser exceptions or document content. Uploads keep their three-second cooperative deadline. An expired parse returns `503 DOCUMENT_BUSY` with `Retry-After: 1`. PDF gate contention remains `429 DOCUMENT_DECODE_BUSY`, and malformed files and decoded-byte limit violations keep their input error codes. PdfPig can spend time in startup or parser code that does not call the deadline hooks, so a timeout response can arrive after three seconds.
+
+### Local document reading
+
+Set `DocumentCapture:Enabled=true` and `DocumentCapture:Extractor=local-ocr` to
+enable reading on a self-hosted instance with the worker installed. By default
+the extractor setting is empty. The API image bundles the worker, its PDFium
+libraries, and the pinned PP-OCRv5 mobile detection and English recognition
+models. For a local build, publish `src/Api.CaptureWorker/Api.CaptureWorker.csproj`
+and set `DocumentCapture:Extractor:WorkerPath` to the absolute path of the
+published `Api.CaptureWorker.dll`. Startup fails if the worker or a required
+model file is missing. The worker verifies all three model asset hashes before
+processing each request.
+
+PDF validation still uses the structure-only policy described above. The child
+reads the text layer with PDFium, groups it by glyph positions, and falls back
+to OCR when a page has fewer than 20 non-space characters. For a document
+with more than three such pages, it OCRs the first two and the last, and returns
+`OCR_PARTIAL_PAGES` for the skipped pages. Page rendering uses 200 dpi and caps
+the long edge at 2,048 pixels. The recognition model supports English. A
+PDF's existing text layer can include other languages.
+
+The API starts one worker process per extraction. The length-prefixed request
+and the result travel through redirected standard streams. The worker receives
+no application secrets through its environment. Logs omit document bytes,
+extracted text, and child stderr. The parent gives the worker 20 seconds,
+samples resident memory every 100 ms, and reads at most 256 KiB of output.
+It kills and reaps the process tree on cancellation or a limit breach.
+`DocumentCapture:Extractor:MaxWorkerMemoryMb` defaults to 1,024.
+`DocumentCapture:Extractor:MaxConcurrency` defaults to 1 and accepts 1–4.
+Gate contention returns `429 DOCUMENT_DECODE_BUSY`, deadline expiry returns
+`503 DOCUMENT_BUSY` with `Retry-After: 1`, and excess memory or output returns
+`422 DOCUMENT_TOO_COMPLEX`. `DocumentCapture:Extractor:IntraOpThreads` defaults
+to 2. The worker uses one inter-op thread. The CPU memory arena is enabled by
+default and can be disabled with `DocumentCapture:Extractor:EnableCpuMemoryArena=false`.
+
+Hosted activation requires staging results on standard-1 for worker peak RSS,
+p95 time per page, and 10 concurrent uploads against the one-slot gate, plus
+the existing storage, backup and rollout checks. Local OCR remains unsuitable
+for lite capacity.
 
 ### Measured resource envelope
 

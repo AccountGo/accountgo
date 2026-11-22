@@ -48,6 +48,8 @@ jobs:
               - 'src/Api/**/*.cs'
               - 'src/Api/**/*.csproj'
               - 'src/Api/appsettings*.json'
+              - 'src/Api/Dockerfile'
+              - 'src/Api.CaptureWorker/**'
               - 'test/AccountGo.BackendTests/**'
               - 'test/AccountGo.ServicesTests/**'
               - 'accountgo.sln'
@@ -114,6 +116,11 @@ jobs:
 
       - name: Backend tests
         run: dotnet test test/AccountGo.BackendTests/AccountGo.BackendTests.csproj -c Release --no-build
+
+      - name: Local OCR quality gates
+        env:
+          ACCOUNTGO_TEST_OCR_WORKER: ${{ github.workspace }}/.build/bin/Api.CaptureWorker/Release/net10.0/Api.CaptureWorker.dll
+        run: dotnet test test/AccountGo.BackendTests/AccountGo.BackendTests.csproj -c Release --no-build --filter 'Category=LocalOcr'
 
       - name: Services tests
         run: dotnet test test/AccountGo.ServicesTests/AccountGo.ServicesTests.csproj -c Release --no-build

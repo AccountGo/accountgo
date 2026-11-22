@@ -65,7 +65,7 @@ internal sealed class PdfiumDocument : IDisposable
         if (count is < 0 or > MaxCharactersPerPage)
             throw new InvalidDataException();
 
-        var rows = new SortedDictionary<int, List<Glyph>>();
+        var glyphs = new List<Glyph>(count);
         for (var index = 0; index < count; index++)
         {
             var codePoint = Native.FPDFText_GetUnicode(textPage, index);
@@ -74,19 +74,25 @@ internal sealed class PdfiumDocument : IDisposable
                 || !rect.IsFinite)
                 continue;
 
-            var baseline = (int)MathF.Round(Math.Clamp(rect.Bottom, 0, size.PointHeight));
-            if (!rows.TryGetValue(baseline, out var row))
-                rows.Add(baseline, row = []);
-            row.Add(new Glyph(rune, rect));
+            glyphs.Add(new Glyph(index, rune, rect));
         }
 
+        // Fallback fonts and combining clusters can shift the loose baseline within one row.
+        // Keep the original PDFium character order inside each overlapping row.
+        var rows = new List<List<Glyph>>();
+        foreach (var glyph in glyphs.OrderByDescending(glyph => glyph.Rect.Bottom))
+        {
+            if (rows.Count == 0 || !SameRow(rows[^1][0].Rect, glyph.Rect))
+                rows.Add([]);
+            rows[^1].Add(glyph);
+        }
         var lines = new List<TextLine>(rows.Count);
-        foreach (var row in rows.Values.Reverse())
+        foreach (var row in rows)
         {
             var text = new StringBuilder();
             float previousRight = float.NegativeInfinity;
             var previousWasWhitespace = true;
-            foreach (var glyph in row)
+            foreach (var glyph in row.OrderBy(glyph => glyph.Index))
             {
                 var whitespace = Rune.IsWhiteSpace(glyph.Rune);
                 if (!previousWasWhitespace && !whitespace && glyph.Rect.Left - previousRight > 6)
@@ -106,6 +112,14 @@ internal sealed class PdfiumDocument : IDisposable
                 maxX * size.Scale, maxY * size.Scale, TextLineSource.PdfTextLayer));
         }
         return lines;
+    }
+
+    private static bool SameRow(PdfRect anchor, PdfRect candidate)
+    {
+        var shorterHeight = Math.Min(anchor.Top - anchor.Bottom, candidate.Top - candidate.Bottom);
+        var overlap = Math.Min(anchor.Top, candidate.Top) - Math.Max(anchor.Bottom, candidate.Bottom);
+        return Math.Abs(anchor.Bottom - candidate.Bottom) <= 1
+            || (shorterHeight > 0 && overlap >= shorterHeight * 0.5f);
     }
 
     public SKBitmap Render(int pageNumber)
@@ -170,7 +184,7 @@ internal sealed class PdfiumDocument : IDisposable
         Native.FPDF_DestroyLibrary();
     }
 
-    private readonly record struct Glyph(Rune Rune, PdfRect Rect);
+    private readonly record struct Glyph(int Index, Rune Rune, PdfRect Rect);
     private readonly record struct PageSize(int Width, int Height, float PointHeight, float Scale);
 
     [StructLayout(LayoutKind.Sequential)]
