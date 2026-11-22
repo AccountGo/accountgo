@@ -136,32 +136,25 @@ export interface DocumentCaptureView {
   status: 'extracting' | 'ready' | 'failed' | 'accepted' | 'rejected' | string;
   contentType: string;
   byteCount: number;
-  width?: number | null;
-  height?: number | null;
+  width: number | null;
+  height: number | null;
   pageCount: number;
-  fields?: Record<string, unknown> | null;
-  acceptedFields?: Record<string, unknown> | null;
-  warnings?: string[] | null;
-  errorCode?: string | null;
+  fields: Record<string, unknown> | null;
+  acceptedFields: Record<string, unknown> | null;
+  warnings: string[] | null;
+  errorCode: string | null;
   bytesAvailable: boolean;
   canAccept: boolean;
   canApply: boolean;
-  providerName?: string | null;
-  providerVersion?: string | null;
+  providerName: string | null;
+  providerVersion: string | null;
   sourceHash: string;
   contentHash: string;
   normalizationVersion: string;
-  link?: DocumentCaptureLinkView | null;
+  link: DocumentCaptureLinkView | null;
   createdAt: string;
-  acceptedAt?: string | null;
-  rejectedAt?: string | null;
-  // Optional forward-compatible metadata fields
-  detectedKind?: string | null;
-  detectedDocumentCount?: number | null;
-  suggestedVendorId?: string | null;
-  suggestedCustomerId?: string | null;
-  fieldConfidences?: Record<string, number | null> | null;
-  fieldBoxes?: Record<string, CaptureFieldBox | null> | null;
+  acceptedAt: string | null;
+  rejectedAt: string | null;
 }
 
 export interface DocumentCaptureCapabilities {
@@ -532,17 +525,9 @@ export interface FinancialApplyGates {
   reasons: string[];
 }
 
-const UNSUPPORTED_FINANCIAL_CLASSES = new Set([
-  'credit-note',
-  'credit_note',
-  'refund',
-  'statement',
-  'bank-statement',
-]);
-
 /**
  * Evaluates document-class, multi-document, currency, schema, and media gates
- * for applying an accepted capture to a financial form.
+ * from the backend DocumentCaptureView warnings and canonical field values only.
  */
 export function evaluateFinancialApplyGates(
   capture: DocumentCaptureView,
@@ -563,17 +548,12 @@ export function evaluateFinancialApplyGates(
     reasons.push('The supporting file bytes are no longer available, so this capture cannot be applied.');
   }
 
-  const detectedClass = capture.detectedKind?.toLowerCase() ?? '';
-  const unsupportedClass =
-    warnings.has('UNSUPPORTED_DOCUMENT_CLASS') ||
-    UNSUPPORTED_FINANCIAL_CLASSES.has(detectedClass);
+  const unsupportedClass = warnings.has('UNSUPPORTED_DOCUMENT_CLASS');
   if (unsupportedClass) {
     reasons.push('This document appears to be a credit note, refund, or statement rather than an ordinary bill. Use Supplier Credits or Banking instead.');
   }
 
-  const multipleDocuments =
-    warnings.has('MULTIPLE_DOCUMENTS') ||
-    (typeof capture.detectedDocumentCount === 'number' && capture.detectedDocumentCount > 1);
+  const multipleDocuments = warnings.has('MULTIPLE_DOCUMENTS');
   if (multipleDocuments) {
     reasons.push('Multiple documents were detected in this file. Upload one document per bill rather than applying combined lines.');
   }
@@ -629,19 +609,14 @@ export interface VendorOptionLike {
 }
 
 /**
- * Exact trimmed case-insensitive single active vendor match, or server-provided suggestedVendorId.
+ * Exact trimmed case-insensitive single active vendor match.
  * Never creates a vendor; returns null on 0 or >1 matches.
  */
 export function findSuggestedVendor<T extends VendorOptionLike>(
   vendorName: string | null | undefined,
-  vendors: readonly T[],
-  serverSuggestedVendorId?: string | null
+  vendors: readonly T[]
 ): T | null {
   const active = vendors.filter((v) => !v.archived);
-  if (serverSuggestedVendorId) {
-    const byId = active.find((v) => v.id === serverSuggestedVendorId);
-    if (byId) return byId;
-  }
   const needle = vendorName?.trim().toLowerCase();
   if (!needle) return null;
   const matches = active.filter((v) => v.name.trim().toLowerCase() === needle);

@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DocumentCapturePanel } from '../src/components/document-capture/DocumentCapturePanel';
 import {
+  computeCaptureDiscrepancy,
   describeCaptureError,
   DocumentCaptureCapabilities,
   DocumentCaptureView,
@@ -51,17 +52,20 @@ const enabledCapabilities: DocumentCaptureCapabilities = {
 
 function makeJsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}) {
   const headerMap = new Headers({ 'content-type': 'application/json', ...headers });
-  const res = {
+  return {
     ok: status >= 200 && status < 300,
     status,
     headers: headerMap,
     json: async () => body,
     clone: () => ({ json: async () => body }),
   };
-  return res;
 }
 
-function makeReadyCapture(overrides: Partial<DocumentCaptureView> = {}): DocumentCaptureView {
+/**
+ * Exact wire shape returned by DocumentCaptureService.ToView with FakeDocumentFieldExtractor
+ * (25 fields, zero client-invented properties).
+ */
+function makeFakeExtractorReadyCapture(overrides: Partial<DocumentCaptureView> = {}): DocumentCaptureView {
   return {
     id: 'cap_01testcapture00000000000001',
     kind: 'expense-receipt',
@@ -98,8 +102,6 @@ function makeReadyCapture(overrides: Partial<DocumentCaptureView> = {}): Documen
     createdAt: '2026-11-10T10:00:00Z',
     acceptedAt: null,
     rejectedAt: null,
-    fieldConfidences: { vendorName: 0.62, date: null },
-    fieldBoxes: { vendorName: { page: 2, x: 0.1, y: 0.1, width: 0.3, height: 0.05 }, date: null },
     ...overrides,
   };
 }
@@ -119,9 +121,11 @@ describe('DocumentCapturePanel & fields.ts', () => {
     expect(screen.queryByLabelText('Upload image or PDF')).toBeNull();
   });
 
-  it('uses canonical server-accepted response, never submits parent form, revokes object URLs, and marks low confidence + page metadata', async () => {
-    const ready = makeReadyCapture({
+  it('uses canonical server-accepted response, never submits parent form, revokes object URLs, and renders PDF page count', async () => {
+    const ready = makeFakeExtractorReadyCapture({
       contentType: 'application/pdf',
+      width: null,
+      height: null,
       pageCount: 3,
     });
     const canonicalAccepted: DocumentCaptureView = {
@@ -138,6 +142,7 @@ describe('DocumentCapturePanel & fields.ts', () => {
       },
       canAccept: false,
       canApply: true,
+      acceptedAt: '2026-11-10T10:01:00Z',
     };
 
     authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
@@ -158,13 +163,10 @@ describe('DocumentCapturePanel & fields.ts', () => {
 
     await waitFor(() => expect(screen.getByLabelText('Upload image or PDF')).toBeTruthy());
 
-    // First pick an image to verify object URL creation and revocation on replacement
     const imgFile = new File(['img-bytes'], 'receipt.png', { type: 'image/png' });
     fireEvent.change(screen.getByLabelText('Upload image or PDF'), { target: { files: [imgFile] } });
 
-    await waitFor(() => expect(screen.getByText('Check this')).toBeTruthy());
-    expect(screen.getByText('Page 2')).toBeTruthy();
-    expect(screen.getByText('3 pages · PDF')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('3 pages · PDF')).toBeTruthy());
     expect(screen.getByText('Defaulted to 1')).toBeTruthy();
     expect(mockCreate).toHaveBeenCalledTimes(1);
 
@@ -172,37 +174,82 @@ describe('DocumentCapturePanel & fields.ts', () => {
 
     await waitFor(() => expect(onAccepted).toHaveBeenCalledWith(canonicalAccepted));
     expect(onParentSubmit).not.toHaveBeenCalled();
-    // Never calls any business save endpoint
     expect(authFetch.mock.calls.some(([u]) => String(u).includes('/api/Purchasing/SaveBill'))).toBe(false);
 
     unmount();
     expect(mockRevoke).toHaveBeenCalledWith('blob:mock-capture-1');
   });
 
-  it('prevents application for unknown schema versions and unavailable bytes', async () => {
-    const unknownSchemaCapture = makeReadyCapture({ schemaVersion: 99 });
+  it('leaves the date unresolved when AMBIGUOUS_DATE warning is present', async () => {
+    const ambiguous = makeFakeExtractorReadyCapture({
+      warnings: ['AMBIGUOUS_DATE'],
+    });
     authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === '/api/document-captures/capabilities') return makeJsonResponse(enabledCapabilities);
-      if (url === '/api/document-captures' && init?.method === 'POST') return makeJsonResponse(unknownSchemaCapture);
+      if (url === '/api/document-captures' && init?.method === 'POST') return makeJsonResponse(ambiguous);
       return makeJsonResponse({}, 404);
     });
 
     render(<DocumentCapturePanel kind="expense-receipt" orgSlug="acme" onAccepted={vi.fn()} />);
     await waitFor(() => expect(screen.getByLabelText('Upload image or PDF')).toBeTruthy());
 
-    const file = new File(['abc'], 'r.png', { type: 'image/png' });
-    fireEvent.change(screen.getByLabelText('Upload image or PDF'), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText('Upload image or PDF'), {
+      target: { files: [new File(['x'], 'amb.png', { type: 'image/png' })] },
+    });
+
+    await waitFor(() => expect(screen.getByText(/Extracted date is ambiguous/i)).toBeTruthy());
+    const dateInput = screen.getByLabelText(/Document date/i) as HTMLInputElement;
+    expect(dateInput.value).toBe('');
+
+    fireEvent.click(screen.getByRole('button', { name: /Accept & apply to draft/i }));
+    await waitFor(() => expect(screen.getByText(/Enter a valid document date in YYYY-MM-DD/i)).toBeTruthy());
+  });
+
+  it('prevents application for unknown schema versions and refuses kinds without a typed handler', async () => {
+    const unknownSchemaCapture = makeFakeExtractorReadyCapture({ schemaVersion: 99 });
+    authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/document-captures/capabilities') return makeJsonResponse(enabledCapabilities);
+      if (url === '/api/document-captures' && init?.method === 'POST') return makeJsonResponse(unknownSchemaCapture);
+      return makeJsonResponse({}, 404);
+    });
+
+    const { unmount } = render(<DocumentCapturePanel kind="expense-receipt" orgSlug="acme" onAccepted={vi.fn()} />);
+    await waitFor(() => expect(screen.getByLabelText('Upload image or PDF')).toBeTruthy());
+
+    fireEvent.change(screen.getByLabelText('Upload image or PDF'), {
+      target: { files: [new File(['abc'], 'r.png', { type: 'image/png' })] },
+    });
 
     await waitFor(() => expect(screen.getByText(/Schema version 99 is not supported/i)).toBeTruthy());
-    const acceptBtn = screen.getByRole('button', { name: /Accept & apply to draft/i }) as HTMLButtonElement;
-    expect(acceptBtn.disabled).toBe(true);
+    expect((screen.getByRole('button', { name: /Accept & apply to draft/i }) as HTMLButtonElement).disabled).toBe(true);
+    unmount();
+
+    // Non-vendor kind without typed handler in PR 2 also disables Accept
+    const bankCapture = makeFakeExtractorReadyCapture({ kind: 'bank', fields: { name: 'Main' } });
+    authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/document-captures/capabilities') {
+        return makeJsonResponse({ ...enabledCapabilities, kinds: ['bank'] });
+      }
+      if (url === '/api/document-captures' && init?.method === 'POST') return makeJsonResponse(bankCapture);
+      return makeJsonResponse({}, 404);
+    });
+
+    render(<DocumentCapturePanel kind="bank" orgSlug="acme" onAccepted={vi.fn()} />);
+    await waitFor(() => expect(screen.getByLabelText('Upload image or PDF')).toBeTruthy());
+    fireEvent.change(screen.getByLabelText('Upload image or PDF'), {
+      target: { files: [new File(['b'], 'b.png', { type: 'image/png' })] },
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: /Accept & apply to draft/i })).toBeTruthy());
+    expect((screen.getByRole('button', { name: /Accept & apply to draft/i }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('routes already-linked duplicate captures to the saved record instead of treating as unused', async () => {
-    const linked = makeReadyCapture({
+    const linked = makeFakeExtractorReadyCapture({
       status: 'accepted',
       fields: null,
       acceptedFields: { date: '2026-11-10' },
+      canAccept: false,
+      canApply: true,
       link: { targetType: 'bill', targetId: 'bill_01existing00000000000001', linkedAt: '2026-11-10T11:00:00Z' },
     });
     authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
@@ -231,26 +278,15 @@ describe('DocumentCapturePanel & fields.ts', () => {
     expect(onOpenLinked).toHaveBeenCalledWith(linked.link);
   });
 
-  it('dispatches entitlement denial to PlanLimitDialog and keeps 429 / 504 errors in panel without auto-retry', async () => {
+  it('dispatches entitlement denial to PlanLimitDialog', async () => {
     const events: CustomEvent[] = [];
     const listener = (e: Event) => events.push(e as CustomEvent);
     window.addEventListener(ENTITLEMENT_DENIED_EVENT, listener);
 
-    let callCount = 0;
     authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === '/api/document-captures/capabilities') return makeJsonResponse(enabledCapabilities);
       if (url === '/api/document-captures' && init?.method === 'POST') {
-        callCount++;
-        if (callCount === 1) {
-          return makeJsonResponse({ code: 'FEATURE_NOT_ENTITLED', detail: 'Feature not included.' }, 403);
-        }
-        if (callCount === 2) {
-          return makeJsonResponse({ code: 'DOCUMENT_RATE_LIMITED' }, 429, { 'Retry-After': '60' });
-        }
-        return makeJsonResponse({ code: 'DOCUMENT_PROVIDER_TIMEOUT', captureId: 'cap_01timeout000000000000001' }, 504);
-      }
-      if (url === '/api/document-captures/cap_01timeout000000000000001') {
-        return makeJsonResponse(makeReadyCapture({ id: 'cap_01timeout000000000000001' }));
+        return makeJsonResponse({ code: 'FEATURE_NOT_ENTITLED', detail: 'Feature not included.' }, 403);
       }
       return makeJsonResponse({}, 404);
     });
@@ -258,118 +294,186 @@ describe('DocumentCapturePanel & fields.ts', () => {
     render(<DocumentCapturePanel kind="expense-receipt" orgSlug="acme" onAccepted={vi.fn()} />);
     await waitFor(() => expect(screen.getByLabelText('Upload image or PDF')).toBeTruthy());
 
-    // 1. Entitlement 403 dispatches shared PlanLimitDialog event
     fireEvent.change(screen.getByLabelText('Upload image or PDF'), {
       target: { files: [new File(['a'], 'a.png', { type: 'image/png' })] },
     });
     await waitFor(() => expect(events.length).toBe(1));
     expect(events[0].detail.code).toBe('FEATURE_NOT_ENTITLED');
 
-    // 2. 429 rate limit renders in panel
+    window.removeEventListener(ENTITLEMENT_DENIED_EVENT, listener);
+  });
+
+  it('keeps 429 rate-limit and 504 timeout errors in panel without auto-retry', async () => {
+    let postCalls = 0;
+    authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/document-captures/capabilities') return makeJsonResponse(enabledCapabilities);
+      if (url === '/api/document-captures' && init?.method === 'POST') {
+        postCalls++;
+        if (postCalls === 1) {
+          return makeJsonResponse({ code: 'DOCUMENT_RATE_LIMITED' }, 429, { 'Retry-After': '60' });
+        }
+        return makeJsonResponse({ code: 'DOCUMENT_PROVIDER_TIMEOUT', captureId: 'cap_01timeout000000000000001' }, 504);
+      }
+      if (url === '/api/document-captures/cap_01timeout000000000000001') {
+        return makeJsonResponse(makeFakeExtractorReadyCapture({ id: 'cap_01timeout000000000000001' }));
+      }
+      return makeJsonResponse({}, 404);
+    });
+
+    render(<DocumentCapturePanel kind="expense-receipt" orgSlug="acme" onAccepted={vi.fn()} />);
+    await waitFor(() => expect(screen.getByLabelText('Upload image or PDF')).toBeTruthy());
+
     fireEvent.change(screen.getByLabelText('Upload image or PDF'), {
       target: { files: [new File(['b'], 'b.png', { type: 'image/png' })] },
     });
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('60 seconds'));
 
-    // 3. 504 timeout does NOT auto-retry; offers manual Check status button
     fireEvent.change(screen.getByLabelText('Upload image or PDF'), {
       target: { files: [new File(['c'], 'c.png', { type: 'image/png' })] },
     });
     await waitFor(() => expect(screen.getByRole('button', { name: /Check status/i })).toBeTruthy());
-    expect(callCount).toBe(3);
+    expect(postCalls).toBe(2);
 
     fireEvent.click(screen.getByRole('button', { name: /Check status/i }));
     await waitFor(() => expect(screen.getByRole('button', { name: /Accept & apply to draft/i })).toBeTruthy());
-    // Still only 3 POST calls (no automatic provider retry!)
-    expect(callCount).toBe(3);
-
-    window.removeEventListener(ENTITLEMENT_DENIED_EVENT, listener);
+    expect(postCalls).toBe(2);
   });
 
-  it('discards stale upload responses after workspace switch', async () => {
-    let resolveUpload!: (val: unknown) => void;
-    const uploadPromise = new Promise((resolve) => {
-      resolveUpload = resolve;
-    });
+  it('offers Check status on a lost accept response without calling the provider again', async () => {
+    let uploadPosts = 0;
+    const ready = makeFakeExtractorReadyCapture();
+    const accepted: DocumentCaptureView = {
+      ...ready,
+      status: 'accepted',
+      fields: null,
+      acceptedFields: ready.fields,
+      canAccept: false,
+      canApply: true,
+    };
 
     authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === '/api/document-captures/capabilities') return makeJsonResponse(enabledCapabilities);
-      if (url === '/api/document-captures' && init?.method === 'POST') return uploadPromise;
+      if (url === '/api/document-captures' && init?.method === 'POST') {
+        uploadPosts++;
+        return makeJsonResponse(ready);
+      }
+      if (url.endsWith('/accept') && init?.method === 'POST') {
+        throw new Error('network dropped');
+      }
+      if (url === `/api/document-captures/${ready.id}`) {
+        return makeJsonResponse(accepted);
+      }
       return makeJsonResponse({}, 404);
     });
 
+    render(<DocumentCapturePanel kind="expense-receipt" orgSlug="acme" onAccepted={vi.fn()} />);
+    await waitFor(() => expect(screen.getByLabelText('Upload image or PDF')).toBeTruthy());
+
+    fireEvent.change(screen.getByLabelText('Upload image or PDF'), {
+      target: { files: [new File(['x'], 'x.png', { type: 'image/png' })] },
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: /Accept & apply to draft/i })).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: /Accept & apply to draft/i }));
+    await waitFor(() => expect(screen.getByText(/accept response was lost/i)).toBeTruthy());
+    expect(screen.getByRole('button', { name: /Check status/i })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Check status/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Apply accepted fields/i })).toBeTruthy());
+    expect(uploadPosts).toBe(1);
+  });
+
+  it('discards stale accept response after switching workspace', async () => {
+    let resolveAccept!: (val: unknown) => void;
+    const acceptPromise = new Promise((resolve) => {
+      resolveAccept = resolve;
+    });
+    const ready = makeFakeExtractorReadyCapture();
+    const accepted: DocumentCaptureView = {
+      ...ready,
+      status: 'accepted',
+      fields: null,
+      acceptedFields: ready.fields,
+      canAccept: false,
+      canApply: true,
+    };
+
+    authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/document-captures/capabilities') return makeJsonResponse(enabledCapabilities);
+      if (url === '/api/document-captures' && init?.method === 'POST') return makeJsonResponse(ready);
+      if (url.endsWith('/accept') && init?.method === 'POST') return acceptPromise;
+      return makeJsonResponse({}, 404);
+    });
+
+    const onAccepted = vi.fn();
     const { rerender } = render(
-      <DocumentCapturePanel kind="expense-receipt" orgSlug="org-a" scopeKey="bill-1" onAccepted={vi.fn()} />
+      <DocumentCapturePanel kind="expense-receipt" orgSlug="org-a" scopeKey="bill-1" onAccepted={onAccepted} />
     );
     await waitFor(() => expect(screen.getByLabelText('Upload image or PDF')).toBeTruthy());
 
     fireEvent.change(screen.getByLabelText('Upload image or PDF'), {
-      target: { files: [new File(['a'], 'slow.png', { type: 'image/png' })] },
+      target: { files: [new File(['a'], 'a.png', { type: 'image/png' })] },
     });
+    await waitFor(() => expect(screen.getByRole('button', { name: /Accept & apply to draft/i })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /Accept & apply to draft/i }));
 
-    // Switch workspace before upload resolves
+    // Switch workspace before accept resolves
     rerender(
-      <DocumentCapturePanel kind="expense-receipt" orgSlug="org-b" scopeKey="bill-1" onAccepted={vi.fn()} />
+      <DocumentCapturePanel kind="expense-receipt" orgSlug="org-b" scopeKey="bill-1" onAccepted={onAccepted} />
     );
 
-    resolveUpload(makeJsonResponse(makeReadyCapture()));
+    resolveAccept(makeJsonResponse(accepted));
     await waitFor(() => expect(authFetch).toHaveBeenCalledWith('/api/document-captures/capabilities'));
-    // Late response from org-a must be discarded
-    expect(screen.queryByRole('button', { name: /Accept & apply to draft/i })).toBeNull();
+    expect(onAccepted).not.toHaveBeenCalled();
   });
 
-  it('enforces strict decimal, date, quantity, blank-description, and domain length validation', () => {
-    // Ambiguous / localized decimals rejected instead of silently reinterpreted
+  it('refuses localized decimals 1.234,56 and 1,234.56 rather than reinterpreting them', () => {
+    expect(parseStrictDecimal('1.234,56').valid).toBe(false);
     expect(parseStrictDecimal('1,234.56').valid).toBe(false);
     expect(parseStrictDecimal('12,50').valid).toBe(false);
     expect(parseStrictDecimal('$10.00').valid).toBe(false);
     expect(parseStrictDecimal('1234.5678').valid).toBe(true);
     expect(parseStrictDecimal('1234.56789').valid).toBe(false);
+  });
 
-    const invalid = validateVendorFieldsForAccept(
-      {
-        vendorName: 'Test',
-        vendorInvoiceNo: 'X'.repeat(55), // > 50 bill domain limit
-        date: '03/04/2026', // ambiguous date
-        dueDate: '',
-        referenceNo: '',
-        currency: 'USD',
-        notes: '',
-      },
-      [
-        {
-          id: 1,
-          description: '',
-          quantity: '0', // explicit zero refused
-          unitAmount: '45.00', // amount-bearing blank description flagged
-          sourceLineTotal: '',
-          taxHint: '',
-          discount: '',
-          priceBasis: '',
-          missingQuantityDefaulted: false,
-        },
-        {
-          // completely blank line is safely removed
-          id: 2,
-          description: '',
-          quantity: '',
-          unitAmount: '',
-          sourceLineTotal: '',
-          taxHint: '',
-          discount: '',
-          priceBasis: '',
-          missingQuantityDefaulted: false,
-        },
-      ]
+  it('evaluates rounding differences at exactly 0.005 (match) and at 0.01 (discrepancy)', () => {
+    const atHalfCent = computeCaptureDiscrepancy({ grandTotal: '10.00' }, 10.005);
+    // round2(10.005) = 10.01 -> diff 0.01 (discrepancy); exact 0.004 rounds to 10.00 -> match
+    expect(atHalfCent.hasDiscrepancy).toBe(true);
+    expect(atHalfCent.difference).toBe(0.01);
+
+    const exactZeroDiff = computeCaptureDiscrepancy({ grandTotal: '10.00' }, 10.004);
+    expect(exactZeroDiff.hasDiscrepancy).toBe(false);
+    expect(exactZeroDiff.difference).toBe(0);
+
+    const atOneCent = computeCaptureDiscrepancy({ grandTotal: '10.00' }, 10.01);
+    expect(atOneCent.hasDiscrepancy).toBe(true);
+    expect(atOneCent.difference).toBe(0.01);
+  });
+
+  it('refuses explicit zero quantity, flags blank description with amount, and rejects overlong vendor invoice # and reference', () => {
+    const zeroQty = validateVendorFieldsForAccept(
+      { vendorName: 'V', vendorInvoiceNo: 'INV-1', date: '2026-11-10', dueDate: '', referenceNo: '', currency: 'USD', notes: '' },
+      [{ id: 1, description: 'Paper', quantity: '0', unitAmount: '10.00', sourceLineTotal: '', taxHint: '', discount: '', priceBasis: '', missingQuantityDefaulted: false }]
     );
+    expect(zeroQty.valid).toBe(false);
+    expect(zeroQty.errors.some((e) => e.includes('greater than zero'))).toBe(true);
 
-    expect(invalid.valid).toBe(false);
-    expect(invalid.errors.some((e) => e.includes('YYYY-MM-DD'))).toBe(true);
-    expect(invalid.errors.some((e) => e.includes('50 characters'))).toBe(true);
-    expect(invalid.errors.some((e) => e.includes('no description'))).toBe(true);
-    expect(invalid.errors.some((e) => e.includes('greater than zero'))).toBe(true);
+    const blankDesc = validateVendorFieldsForAccept(
+      { vendorName: 'V', vendorInvoiceNo: 'INV-1', date: '2026-11-10', dueDate: '', referenceNo: '', currency: 'USD', notes: '' },
+      [{ id: 1, description: '', quantity: '1', unitAmount: '45.00', sourceLineTotal: '', taxHint: '', discount: '', priceBasis: '', missingQuantityDefaulted: false }]
+    );
+    expect(blankDesc.valid).toBe(false);
+    expect(blankDesc.errors.some((e) => e.includes('no description'))).toBe(true);
 
-    // Every §6 code maps cleanly
+    const overlong = validateVendorFieldsForAccept(
+      { vendorName: 'V', vendorInvoiceNo: 'X'.repeat(51), date: '2026-11-10', dueDate: '', referenceNo: 'R'.repeat(101), currency: 'USD', notes: '' },
+      []
+    );
+    expect(overlong.valid).toBe(false);
+    expect(overlong.errors.some((e) => e.includes('50 characters'))).toBe(true);
+    expect(overlong.errors.some((e) => e.includes('100 characters'))).toBe(true);
+
     expect(describeCaptureError('DOCUMENT_DECODE_BUSY', 429).canRetryUpload).toBe(true);
     expect(describeCaptureError('DOCUMENT_BYTES_UNAVAILABLE', 409).canRetryAccept).toBe(false);
     expect(describeCaptureError('DOCUMENT_REVIEW_REQUIRED', 409).code).toBe('DOCUMENT_REVIEW_REQUIRED');

@@ -16,18 +16,17 @@ import {
   X,
 } from 'lucide-react';
 import {
-  CaptureFieldBox,
   CaptureLineField,
   CapturePaymentHints,
   CaptureSourceTotals,
   describeCaptureWarning,
+  DocumentCaptureCapabilities,
   DocumentCaptureKind,
   DocumentCaptureLinkView,
   DocumentCaptureView,
   EditableLineDraft,
   evaluateFinancialApplyGates,
   getFieldDescriptors,
-  isLowConfidence,
   isSupportedSchemaVersion,
   isVendorKind,
   KIND_LABELS,
@@ -43,6 +42,8 @@ export interface DocumentCapturePanelProps {
   orgCurrency?: string;
   /** Document scope identifier (e.g. billId or 'new') so late responses after navigation are discarded. */
   scopeKey?: string;
+  /** Pre-fetched capabilities from the host to avoid duplicate /capabilities fetches. */
+  capabilities?: DocumentCaptureCapabilities | null;
   disabled?: boolean;
   /** Called ONLY after POST /accept succeeds, with the server's canonical response. */
   onAccepted: (canonicalCapture: DocumentCaptureView) => void;
@@ -71,16 +72,12 @@ function toEditableLines(source: CaptureLineField[] | null | undefined): Editabl
   });
 }
 
-function formatBoxBadge(box: CaptureFieldBox | null | undefined): string | null {
-  if (!box || typeof box.page !== 'number') return null;
-  return `Page ${box.page}`;
-}
-
 export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
   kind,
   orgSlug,
   orgCurrency,
   scopeKey = 'new',
+  capabilities: externalCapabilities,
   disabled = false,
   onAccepted,
   onOpenLinkedRecord,
@@ -113,7 +110,7 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
     accept,
     reject,
     reset,
-  } = useDocumentCapture({ orgSlug, scopeKey });
+  } = useDocumentCapture({ orgSlug, scopeKey, capabilities: externalCapabilities });
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
@@ -137,9 +134,15 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
       setValidationErrors([]);
     } else {
       const raw = (capture.acceptedFields ?? capture.fields ?? {}) as Record<string, unknown>;
+      const warningsSet = new Set(capture.warnings ?? []);
       const nextDescriptors = getFieldDescriptors(capture.kind, capture.schemaVersion);
       const nextHeader: Record<string, string> = {};
       for (const desc of nextDescriptors) {
+        if (desc.key === 'date' && capture.status !== 'accepted' && warningsSet.has('AMBIGUOUS_DATE')) {
+          // Ambiguous extracted dates remain unresolved until the user explicitly confirms YYYY-MM-DD.
+          nextHeader[desc.key] = '';
+          continue;
+        }
         const v = raw[desc.key];
         nextHeader[desc.key] = typeof v === 'string' ? v : '';
       }
@@ -202,50 +205,43 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
       return;
     }
 
-    if (isVendorKind(capture.kind)) {
-      const checked = validateVendorFieldsForAccept(
-        {
-          vendorName: headerValues.vendorName ?? '',
-          vendorInvoiceNo: headerValues.vendorInvoiceNo ?? '',
-          date: headerValues.date ?? '',
-          dueDate: headerValues.dueDate ?? '',
-          referenceNo: headerValues.referenceNo ?? '',
-          currency: headerValues.currency ?? '',
-          notes: headerValues.notes ?? '',
-        },
-        lines,
-        sourceTotals,
-        paymentHints
-      );
-      if (!checked.valid) {
-        setValidationErrors(checked.errors);
-        return;
-      }
-      const canonical = await accept(checked.payload as Record<string, unknown>);
-      if (canonical) {
-        onAccepted(canonical);
-      }
+    if (!isVendorKind(capture.kind)) {
+      setValidationErrors([`No typed review schema handler is registered in this panel for kind "${capture.kind}".`]);
       return;
     }
 
-    // Generic path for sales-invoice / bank / assistant-attachment reuse in PR 3-5.
-    const genericPayload: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(headerValues)) {
-      if (v.trim() !== '') genericPayload[k] = v.trim();
+    const checked = validateVendorFieldsForAccept(
+      {
+        vendorName: headerValues.vendorName ?? '',
+        vendorInvoiceNo: headerValues.vendorInvoiceNo ?? '',
+        date: headerValues.date ?? '',
+        dueDate: headerValues.dueDate ?? '',
+        referenceNo: headerValues.referenceNo ?? '',
+        currency: headerValues.currency ?? '',
+        notes: headerValues.notes ?? '',
+      },
+      lines,
+      sourceTotals,
+      paymentHints
+    );
+    if (!checked.valid) {
+      setValidationErrors(checked.errors);
+      return;
     }
-    const canonical = await accept(genericPayload);
+    const canonical = await accept(checked.payload as Record<string, unknown>);
     if (canonical) {
       onAccepted(canonical);
     }
   };
 
   const handleUseAlreadyAccepted = () => {
-    if (!capture || capture.status !== 'accepted') return;
+    if (!capture || capture.status !== 'accepted' || !capture.canApply) return;
     onAccepted(capture);
   };
 
   const descriptors = capture ? getFieldDescriptors(capture.kind, capture.schemaVersion) : [];
   const schemaSupported = capture ? isSupportedSchemaVersion(capture.schemaVersion) : true;
+  const kindHasTypedHandler = capture ? isVendorKind(capture.kind) : true;
   const gates = capture ? evaluateFinancialApplyGates(capture, orgCurrency) : null;
   const isAlreadyLinked = Boolean(capture?.link);
 
@@ -474,9 +470,6 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
           {schemaSupported && descriptors.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {descriptors.map((desc) => {
-                const conf = capture.fieldConfidences?.[desc.key] ?? null;
-                const boxBadge = formatBoxBadge(capture.fieldBoxes?.[desc.key] ?? null);
-                const lowConf = isLowConfidence(conf);
                 const readOnly = capture.status === 'accepted';
                 return (
                   <div key={desc.key} className={desc.type === 'textarea' ? 'sm:col-span-2 lg:col-span-3' : undefined}>
@@ -485,18 +478,6 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
                         {desc.label}
                         {desc.requiredForAccept && <span className="text-rose-500 ml-0.5">*</span>}
                       </label>
-                      <span className="flex items-center gap-1.5">
-                        {boxBadge && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-subtle)] text-[var(--text-muted)]">
-                            {boxBadge}
-                          </span>
-                        )}
-                        {lowConf && (
-                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300">
-                            Check this
-                          </span>
-                        )}
-                      </span>
                     </div>
                     {desc.type === 'textarea' ? (
                       <textarea
@@ -734,7 +715,7 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
                 </button>
                 <button
                   type="button"
-                  disabled={!!busy || !schemaSupported || !capture.bytesAvailable || !capture.canAccept}
+                  disabled={!!busy || !schemaSupported || !kindHasTypedHandler || !capture.bytesAvailable || !capture.canAccept}
                   onClick={() => void handleAcceptClick()}
                   className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl bg-[var(--brand-primary)] text-white hover:opacity-90 transition disabled:opacity-50"
                 >
@@ -750,7 +731,7 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
             {capture.status === 'accepted' && (
               <button
                 type="button"
-                disabled={!!busy || !schemaSupported || !capture.bytesAvailable}
+                disabled={!!busy || !schemaSupported || !kindHasTypedHandler || !capture.bytesAvailable || !capture.canApply}
                 onClick={handleUseAlreadyAccepted}
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl bg-[var(--brand-primary)] text-white hover:opacity-90 transition disabled:opacity-50"
               >

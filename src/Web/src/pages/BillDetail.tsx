@@ -58,11 +58,12 @@ export const BillDetail: React.FC = () => {
   >(null);
   const [isPaying, setIsPaying] = useState(false);
   const [linkedCaptures, setLinkedCaptures] = useState<DocumentCaptureView[]>([]);
-  const [detailAckSnapshot, setDetailAckSnapshot] = useState<{
-    captureId: string;
-    sourceGrandTotal: number | null;
-    formTotal: number;
-  } | null>(null);
+  const [detailAckSnapshots, setDetailAckSnapshots] = useState<
+    Record<string, { sourceGrandTotal: number | null; formTotal: number }>
+  >({});
+  const [serverReconciliation, setServerReconciliation] = useState<
+    Record<string, { sourceGrandTotal: number; formTotal: number; difference: number }>
+  >({});
 
   const handleCapturesLoaded = useCallback((items: DocumentCaptureView[]) => {
     setLinkedCaptures(items);
@@ -106,21 +107,30 @@ export const BillDetail: React.FC = () => {
 
   const act = async (kind: 'approve', path: string, done: string, confirmDuplicate = false) => {
     if (!bill) return;
-    const primaryDiscrepancyCapture = linkedCaptures.find((c) => {
+    const captureReviews = linkedCaptures.map((c) => {
       const fields = (c.acceptedFields ?? {}) as VendorCaptureFields;
-      return computeCaptureDiscrepancy(fields.sourceTotals ?? null, bill.total).hasDiscrepancy;
+      const override = serverReconciliation[c.id];
+      const disc = override
+        ? {
+            sourceGrandTotal: override.sourceGrandTotal,
+            formTotal: override.formTotal,
+            difference: override.difference,
+            hasDiscrepancy: Math.abs(override.difference) > 0.005,
+          }
+        : computeCaptureDiscrepancy(fields.sourceTotals ?? null, bill.total);
+      const snap = detailAckSnapshots[c.id];
+      const acknowledged = Boolean(
+        snap &&
+          snap.sourceGrandTotal === disc.sourceGrandTotal &&
+          snap.formTotal === disc.formTotal
+      );
+      return {
+        captureId: c.id,
+        sourceGrandTotal: disc.sourceGrandTotal,
+        formTotal: disc.formTotal,
+        discrepancyAcknowledged: acknowledged,
+      };
     });
-    const discrepancy = primaryDiscrepancyCapture
-      ? computeCaptureDiscrepancy(((primaryDiscrepancyCapture.acceptedFields ?? {}) as VendorCaptureFields).sourceTotals ?? null, bill.total)
-      : null;
-    const isAcked = Boolean(
-      primaryDiscrepancyCapture &&
-        discrepancy &&
-        detailAckSnapshot &&
-        detailAckSnapshot.captureId === primaryDiscrepancyCapture.id &&
-        detailAckSnapshot.sourceGrandTotal === discrepancy.sourceGrandTotal &&
-        detailAckSnapshot.formTotal === discrepancy.formTotal
-    );
 
     setBusy(kind);
     setError(null);
@@ -128,15 +138,10 @@ export const BillDetail: React.FC = () => {
       const url = `${path}?id=${bill.id}${confirmDuplicate ? '&confirmDuplicate=true' : ''}`;
       const res = await authFetch(url, {
         method: 'POST',
-        ...(primaryDiscrepancyCapture && discrepancy
+        ...(captureReviews.length > 0
           ? {
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                captureId: primaryDiscrepancyCapture.id,
-                sourceGrandTotal: discrepancy.sourceGrandTotal,
-                formTotal: discrepancy.formTotal,
-                discrepancyAcknowledged: isAcked,
-              }),
+              body: JSON.stringify({ captureReviews }),
             }
           : {}),
       });
@@ -147,7 +152,28 @@ export const BillDetail: React.FC = () => {
           return;
         }
         if (res.status === 409 && data?.code === 'DOCUMENT_REVIEW_REQUIRED') {
-          setError(data?.detail || 'The bill total differs from the linked source document total. Acknowledge the difference before approving.');
+          const nextOverrides: Record<string, { sourceGrandTotal: number; formTotal: number; difference: number }> = {};
+          if (Array.isArray(data.discrepancies)) {
+            for (const d of data.discrepancies) {
+              if (d?.captureId && typeof d.sourceGrandTotal === 'number' && typeof d.formTotal === 'number') {
+                nextOverrides[d.captureId] = {
+                  sourceGrandTotal: d.sourceGrandTotal,
+                  formTotal: d.formTotal,
+                  difference: typeof d.difference === 'number' ? d.difference : d.formTotal - d.sourceGrandTotal,
+                };
+              }
+            }
+          } else if (data?.captureId && typeof data.sourceGrandTotal === 'number' && typeof data.formTotal === 'number') {
+            nextOverrides[data.captureId] = {
+              sourceGrandTotal: data.sourceGrandTotal,
+              formTotal: data.formTotal,
+              difference: typeof data.difference === 'number' ? data.difference : data.formTotal - data.sourceGrandTotal,
+            };
+          }
+          if (Object.keys(nextOverrides).length > 0) {
+            setServerReconciliation((prev) => ({ ...prev, ...nextOverrides }));
+          }
+          setError(data?.detail || 'The bill total differs from one or more linked source documents. Acknowledge each difference before approving.');
           return;
         }
         throw new Error(res.status === 403 ? "You don't have permission to do that." : data?.message || data?.detail || `The bill could not be ${kind === 'approve' ? 'approved' : 'voided'}.`);
@@ -537,42 +563,64 @@ export const BillDetail: React.FC = () => {
       )}
 
       {isDraft && canApprove && (() => {
-        const discrepant = linkedCaptures.find((c) => {
-          const f = (c.acceptedFields ?? {}) as VendorCaptureFields;
-          return computeCaptureDiscrepancy(f.sourceTotals ?? null, bill.total).hasDiscrepancy;
-        });
-        if (!discrepant) return null;
-        const fields = (discrepant.acceptedFields ?? {}) as VendorCaptureFields;
-        const disc = computeCaptureDiscrepancy(fields.sourceTotals ?? null, bill.total);
-        const checked = Boolean(
-          detailAckSnapshot &&
-            detailAckSnapshot.captureId === discrepant.id &&
-            detailAckSnapshot.sourceGrandTotal === disc.sourceGrandTotal &&
-            detailAckSnapshot.formTotal === disc.formTotal
-        );
+        const discrepantCaptures = linkedCaptures
+          .map((c) => {
+            const f = (c.acceptedFields ?? {}) as VendorCaptureFields;
+            const override = serverReconciliation[c.id];
+            const disc = override
+              ? {
+                  sourceGrandTotal: override.sourceGrandTotal,
+                  formTotal: override.formTotal,
+                  difference: override.difference,
+                  hasDiscrepancy: Math.abs(override.difference) > 0.005,
+                }
+              : computeCaptureDiscrepancy(f.sourceTotals ?? null, bill.total);
+            return { capture: c, fields: f, disc };
+          })
+          .filter((item) => item.disc.hasDiscrepancy);
+
+        if (discrepantCaptures.length === 0) return null;
+
         return (
-          <section aria-label="Reconciliation acknowledgement" className="rounded-xl border border-rose-500/25 bg-rose-500/10 p-4 text-xs text-rose-700 dark:text-rose-300">
-            <label className="flex items-start gap-2.5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setDetailAckSnapshot({
-                      captureId: discrepant.id,
-                      sourceGrandTotal: disc.sourceGrandTotal,
-                      formTotal: disc.formTotal,
-                    });
-                  } else {
-                    setDetailAckSnapshot(null);
-                  }
-                }}
-                className="mt-0.5 rounded"
-              />
-              <span>
-                Linked source document ({discrepant.id}) total is {fields.sourceTotals?.grandTotal}, while this draft bill total is {formatCurrency(bill.total)}. I have reviewed this difference and acknowledge it for approval.
-              </span>
-            </label>
+          <section aria-label="Reconciliation acknowledgement" className="rounded-xl border border-rose-500/25 bg-rose-500/10 p-4 text-xs text-rose-700 dark:text-rose-300 space-y-2.5">
+            {discrepantCaptures.map(({ capture, fields, disc }) => {
+              const snap = detailAckSnapshots[capture.id];
+              const checked = Boolean(
+                snap &&
+                  snap.sourceGrandTotal === disc.sourceGrandTotal &&
+                  snap.formTotal === disc.formTotal
+              );
+              return (
+                <label key={capture.id} className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    aria-label={`Acknowledge difference for ${capture.id}`}
+                    checked={checked}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setDetailAckSnapshots((prev) => ({
+                          ...prev,
+                          [capture.id]: {
+                            sourceGrandTotal: disc.sourceGrandTotal,
+                            formTotal: disc.formTotal,
+                          },
+                        }));
+                      } else {
+                        setDetailAckSnapshots((prev) => {
+                          const next = { ...prev };
+                          delete next[capture.id];
+                          return next;
+                        });
+                      }
+                    }}
+                    className="mt-0.5 rounded"
+                  />
+                  <span>
+                    Linked source document ({capture.id}) total is {disc.sourceGrandTotal?.toFixed(2) ?? fields.sourceTotals?.grandTotal}, while this draft bill total is {formatCurrency(disc.formTotal)} (difference {disc.difference !== null ? `${disc.difference > 0 ? '+' : ''}${formatCurrency(disc.difference)}` : '—'}). I have reviewed this difference and acknowledge it for approval.
+                  </span>
+                </label>
+              );
+            })}
           </section>
         );
       })()}

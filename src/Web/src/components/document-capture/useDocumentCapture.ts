@@ -18,6 +18,8 @@ import {
 export interface UseDocumentCaptureOptions {
   orgSlug: string;
   scopeKey?: string;
+  /** Optional pre-fetched capabilities from the host page to avoid duplicate /capabilities fetches. */
+  capabilities?: DocumentCaptureCapabilities | null;
 }
 
 function generateIdempotencyKey(): string {
@@ -27,11 +29,17 @@ function generateIdempotencyKey(): string {
   return `cap_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 14)}`;
 }
 
-export function useDocumentCapture({ orgSlug, scopeKey = 'default' }: UseDocumentCaptureOptions) {
+export function useDocumentCapture({
+  orgSlug,
+  scopeKey = 'default',
+  capabilities: externalCapabilities,
+}: UseDocumentCaptureOptions) {
   const { authFetch } = useAuth();
+  const hasExternalCapabilities = externalCapabilities !== undefined;
 
-  const [capabilities, setCapabilities] = useState<DocumentCaptureCapabilities | null>(null);
-  const [capabilitiesLoading, setCapabilitiesLoading] = useState(true);
+  const [fetchedCapabilities, setFetchedCapabilities] = useState<DocumentCaptureCapabilities | null>(null);
+  const [capabilitiesLoading, setCapabilitiesLoading] = useState(!hasExternalCapabilities);
+  const capabilities = hasExternalCapabilities ? externalCapabilities : fetchedCapabilities;
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
@@ -76,8 +84,12 @@ export function useDocumentCapture({ orgSlug, scopeKey = 'default' }: UseDocumen
   // Always revoke object URLs on unmount.
   useEffect(() => () => revokePreview(), [revokePreview]);
 
-  // Fetch action-aware capture capabilities for the active workspace.
+  // Fetch action-aware capture capabilities for the active workspace only when not provided by the host.
   useEffect(() => {
+    if (hasExternalCapabilities) {
+      setCapabilitiesLoading(false);
+      return;
+    }
     let cancelled = false;
     const expectedOrg = orgSlug;
     setCapabilitiesLoading(true);
@@ -86,15 +98,15 @@ export function useDocumentCapture({ orgSlug, scopeKey = 'default' }: UseDocumen
         const res = await authFetch('/api/document-captures/capabilities');
         if (cancelled || activeScopeRef.current.split('::')[0] !== expectedOrg) return;
         if (!res.ok) {
-          setCapabilities(null);
+          setFetchedCapabilities(null);
           return;
         }
         const data: DocumentCaptureCapabilities = await res.json();
         if (!cancelled && activeScopeRef.current.split('::')[0] === expectedOrg) {
-          setCapabilities(data);
+          setFetchedCapabilities(data);
         }
       } catch {
-        if (!cancelled) setCapabilities(null);
+        if (!cancelled) setFetchedCapabilities(null);
       } finally {
         if (!cancelled) setCapabilitiesLoading(false);
       }
@@ -102,7 +114,7 @@ export function useDocumentCapture({ orgSlug, scopeKey = 'default' }: UseDocumen
     return () => {
       cancelled = true;
     };
-  }, [authFetch, orgSlug]);
+  }, [authFetch, hasExternalCapabilities, orgSlug]);
 
   const isCurrent = useCallback(
     (expectedScope: string, expectedGen: number) =>
