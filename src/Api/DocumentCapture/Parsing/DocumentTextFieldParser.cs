@@ -712,6 +712,11 @@ public static class DocumentTextFieldParser
         {
             status = "paid";
         }
+        else if (amountPaid is > 0m && grandTotal is > 0m)
+        {
+            // M1: explicit amountPaid >= grandTotal (within 0.01) => paid; 0 < amountPaid < grandTotal => partial.
+            status = amountPaid.Value + 0.01m >= grandTotal.Value ? "paid" : "partial";
+        }
         else if (hasDueDate)
         {
             status = "unpaid";

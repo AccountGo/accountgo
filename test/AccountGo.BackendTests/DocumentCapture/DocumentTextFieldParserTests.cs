@@ -743,6 +743,30 @@ public sealed class DocumentTextFieldParserTests
         Assert.False(tenderedHints.TryGetProperty("amountPaid", out _));
     }
 
+    // --- M1: explicit amountPaid vs grandTotal determines paid vs partial ---
+
+    [Fact]
+    public void Parse_PaymentHints_M1_ExplicitAmountPaidDeterminesPaidOrPartialAgainstGrandTotal()
+    {
+        var fullyPaid = ParseAndValidate("purchase-invoice", [
+            Line("Acme Supplies Ltd"),
+            Line("Total: EUR 500.00"),
+            Line("Amount Paid: EUR 500.00"),
+        ], out _);
+        var paidHints = fullyPaid.GetProperty("paymentHints");
+        Assert.Equal("paid", paidHints.GetProperty("paymentStatus").GetString());
+        Assert.Equal("500.00", paidHints.GetProperty("amountPaid").GetString());
+
+        var partiallyPaid = ParseAndValidate("purchase-invoice", [
+            Line("Acme Supplies Ltd"),
+            Line("Total: EUR 500.00"),
+            Line("Amount Paid: EUR 200.00"),
+        ], out _);
+        var partialHints = partiallyPaid.GetProperty("paymentHints");
+        Assert.Equal("partial", partialHints.GetProperty("paymentStatus").GetString());
+        Assert.Equal("200.00", partialHints.GetProperty("amountPaid").GetString());
+    }
+
     // --- L2: real tax-inclusive receipts recognised without TOTALS_INCONSISTENT ---
 
     [Fact]
