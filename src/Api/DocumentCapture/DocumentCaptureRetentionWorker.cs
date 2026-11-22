@@ -5,17 +5,31 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Api.DocumentCaptures;
 
 public sealed class DocumentCaptureRetentionWorker(IServiceScopeFactory scopes, ILogger<DocumentCaptureRetentionWorker> logger,
-    TimeProvider? timeProvider = null) : BackgroundService
+    IOptions<DocumentCaptureOptions> options, TimeProvider? timeProvider = null) : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromHours(1);
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        var startDelay = TimeSpan.FromSeconds(options.Value.RetentionStartDelaySeconds);
+        if (startDelay > TimeSpan.Zero)
+        {
+            try
+            {
+                await Task.Delay(startDelay, _timeProvider, stoppingToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                return;
+            }
+        }
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try

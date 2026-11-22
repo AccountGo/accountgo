@@ -15,8 +15,10 @@ using Core.Entitlements;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using UglyToad.PdfPig.Writer;
 using Xunit;
 
 namespace AccountGo.BackendTests.DocumentCapture;
@@ -27,6 +29,7 @@ public sealed class DocumentCaptureControllerHttpTests : IAsyncLifetime
     private WebApplicationFactory<Program> _factory = null!;
     private HttpClient _client = null!;
     private string _token = string.Empty;
+    private string _secondToken = string.Empty;
     private string _companySlug = string.Empty;
     private int _companyId;
 
@@ -75,6 +78,19 @@ public sealed class DocumentCaptureControllerHttpTests : IAsyncLifetime
                      .Where(role => role.Name == "Accountant" || role.Name == "Sales Representative" || role.Name == "Purchasing Agent")
                      .Select(role => role.Id).ToListAsync())
             db.CompanyMemberSecurityRoles.Add(new CompanyMemberSecurityRole { CompanyMemberId = member.Id, SecurityRoleId = roleId });
+        var secondUser = new ApplicationUser
+        {
+            UserName = $"capture-second-{Guid.NewGuid():N}@example.test",
+            Email = $"capture-second-{Guid.NewGuid():N}@example.test",
+            EmailConfirmed = true
+        };
+        Assert.True((await users.CreateAsync(secondUser)).Succeeded);
+        _secondToken = (await auth.CreateToken(secondUser, populateExp: true)).AccessToken;
+        db.CompanyMembers.Add(new CompanyMember
+        {
+            CompanyId = _companyId, UserId = secondUser.Id, Role = CompanyMemberRole.Member,
+            Status = CompanyMemberStatus.Active, JoinedAt = DateTime.UtcNow
+        });
         await db.SaveChangesAsync();
     }
 
@@ -126,7 +142,8 @@ public sealed class DocumentCaptureControllerHttpTests : IAsyncLifetime
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
             Assert.Equal("attachment", response.Content.Headers.ContentDisposition?.DispositionType);
-            Assert.Equal("no-store", response.Headers.CacheControl?.NoStore == true ? "no-store" : null);
+            Assert.True(response.Headers.CacheControl?.NoStore == true);
+            Assert.Contains("private", response.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
             Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
         }
 
@@ -219,6 +236,247 @@ public sealed class DocumentCaptureControllerHttpTests : IAsyncLifetime
         Assert.Equal(first, second);
     }
 
+    [Fact]
+    public async Task AssistantOwnerMismatchReturnsByteIdenticalUnknownIdAcrossRoutesAndDoesNotDedupe()
+    {
+        var source = CreatePng(0xFFAA5511);
+        var ownerId = await UploadKindAsync(_token, "assistant-attachment", source, "assistant-shared-key");
+        using (var request = NewRequest(HttpMethod.Post, $"/api/document-captures/{ownerId}/accept"))
+        {
+            request.Content = JsonContent.Create(new { fields = new { fields = new[] { new { label = "Total", value = "12" } } } });
+            using var response = await _client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+        using var missingRequest = NewRequest(HttpMethod.Get, "/api/document-captures/cap_00000000000000000000000000");
+        using var missingResponse = await _client.SendAsync(missingRequest);
+        var missingBody = await missingResponse.Content.ReadAsByteArrayAsync();
+
+        foreach (var (method, path, content) in new (HttpMethod Method, string Path, HttpContent? Content)[]
+        {
+            (HttpMethod.Get, $"/api/document-captures/{ownerId}", null),
+            (HttpMethod.Get, $"/api/document-captures/{ownerId}/bytes", null),
+            (HttpMethod.Post, $"/api/document-captures/{ownerId}/accept", JsonContent.Create(new { fields = new { fields = new[] { new { label = "Total", value = "12" } } } })),
+            (HttpMethod.Post, $"/api/document-captures/{ownerId}/reject", new StringContent("{}", System.Text.Encoding.UTF8, "application/json")),
+            (HttpMethod.Post, $"/api/document-captures/{ownerId}/link", JsonContent.Create(new { targetType = "bill", targetId = "bill_missing" }))
+        })
+        {
+            using var request = NewRequestForToken(method, path, _secondToken);
+            request.Content = content;
+            using var response = await _client.SendAsync(request);
+            Assert.True(response.StatusCode == HttpStatusCode.NotFound,
+                $"Expected shared 404 for {method} {path}, got {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
+            Assert.Equal(missingBody, await response.Content.ReadAsByteArrayAsync());
+        }
+
+        var otherCreatorId = await UploadKindAsync(_secondToken, "assistant-attachment", source, "assistant-shared-key");
+        Assert.NotEqual(ownerId, otherCreatorId);
+    }
+
+    [Fact]
+    public async Task UploadHttpMatrixCoversAuthenticationPermissionsMediaAndPdfBytePreservation()
+    {
+        using (var unauthenticated = new HttpRequestMessage(HttpMethod.Get, "/api/document-captures/capabilities"))
+        using (var response = await _client.SendAsync(unauthenticated))
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+
+        using (var request = NewRequestForToken(HttpMethod.Post, "/api/document-captures", _secondToken))
+        using (var form = CreateUploadForm("purchase-invoice", CreatePng(0xFFABCD12), "image/png"))
+        {
+            request.Content = form;
+            using var response = await _client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+            using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal("DOCUMENT_PERMISSION_REQUIRED", problem.RootElement.GetProperty("code").GetString());
+        }
+
+        using (var request = NewRequest(HttpMethod.Post, "/api/document-captures"))
+        using (var form = CreateUploadForm("purchase-invoice", Array.Empty<byte>(), "image/png"))
+        {
+            request.Content = form;
+            using var response = await _client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Equal("DOCUMENT_EMPTY", (await ReadProblemCodeAsync(response)));
+        }
+
+        using (var request = NewRequest(HttpMethod.Post, "/api/document-captures"))
+        using (var form = CreateUploadForm("purchase-invoice", [0x47, 0x49, 0x46, 0x38, 0x39, 0x61], "image/gif"))
+        {
+            request.Content = form;
+            using var response = await _client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
+            Assert.Equal("DOCUMENT_UNSUPPORTED_TYPE", await ReadProblemCodeAsync(response));
+        }
+
+        var oversized = new byte[Api.DocumentCaptures.DocumentCaptureImageLimits.MaxInputBytes + 1];
+        using (var request = NewRequest(HttpMethod.Post, "/api/document-captures"))
+        using (var form = CreateUploadForm("purchase-invoice", oversized, "image/png"))
+        {
+            request.Content = form;
+            using var response = await _client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+            Assert.Equal("DOCUMENT_TOO_LARGE", await ReadProblemCodeAsync(response));
+        }
+
+        var pdfBuilder = new PdfDocumentBuilder();
+        pdfBuilder.AddPage(100, 100);
+        var pdf = pdfBuilder.Build();
+        var pdfId = await UploadFileAsync(pdf, "application/pdf", "pdf-http-key");
+        using (var request = NewRequest(HttpMethod.Get, $"/api/document-captures/{pdfId}/bytes"))
+        using (var response = await _client.SendAsync(request))
+        {
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal(pdf, await response.Content.ReadAsByteArrayAsync());
+            Assert.Equal("attachment", response.Content.Headers.ContentDisposition?.DispositionType);
+            Assert.True(response.Headers.CacheControl?.NoStore == true);
+            Assert.Contains("private", response.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
+        }
+    }
+
+    [Fact]
+    public async Task CompanyLockContentionReturnsRetryAfterAndDocumentBusyOverHttp()
+    {
+        await using var blocker = new SqliteConnection($"Data Source={_databasePath}");
+        await blocker.OpenAsync();
+        await using var held = blocker.BeginTransaction(deferred: false);
+        using var request = NewRequest(HttpMethod.Post, "/api/document-captures");
+        request.Content = CreateUploadForm("purchase-invoice", CreatePng(0xFF334455), "image/png");
+        using var response = await _client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal(TimeSpan.FromSeconds(1), response.Headers.RetryAfter?.Delta);
+        Assert.Equal("DOCUMENT_BUSY", await ReadProblemCodeAsync(response));
+    }
+
+    [Fact]
+    public async Task CrossCompanyCaptureAndLinkTargetIdsMatchMissingIdResponses()
+    {
+        string foreignCaptureId;
+        string foreignBillId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            db.SuppressTenantSecurityCheck = true;
+            var suffix = Guid.NewGuid().ToString("N");
+            var company = new Company
+            {
+                Name = "Foreign capture workspace", CompanyCode = "X" + suffix[..5], Slug = "foreign-" + suffix[..8]
+            };
+            db.Companies.Add(company);
+            await db.SaveChangesAsync();
+            foreignCaptureId = PublicIdGenerator.New("cap");
+            db.DocumentCaptures.Add(new Core.Domain.DocumentCapture
+            {
+                CompanyId = company.Id, PublicId = foreignCaptureId, Kind = "purchase-invoice", SchemaVersion = 1,
+                Status = "ready", SourceHash = new string('d', 64), ContentHash = new string('e', 64),
+                NormalizationVersion = "image-normalization-v2", ContentType = "image/png", ByteCount = 3,
+                PageCount = 1, RequestFingerprint = new string('f', 64), ExtractionGeneration = 1,
+                CreatedBy = "foreign-user", CreatedAt = DateTime.UtcNow, ExpiresAt = DateTime.UtcNow.AddDays(1)
+            });
+            foreignBillId = PublicIdGenerator.New("bill");
+            db.PurchaseInvoiceHeaders.Add(new PurchaseInvoiceHeader
+            {
+                CompanyId = company.Id, PublicId = foreignBillId, Date = new DateTime(2026, 11, 20), VendorInvoiceNo = "FOREIGN-1"
+            });
+            await db.SaveChangesAsync();
+        }
+
+        using var missingCaptureRequest = NewRequest(HttpMethod.Get, "/api/document-captures/cap_00000000000000000000000000");
+        using var missingCaptureResponse = await _client.SendAsync(missingCaptureRequest);
+        using var foreignCaptureRequest = NewRequest(HttpMethod.Get, $"/api/document-captures/{foreignCaptureId}");
+        using var foreignCaptureResponse = await _client.SendAsync(foreignCaptureRequest);
+        Assert.Equal(HttpStatusCode.NotFound, foreignCaptureResponse.StatusCode);
+        Assert.Equal(await missingCaptureResponse.Content.ReadAsByteArrayAsync(), await foreignCaptureResponse.Content.ReadAsByteArrayAsync());
+
+        var ownCaptureId = (await UploadAsync(CreatePng(0xFF668822), "cross-company-link")).GetProperty("id").GetString()!;
+        using (var acceptRequest = NewRequest(HttpMethod.Post, $"/api/document-captures/{ownCaptureId}/accept"))
+        {
+            acceptRequest.Content = JsonContent.Create(new { fields = new { date = "2026-11-20", vendorName = "Vendor" } });
+            using var acceptResponse = await _client.SendAsync(acceptRequest);
+            Assert.Equal(HttpStatusCode.OK, acceptResponse.StatusCode);
+        }
+        var missingBillId = PublicIdGenerator.New("bill");
+        using var missingLinkRequest = NewRequest(HttpMethod.Post, $"/api/document-captures/{ownCaptureId}/link");
+        missingLinkRequest.Content = JsonContent.Create(new { targetType = "bill", targetId = missingBillId });
+        using var missingLinkResponse = await _client.SendAsync(missingLinkRequest);
+        using var foreignLinkRequest = NewRequest(HttpMethod.Post, $"/api/document-captures/{ownCaptureId}/link");
+        foreignLinkRequest.Content = JsonContent.Create(new { targetType = "bill", targetId = foreignBillId });
+        using var foreignLinkResponse = await _client.SendAsync(foreignLinkRequest);
+        Assert.Equal(HttpStatusCode.NotFound, foreignLinkResponse.StatusCode);
+        Assert.Equal(await missingLinkResponse.Content.ReadAsByteArrayAsync(), await foreignLinkResponse.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
+    public async Task ProviderFailureReturns422WithCapturePublicIdOverHttp()
+    {
+        var extractor = Assert.IsType<Api.DocumentCaptures.FakeDocumentFieldExtractor>(
+            _factory.Services.GetRequiredService<Api.DocumentCaptures.IDocumentFieldExtractor>());
+        var fixtures = (IDictionary<string, string>)typeof(Api.DocumentCaptures.FakeDocumentFieldExtractor)
+            .GetField("_fixtures", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetValue(extractor)!;
+        var original = fixtures["purchase-invoice"];
+        fixtures["purchase-invoice"] = "{\"date\":\"not-a-date\"}";
+        try
+        {
+            using var request = NewRequest(HttpMethod.Post, "/api/document-captures");
+            request.Content = CreateUploadForm("purchase-invoice", CreatePng(0xFF998877), "image/png");
+            using var response = await _client.SendAsync(request);
+            Assert.True(response.StatusCode == (HttpStatusCode)422,
+                $"Expected provider failure response, got {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal("DOCUMENT_PROVIDER_OUTPUT_INVALID", body.RootElement.GetProperty("code").GetString());
+            Assert.StartsWith("cap_", body.RootElement.GetProperty("captureId").GetString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            fixtures["purchase-invoice"] = original;
+        }
+    }
+
+    private static MultipartFormDataContent CreateUploadForm(string kind, byte[] bytes, string contentType)
+    {
+        var form = new MultipartFormDataContent();
+        form.Add(new StringContent(kind), "Kind");
+        form.Add(new StringContent("1"), "SchemaVersion");
+        var file = new ByteArrayContent(bytes);
+        file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        form.Add(file, "File", "document.bin");
+        return form;
+    }
+
+    private async Task<string> UploadFileAsync(byte[] bytes, string contentType, string key)
+    {
+        using var request = NewRequest(HttpMethod.Post, "/api/document-captures");
+        request.Headers.Add("Idempotency-Key", key);
+        request.Content = CreateUploadForm("purchase-invoice", bytes, contentType);
+        using var response = await _client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return body.RootElement.GetProperty("id").GetString()!;
+    }
+
+    private static async Task<string> ReadProblemCodeAsync(HttpResponseMessage response)
+    {
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return body.RootElement.GetProperty("code").GetString()!;
+    }
+
+    private async Task<string> UploadKindAsync(string token, string kind, byte[] bytes, string key)
+    {
+        using var request = NewRequestForToken(HttpMethod.Post, "/api/document-captures", token);
+        request.Headers.Add("Idempotency-Key", key);
+        using var form = new MultipartFormDataContent();
+        form.Add(new StringContent(kind), "Kind");
+        form.Add(new StringContent("1"), "SchemaVersion");
+        var file = new ByteArrayContent(bytes);
+        file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+        form.Add(file, "File", "assistant.png");
+        request.Content = form;
+        using var response = await _client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return body.RootElement.GetProperty("id").GetString()!;
+    }
+
     private async Task<JsonElement> UploadAsync(byte[] bytes, string idempotencyKey)
     {
         using var request = NewRequest(HttpMethod.Post, "/api/document-captures");
@@ -271,9 +529,12 @@ public sealed class DocumentCaptureControllerHttpTests : IAsyncLifetime
     }
 
     private HttpRequestMessage NewRequest(HttpMethod method, string path)
+        => NewRequestForToken(method, path, _token);
+
+    private HttpRequestMessage NewRequestForToken(HttpMethod method, string path, string token)
     {
         var request = new HttpRequestMessage(method, path);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         request.Headers.Add("X-AccountGo-Org", _companySlug);
         return request;
     }

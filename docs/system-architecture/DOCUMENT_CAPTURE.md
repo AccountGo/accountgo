@@ -9,6 +9,7 @@ Status: implementation record for the approved document-capture design. Parser s
 - `FakeDocumentFieldExtractor` is development/test only. The production adapter remains unconfigured until a later owner instruction names a provider. New extraction is disabled by default; evidence reads remain independently authorized.
 - Accepted bytes and fields remain until workspace deletion. Abandoned unaccepted bytes expire after seven days; attempt reservations expire after 48 hours. Rejection deletes bytes only for bank and assistant captures.
 - The runtime flag controls upload, retry, and accept. It does not block reject, linking an already accepted capture, or authorized evidence reads. Provider availability is reported separately and gates upload/extraction, not manual acceptance.
+- The feature grant gates new upload and retry. Accepting an existing capture uses the existing kind-specific write permission and module access, plus the runtime flag; it does not require the new-capture feature grant.
 - PDFs are retained byte-for-byte and served as authenticated attachments. Structural validation is not sanitization or malware certification.
 
 ## Bounded contracts
@@ -75,9 +76,11 @@ The API exposes capability discovery at `GET /api/document-captures/capabilities
 - Resource-specific evidence reads use the existing authorization service: unlinked captures require the relevant module's capture-review read capability; linked evidence requires target read permission and target resource access on every metadata and byte path. Bank evidence additionally requires the existing sensitive banking permission. Assistant evidence is creator-only.
 - Company liveness is checked after tenant resolution and again in state-changing transactions. Cleanup commits `DeletedAt` first and is retried by a bounded purge worker.
 - Sensitive account identifiers in financial free text are replaced completely with `••••` before storage. Masked fields are `notes` and each financial line's `description`, plus assistant field `label`/`value` and bounded extractor raw text. Structured values such as invoice numbers, amounts, quantities, dates, and routing/account fields are not rewritten by the financial free-text masker.
+- Account-like digit runs are masked except when the complete matched token parses as `yyyy-MM-dd` or `yyyyMMdd` with a year from 1990 through 2100. This date exemption avoids masking ordinary financial due dates; masking remains a heuristic, not complete PII detection.
 - Company attempts are reserved transactionally. Admission-lock contention returns `503 DOCUMENT_BUSY` with `Retry-After: 1`; it is not reported as a rate limit. Rate-limit responses remain `429 DOCUMENT_RATE_LIMITED`.
 - `Idempotency-Key` may be omitted. An explicitly empty or over-80-character value returns `400 DOCUMENT_IDEMPOTENCY_KEY_INVALID`; an omitted key relies on source-hash deduplication and has no key replay guarantee.
 - Runtime-disabled accept returns `503 DOCUMENT_CAPTURE_DISABLED`; upload while disabled or without a configured provider returns `503 DOCUMENT_CAPTURE_UNCONFIGURED`.
+- The retention worker waits 60 seconds after process start by default before its first purge pass. `DocumentCapture:RetentionStartDelaySeconds` configures a delay from 0 through 3,600 seconds.
 
 ## PDF parser decision and policy
 

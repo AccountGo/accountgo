@@ -130,6 +130,149 @@ public sealed class DocumentCapturePostgresConcurrencyTests
     }
 
     [PostgresOnlyFact]
+    public async Task RetentionSkipsActiveLeasePurgesAfterExpiryAndReportsMissingReadyBytes()
+    {
+        using var postgres = PostgresTestDatabase.CreateIfConfigured()!;
+        var tenant = new TestTenantContext(CompanyId);
+        var options = new DbContextOptionsBuilder<PostgresApiDbContext>().UseNpgsql(postgres.ConnectionString).Options;
+        await CreateCompanyAsync(options, tenant);
+        var captureOptions = CaptureOptions();
+        string publicId;
+        int captureId;
+        var now = DateTime.UtcNow;
+        await using (var db = new PostgresApiDbContext(options, tenant))
+        {
+            publicId = (await CreateService(db, tenant, CreateEntitlement(), captureOptions)
+                .UploadAsync("purchase-invoice", 1, "image/png", CreatePng(18), "retention-lease", CancellationToken.None)).Id;
+            captureId = await db.DocumentCaptures.Where(row => row.PublicId == publicId).Select(row => row.Id).SingleAsync();
+            await db.DocumentCaptures.Where(row => row.Id == captureId).ExecuteUpdateAsync(update => update
+                .SetProperty(row => row.Status, "extracting")
+                .SetProperty(row => row.ExpiresAt, now.AddDays(-8))
+                .SetProperty(row => row.LeaseExpiresAt, now.AddMinutes(2)));
+            await new DocumentCaptureRetentionService(db, new DocumentCaptureAdmissionLock(db)).PurgeAsync(now, CancellationToken.None);
+            Assert.True(await db.DocumentCaptureBlobs.AnyAsync(blob => blob.CaptureId == captureId));
+
+            await db.DocumentCaptures.Where(row => row.Id == captureId).ExecuteUpdateAsync(update => update
+                .SetProperty(row => row.Status, "ready")
+                .SetProperty(row => row.LeaseExpiresAt, (DateTime?)now.AddMinutes(-1)));
+            await new DocumentCaptureRetentionService(db, new DocumentCaptureAdmissionLock(db)).PurgeAsync(now, CancellationToken.None);
+            Assert.False(await db.DocumentCaptureBlobs.AnyAsync(blob => blob.CaptureId == captureId));
+            var view = await CreateService(db, tenant, CreateEntitlement(), captureOptions).GetAsync(captureId, CancellationToken.None);
+            Assert.False(view.BytesAvailable);
+            Assert.False(view.CanAccept);
+        }
+    }
+
+    [PostgresOnlyFact]
+    public async Task AbandonedPurgeRacingAcceptNeverLeavesAcceptedCaptureWithoutBytes()
+    {
+        using var postgres = PostgresTestDatabase.CreateIfConfigured()!;
+        var tenant = new TestTenantContext(CompanyId);
+        var options = new DbContextOptionsBuilder<PostgresApiDbContext>().UseNpgsql(postgres.ConnectionString).Options;
+        await CreateCompanyAsync(options, tenant);
+        var captureOptions = CaptureOptions();
+        int captureId;
+        await using (var db = new PostgresApiDbContext(options, tenant))
+        {
+            var view = await CreateService(db, tenant, CreateEntitlement(), captureOptions)
+                .UploadAsync("purchase-invoice", 1, "image/png", CreatePng(20), "purge-accept-race", CancellationToken.None);
+            captureId = await db.DocumentCaptures.Where(row => row.PublicId == view.Id).Select(row => row.Id).SingleAsync();
+            await db.DocumentCaptures.Where(row => row.Id == captureId)
+                .ExecuteUpdateAsync(update => update.SetProperty(row => row.ExpiresAt, DateTime.UtcNow.AddDays(-8)));
+        }
+
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var accept = Task.Run(async () =>
+        {
+            await gate.Task;
+            await using var db = new PostgresApiDbContext(options, tenant);
+            try
+            {
+                await CreateService(db, tenant, CreateEntitlement(), captureOptions)
+                    .AcceptAsync(captureId, "{\"date\":\"2026-11-20\"}", CancellationToken.None);
+                return "accepted";
+            }
+            catch (DocumentCaptureServiceException exception) { return exception.ErrorCode; }
+        });
+        var purge = Task.Run(async () =>
+        {
+            await gate.Task;
+            await using var db = new PostgresApiDbContext(options, tenant);
+            await new DocumentCaptureRetentionService(db, new DocumentCaptureAdmissionLock(db))
+                .PurgeAsync(DateTime.UtcNow, CancellationToken.None);
+        });
+        gate.SetResult();
+        await Task.WhenAll(accept, purge);
+
+        await using var verify = new PostgresApiDbContext(options, tenant);
+        var capture = await verify.DocumentCaptures.SingleAsync(row => row.Id == captureId);
+        var hasBytes = await verify.DocumentCaptureBlobs.AnyAsync(row => row.CaptureId == captureId);
+        if (capture.Status == "accepted")
+        {
+            Assert.Equal("accepted", await accept);
+            Assert.True(hasBytes, "An accepted capture must retain its evidence bytes when purge races acceptance.");
+        }
+        else
+        {
+            Assert.Equal("DOCUMENT_BYTES_UNAVAILABLE", await accept);
+            Assert.False(hasBytes);
+        }
+    }
+
+    [PostgresOnlyFact]
+    public Task FinalizationLockReleasedDuringRetryAllowsReadyState() => AssertFinalizationLockRetryAsync(TimeSpan.FromMilliseconds(150), shouldSucceed: true);
+
+    [PostgresOnlyFact]
+    public Task FinalizationLockHeldPastRetriesReturnsBusyAndPreservesReservation() => AssertFinalizationLockRetryAsync(TimeSpan.FromMilliseconds(2200), shouldSucceed: false);
+
+    private static async Task AssertFinalizationLockRetryAsync(TimeSpan lockDuration, bool shouldSucceed)
+    {
+        using var postgres = PostgresTestDatabase.CreateIfConfigured()!;
+        var tenant = new TestTenantContext(CompanyId);
+        var dbOptions = new DbContextOptionsBuilder<PostgresApiDbContext>().UseNpgsql(postgres.ConnectionString).Options;
+        await CreateCompanyAsync(dbOptions, tenant);
+        var captureOptions = CaptureOptions();
+        var extractor = new BlockingExtractor();
+        var upload = Task.Run(async () =>
+        {
+            await using var db = new PostgresApiDbContext(dbOptions, tenant);
+            try
+            {
+                var view = await CreateService(db, tenant, CreateEntitlement(), captureOptions, extractor)
+                    .UploadAsync("purchase-invoice", 1, "image/png", CreatePng(19), "finalization-lock", CancellationToken.None);
+                return (View: view, Error: (string?)null);
+            }
+            catch (DocumentCaptureServiceException exception)
+            {
+                return (View: (DocumentCaptureView?)null, Error: exception.ErrorCode);
+            }
+        });
+        await extractor.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await using var lockDb = new PostgresApiDbContext(dbOptions, tenant);
+        await using var held = await new DocumentCaptureAdmissionLock(lockDb).AcquireCompanyAsync(CompanyId, CancellationToken.None);
+        extractor.Release();
+        await Task.Delay(TimeSpan.FromMilliseconds(30));
+        await Task.Delay(lockDuration);
+        await held.DisposeAsync();
+        var result = await upload.WaitAsync(TimeSpan.FromSeconds(10));
+
+        await using var verify = new PostgresApiDbContext(dbOptions, tenant);
+        var stored = await verify.DocumentCaptures.SingleAsync();
+        Assert.Equal(1, await verify.DocumentCaptureAttempts.CountAsync());
+        if (shouldSucceed)
+        {
+            Assert.Null(result.Error);
+            Assert.Equal("ready", stored.Status);
+        }
+        else
+        {
+            Assert.Equal("DOCUMENT_BUSY", result.Error);
+            Assert.Equal("extracting", stored.Status);
+            Assert.Equal(1, stored.ExtractionGeneration);
+        }
+    }
+
+    [PostgresOnlyFact]
     public async Task HeldCompanyLock_MapsAcceptRejectAndLinkToRetryableBusyResponses()
     {
         using var postgres = PostgresTestDatabase.CreateIfConfigured()!;

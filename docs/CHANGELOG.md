@@ -11,6 +11,10 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ## [Unreleased]
 
+### Fixed
+
+- Document capture now applies the correct banking permissions, keeps review actions available for existing captures after plan changes, and reports unsupported file types consistently.
+
 ## [0.3.0] - 2026-11-21
 
 Release notes: https://github.com/AccountGo/accountgo/releases/tag/v0.3.0

@@ -19,6 +19,7 @@ public sealed class DocumentCaptureExtractorTests
         Assert.Equal(60, options.MaxAttemptsPerDay);
         Assert.Equal(4, options.ImageDecodeSlots);
         Assert.Equal(1, options.PdfParseSlots);
+        Assert.Equal(60, options.RetentionStartDelaySeconds);
     }
 
     [Fact]
@@ -46,6 +47,8 @@ public sealed class DocumentCaptureExtractorTests
             new DocumentCaptureOptions { ImageDecodeSlots = 5 }, environment));
         Assert.Throws<InvalidOperationException>(() => DocumentCaptureOptions.Validate(
             new DocumentCaptureOptions { PdfParseSlots = 0 }, environment));
+        Assert.Throws<InvalidOperationException>(() => DocumentCaptureOptions.Validate(
+            new DocumentCaptureOptions { RetentionStartDelaySeconds = 3_601 }, environment));
     }
 
     [Fact]

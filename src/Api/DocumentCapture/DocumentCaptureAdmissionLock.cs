@@ -45,8 +45,9 @@ public sealed class DocumentCaptureAdmissionLock(ApiDbContext db)
             {
                 throw new DocumentCaptureAdmissionBusyException();
             }
-            return await db.Database.UseTransactionAsync(transaction, cancellationToken).ConfigureAwait(false)
+            var attached = await db.Database.UseTransactionAsync(transaction, cancellationToken).ConfigureAwait(false)
                 ?? throw new InvalidOperationException("The SQLite admission transaction could not be attached to the API context.");
+            return new OwnedSqliteTransaction(attached, transaction);
         }
 
         var relationalTransaction = await db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
@@ -84,6 +85,37 @@ public sealed class DocumentCaptureAdmissionLock(ApiDbContext db)
             await relationalTransaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
             await relationalTransaction.DisposeAsync().ConfigureAwait(false);
             throw;
+        }
+    }
+
+    private sealed class OwnedSqliteTransaction(IDbContextTransaction attached, SqliteTransaction underlying) : IDbContextTransaction
+    {
+        public Guid TransactionId => attached.TransactionId;
+        public bool SupportsSavepoints => attached.SupportsSavepoints;
+        public void Commit() => attached.Commit();
+        public Task CommitAsync(CancellationToken cancellationToken = default) => attached.CommitAsync(cancellationToken);
+        public void Rollback() => attached.Rollback();
+        public Task RollbackAsync(CancellationToken cancellationToken = default) => attached.RollbackAsync(cancellationToken);
+        public void CreateSavepoint(string name) => attached.CreateSavepoint(name);
+        public Task CreateSavepointAsync(string name, CancellationToken cancellationToken = default) =>
+            attached.CreateSavepointAsync(name, cancellationToken);
+        public void RollbackToSavepoint(string name) => attached.RollbackToSavepoint(name);
+        public Task RollbackToSavepointAsync(string name, CancellationToken cancellationToken = default) =>
+            attached.RollbackToSavepointAsync(name, cancellationToken);
+        public void ReleaseSavepoint(string name) => attached.ReleaseSavepoint(name);
+        public Task ReleaseSavepointAsync(string name, CancellationToken cancellationToken = default) =>
+            attached.ReleaseSavepointAsync(name, cancellationToken);
+
+        public void Dispose()
+        {
+            try { attached.Dispose(); }
+            finally { underlying.Dispose(); }
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            try { await attached.DisposeAsync().ConfigureAwait(false); }
+            finally { await underlying.DisposeAsync().ConfigureAwait(false); }
         }
     }
 

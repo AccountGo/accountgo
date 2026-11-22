@@ -53,6 +53,9 @@ public static class DocumentCaptureImageNormalizer
             throw new DocumentCaptureMediaException("DOCUMENT_EMPTY", "An image file is required.");
         if (original.Length > DocumentCaptureImageLimits.MaxInputBytes)
             throw new DocumentCaptureMediaException("DOCUMENT_TOO_LARGE", "The uploaded image exceeds the size limit.");
+        if (!string.Equals(declaredContentType, "image/png", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(declaredContentType, "image/jpeg", StringComparison.OrdinalIgnoreCase))
+            throw new DocumentCaptureMediaException("DOCUMENT_UNSUPPORTED_TYPE", "Only PNG and JPEG images are supported.");
 
         if (decodeSlots is < 1 or > DocumentCaptureImageLimits.DecodeGateSlots)
             throw new ArgumentOutOfRangeException(nameof(decodeSlots));

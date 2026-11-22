@@ -99,7 +99,7 @@ public static class DocumentCaptureAccessPolicy
         "bank" => new(
             [SystemModules.Sales, SystemModules.Purchases, SystemModules.Financials],
             [SystemPermissions.BankingAccountsManage],
-            [SystemPermissions.BankingAccountsManage, SystemPermissions.BankingAccountsView]),
+            [SystemPermissions.BankingAccountsManage]),
         "assistant-attachment" => new([], [], []),
         _ => null
     };

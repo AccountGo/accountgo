@@ -9,12 +9,18 @@ public sealed class DocumentCaptureMaskingTests
     [Theory]
     [InlineData("routing 021000021", "routing ••••")]
     [InlineData("account 1234-5678-9012", "account ••••")]
-    [InlineData("IBAN GB82 WEST 1234 5698 7654 32", "IBAN ••••")]
     [InlineData("12345678", "••••")]
     [InlineData("12345678901234567", "••••")]
     [InlineData("1234567", "1234567")]
     [InlineData("123456789012345678", "123456789012345678")]
     [InlineData("A021000021Z", "A••••Z")]
+    [InlineData("2026-11-21", "2026-11-21")]
+    [InlineData("Due 2026-11-21; account 12345678", "Due 2026-11-21; account ••••")]
+    [InlineData("20261121", "20261121")]
+    [InlineData("20261321", "••••")]
+    [InlineData("account 123456789012", "account ••••")]
+    [InlineData("account 1234 5678 9012", "account ••••")]
+    [InlineData("IBAN GB82 WEST 1234 5698 7654 32", "IBAN ••••")]
     public void MaskSensitiveValue_MasksFinancialIdentifiers(string input, string expected)
     {
         Assert.Equal(expected, DocumentCaptureMasking.MaskSensitiveValue(input));

@@ -4,6 +4,7 @@
 #nullable enable
 using Api.DocumentCaptures;
 using Api.Filters;
+using Api.PublicIds;
 using Core.Entitlements;
 using Core.Tenancy;
 using Microsoft.AspNetCore.Authorization;
@@ -145,6 +146,10 @@ public sealed class DocumentCapturesController(
             var fieldsJson = request.Fields.ToString(Formatting.None);
             return Ok(await captures.AcceptAsync(id, fieldsJson, cancellationToken).ConfigureAwait(false));
         }
+        catch (PublicIdSerializationException)
+        {
+            throw;
+        }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException)
         {
             return ErrorProblem(400, "DOCUMENT_ACCEPT_INVALID");
@@ -232,6 +237,8 @@ public sealed class DocumentCapturesController(
 
     private ObjectResult ServiceProblem(DocumentCaptureServiceException exception)
     {
+        if (exception.StatusCode == StatusCodes.Status404NotFound && exception.ErrorCode == "DOCUMENT_NOT_FOUND")
+            return new NotFoundObjectResult(new { message = PublicIdErrorCodes.NotFoundMessage, code = PublicIdErrorCodes.UnknownId });
         if (exception.EntitlementDecision is { } decision)
         {
             var problem = EntitlementProblemFactory.FromDecision(decision, tenant, entitlements.Options.SupportEmail,

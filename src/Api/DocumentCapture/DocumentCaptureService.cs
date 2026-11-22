@@ -335,6 +335,12 @@ public sealed class DocumentCaptureService(
         CancellationToken cancellationToken)
     {
         var companyId = tenant.RequireCompanyId();
+        var visibleCapture = await db.DocumentCaptures.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.CompanyId == companyId && item.Id == captureId
+                && db.Companies.IgnoreQueryFilters().Any(company => company.Id == companyId && company.DeletedAt == null), cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new DocumentCaptureServiceException(404, "DOCUMENT_NOT_FOUND");
+        EnsureCreatorAccess(visibleCapture);
         await using var transaction = await admissionLock.AcquireCompanyAsync(companyId, cancellationToken).ConfigureAwait(false);
         var capture = await db.DocumentCaptures.IgnoreQueryFilters().AsNoTracking()
             .SingleOrDefaultAsync(item => item.CompanyId == companyId && item.Id == captureId
@@ -478,7 +484,7 @@ public sealed class DocumentCaptureService(
         EnsureCreatorAccess(capture);
         if (!options.Value.Enabled)
             throw new DocumentCaptureServiceException(503, "DOCUMENT_CAPTURE_DISABLED");
-        var access = DocumentCaptureAccessPolicy.AuthorizeNew(entitlements, companyId, tenant.Permissions, capture.Kind);
+        var access = DocumentCaptureAccessPolicy.AuthorizeExistingWrite(entitlements, companyId, tenant.Permissions, capture.Kind);
         if (access != DocumentCaptureAccessFailure.None)
             throw AccessFailure(access, capture.Kind, companyId);
         fieldsJson = DocumentCaptureMasking.MaskFinancialFreeText(capture.Kind, fieldsJson);
@@ -534,6 +540,11 @@ public sealed class DocumentCaptureService(
         var actorId = tenant.UserId;
         if (string.IsNullOrWhiteSpace(actorId))
             throw new DocumentCaptureServiceException(401, "DOCUMENT_UNAUTHORIZED");
+        var visibleCapture = await db.DocumentCaptures.AsNoTracking()
+            .SingleOrDefaultAsync(capture => capture.CompanyId == companyId && capture.Id == captureId, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new DocumentCaptureServiceException(404, "DOCUMENT_NOT_FOUND");
+        EnsureCreatorAccess(visibleCapture);
         await using var transaction = await admissionLock.AcquireCompanyAsync(companyId, cancellationToken).ConfigureAwait(false);
         var capture = await db.DocumentCaptures.AsNoTracking()
             .SingleOrDefaultAsync(c => c.CompanyId == companyId && c.Id == captureId
@@ -814,7 +825,7 @@ public sealed class DocumentCaptureService(
     private void EnsureCreatorAccess(DocumentCapture capture)
     {
         if (capture.Kind == "assistant-attachment" && !string.Equals(capture.CreatedBy, tenant.UserId, StringComparison.Ordinal))
-            throw new DocumentCaptureServiceException(404, "DOCUMENT_NOT_FOUND");
+            throw new PublicIdSerializationException(PublicIdErrorCodes.UnknownId, PublicIdErrorCodes.NotFoundMessage);
     }
 
     private DocumentCaptureServiceException AccessFailure(DocumentCaptureAccessFailure failure, string kind, int companyId) => failure switch

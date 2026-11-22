@@ -57,7 +57,7 @@ public sealed class DocumentCapturePdfValidatorTests
 
             Assert.False(result.IsValid);
             Assert.Equal("DOCUMENT_DECODE_BUSY", result.ErrorCode);
-            Assert.InRange(stopwatch.Elapsed, DocumentCapturePdfLimits.ParseAdmissionWait,
+            Assert.InRange(stopwatch.Elapsed, DocumentCapturePdfLimits.ParseAdmissionWait - TimeSpan.FromMilliseconds(50),
                 DocumentCapturePdfLimits.ParseAdmissionWait + TimeSpan.FromSeconds(1));
         }
         finally

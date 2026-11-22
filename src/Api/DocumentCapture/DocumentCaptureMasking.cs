@@ -5,6 +5,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using System.Globalization;
 
 namespace Api.DocumentCaptures;
 
@@ -64,7 +65,15 @@ public static partial class DocumentCaptureMasking
     public static string MaskSensitiveValue(string value)
     {
         var maskedIbans = IbanRegex().Replace(value, "••••");
-        return AccountNumberRegex().Replace(maskedIbans, "••••");
+        return AccountNumberRegex().Replace(maskedIbans, match => IsPlausibleDate(match.Value) ? match.Value : "••••");
+    }
+
+    private static bool IsPlausibleDate(string value)
+    {
+        var formats = new[] { "yyyy-MM-dd", "yyyyMMdd" };
+        if (!DateOnly.TryParseExact(value, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+            return false;
+        return date.Year is >= 1990 and <= 2100;
     }
 
     [GeneratedRegex(@"(?<![A-Z0-9])[A-Z]{2}[ -]?[0-9]{2}(?:[ -]?[A-Z0-9]){11,30}(?![A-Z0-9])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
