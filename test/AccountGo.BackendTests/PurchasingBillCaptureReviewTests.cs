@@ -118,6 +118,17 @@ public sealed class PurchasingBillCaptureReviewTests : MultiTenancyPhase3TestBas
         return taxId;
     }
 
+    private List<string> ReadDiscrepancyAuditMetadata()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var identityDb = scope.ServiceProvider.GetRequiredService<ApplicationIdentityDbContext>();
+        return identityDb.SecurityAuditEvents.AsNoTracking()
+            .Where(e => e.CompanyId == _companyId && e.EventType == "bill.capture_discrepancy.acknowledged")
+            .OrderBy(e => e.Id)
+            .Select(e => e.MetadataJson ?? string.Empty)
+            .ToList();
+    }
+
     [Fact]
     public async Task SaveBill_Draft_AllowsUnresolvedDiscrepancyWithoutAcknowledgement()
     {
@@ -127,40 +138,45 @@ public sealed class PurchasingBillCaptureReviewTests : MultiTenancyPhase3TestBas
 
         var bill = NewBill(vendor.Id, ("Coffee beans", 1m, 125m, null));
         bill.Status = "Draft";
-        bill.CaptureReview = new Dto.Purchasing.CaptureReviewContext
-        {
-            CaptureId = captureId,
-            SourceGrandTotal = 110m,
-            FormTotal = 125m,
-            DiscrepancyAcknowledged = false,
-        };
+        bill.CaptureReviews =
+        [
+            new Dto.Purchasing.CaptureReviewContext
+            {
+                CaptureId = captureId,
+                SourceGrandTotal = 110m,
+                FormTotal = 125m,
+                DiscrepancyAcknowledged = false,
+            }
+        ];
 
         var saved = await SaveBillOk(bill);
         Assert.Equal("Draft", saved.Status);
         Assert.False(saved.Approved);
+        Assert.Equal(0m, saved.AmountPaid);
         Assert.Empty(saved.Payments);
     }
 
     [Fact]
-    public async Task SaveBill_Approve_RefusesUnacknowledgedTaxInclusiveDiscrepancy_AndAcceptsCurrentAcknowledgement()
+    public async Task SaveBill_Approve_RefusesUnacknowledgedAndStaleDiscrepancy_AcceptsCurrentAndWritesAuditEvent()
     {
         var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Inclusive Supply Co" });
         var tax10 = SeedTax("VAT 10%", 10m);
-        // Source receipt total is 110.00 (100.00 + 10.00 tax inclusive).
-        // If user mistakenly enters 110.00 unit cost + 10% tax => authoritative bill total is 121.00.
         var (captureId, capturePublicId) = SeedCapture(
             acceptedFieldsJson: """{"date":"2026-11-10","sourceTotals":{"grandTotal":"110.00","priceBasis":"inclusive","subtotal":"100.00","taxTotal":"10.00"}}""");
 
         var bill = NewBill(vendor.Id, ("Supplies", 1m, 110m, null));
         bill.Lines[0].TaxId = tax10;
         bill.Status = "Open";
-        bill.CaptureReview = new Dto.Purchasing.CaptureReviewContext
-        {
-            CaptureId = captureId,
-            SourceGrandTotal = 110m,
-            FormTotal = 121m,
-            DiscrepancyAcknowledged = false,
-        };
+        bill.CaptureReviews =
+        [
+            new Dto.Purchasing.CaptureReviewContext
+            {
+                CaptureId = captureId,
+                SourceGrandTotal = 110m,
+                FormTotal = 121m,
+                DiscrepancyAcknowledged = false,
+            }
+        ];
 
         var refused = await SaveBill(bill);
         Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
@@ -173,15 +189,18 @@ public sealed class PurchasingBillCaptureReviewTests : MultiTenancyPhase3TestBas
             Assert.Equal(11m, doc.RootElement.GetProperty("difference").GetDecimal());
         }
 
-        // Stale acknowledgement (user edited line from 110 to 120 => total 132, but sent old snapshot 121) is refused.
+        // Stale acknowledgement (user edited line from 110 to 120 => total 132, sent old snapshot 121) is refused.
         bill.Lines[0].Amount = 120m;
-        bill.CaptureReview = new Dto.Purchasing.CaptureReviewContext
-        {
-            CaptureId = captureId,
-            SourceGrandTotal = 110m,
-            FormTotal = 121m,
-            DiscrepancyAcknowledged = true,
-        };
+        bill.CaptureReviews =
+        [
+            new Dto.Purchasing.CaptureReviewContext
+            {
+                CaptureId = captureId,
+                SourceGrandTotal = 110m,
+                FormTotal = 121m,
+                DiscrepancyAcknowledged = true,
+            }
+        ];
         var stale = await SaveBill(bill);
         Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
         using (var doc = JsonDocument.Parse(await stale.Content.ReadAsStringAsync()))
@@ -190,113 +209,289 @@ public sealed class PurchasingBillCaptureReviewTests : MultiTenancyPhase3TestBas
             Assert.Equal(132m, doc.RootElement.GetProperty("formTotal").GetDecimal());
         }
 
-        // Current acknowledgement bound to (captureId, 110.00, 132.00) succeeds and creates no payment.
-        bill.CaptureReview = new Dto.Purchasing.CaptureReviewContext
-        {
-            CaptureId = captureId,
-            SourceGrandTotal = 110m,
-            FormTotal = 132m,
-            DiscrepancyAcknowledged = true,
-        };
+        // Current acknowledgement succeeds, leaves AmountPaid = 0 / no payment, and writes audit event.
+        bill.CaptureReviews =
+        [
+            new Dto.Purchasing.CaptureReviewContext
+            {
+                CaptureId = captureId,
+                SourceGrandTotal = 110m,
+                FormTotal = 132m,
+                DiscrepancyAcknowledged = true,
+            }
+        ];
         var approved = await SaveBillOk(bill);
         Assert.True(approved.Approved);
         Assert.Equal(132m, approved.Total);
         Assert.Equal(0m, approved.AmountPaid);
         Assert.Empty(approved.Payments);
+
+        var events = ReadDiscrepancyAuditMetadata();
+        var audit = Assert.Single(events);
+        Assert.Contains(capturePublicId, audit);
+        Assert.Contains(PubId<PurchaseInvoiceHeader>(approved.Id), audit);
+        Assert.Contains("110", audit);
+        Assert.Contains("132", audit);
+        Assert.Contains("22", audit);
     }
 
     [Fact]
-    public async Task SaveBill_Approve_MatchingCorrectedTaxExclusiveTotal_SucceedsWithoutDiscrepancyFlag()
+    public async Task SaveBill_Approve_MatchingTotals_SucceedsAndWritesNoDiscrepancyAuditEvent()
     {
         var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Corrected Tax Vendor" });
         var tax10 = SeedTax("VAT 10%", 10m);
         var (captureId, _) = SeedCapture(
             acceptedFieldsJson: """{"date":"2026-11-10","sourceTotals":{"grandTotal":"110.00","priceBasis":"inclusive","subtotal":"100.00","taxTotal":"10.00"}}""");
 
-        // Corrected: 100.00 unit cost + 10% tax = 110.00 authoritative total matches 110.00 source total.
         var bill = NewBill(vendor.Id, ("Supplies", 1m, 100m, null));
         bill.Lines[0].TaxId = tax10;
         bill.Status = "Open";
-        bill.CaptureReview = new Dto.Purchasing.CaptureReviewContext
-        {
-            CaptureId = captureId,
-            SourceGrandTotal = 110m,
-            FormTotal = 110m,
-            DiscrepancyAcknowledged = false,
-        };
+        bill.CaptureReviews =
+        [
+            new Dto.Purchasing.CaptureReviewContext
+            {
+                CaptureId = captureId,
+                SourceGrandTotal = 110m,
+                FormTotal = 110m,
+                DiscrepancyAcknowledged = false,
+            }
+        ];
 
         var approved = await SaveBillOk(bill);
         Assert.True(approved.Approved);
         Assert.Equal(110m, approved.Total);
+        Assert.Empty(ReadDiscrepancyAuditMetadata());
     }
 
     [Fact]
-    public async Task ApproveBill_WithLinkedCaptureDiscrepancy_RefusesUnacknowledged_AndAcceptsBoundAcknowledgement()
+    public async Task SaveBill_PerLineTaxRoundingDifference_SucceedsWhenAcknowledgingServerReturnedTotal()
     {
-        var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Linked Draft Vendor" });
-        var draft = await SaveBillOk(NewBill(vendor.Id, ("Freight & items", 1m, 95m, null)));
-        var (captureId, capturePublicId) = SeedCapture(
-            kind: "purchase-invoice",
-            acceptedFieldsJson: """{"date":"2026-11-10","sourceTotals":{"grandTotal":"100.00","priceBasis":"exclusive"}}""");
-        SeedCaptureLink(captureId, draft.Id);
+        var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Rounding Vendor" });
+        var tax10 = SeedTax("VAT 10%", 10m);
+        // 3 lines of 0.33 each: per-line tax = round(0.033) = 0.03 * 3 = 0.09 => bill.Total() = 1.08.
+        // Whole-subtotal tax would be round(0.99 * 0.10) = 0.10 => 1.09.
+        var (captureId, _) = SeedCapture(
+            acceptedFieldsJson: """{"date":"2026-11-10","sourceTotals":{"grandTotal":"1.09","priceBasis":"exclusive"}}""");
 
-        // Empty-body ApproveBill is refused because linked capture has a discrepancy (95 vs 100).
-        var refused = await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={PubId<PurchaseInvoiceHeader>(draft.Id)}");
-        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
-        using (var doc = JsonDocument.Parse(await refused.Content.ReadAsStringAsync()))
+        var bill = NewBill(vendor.Id, ("A", 1m, 0.33m, null), ("B", 1m, 0.33m, null), ("C", 1m, 0.33m, null));
+        foreach (var line in bill.Lines) line.TaxId = tax10;
+        bill.Status = "Open";
+        // Client initially sends unacknowledged review (or mismatched total).
+        bill.CaptureReviews =
+        [
+            new Dto.Purchasing.CaptureReviewContext
+            {
+                CaptureId = captureId,
+                SourceGrandTotal = 1.09m,
+                FormTotal = 1.09m,
+                DiscrepancyAcknowledged = false,
+            }
+        ];
+
+        var conflict = await SaveBill(bill);
+        Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+        decimal serverSource, serverForm;
+        using (var doc = JsonDocument.Parse(await conflict.Content.ReadAsStringAsync()))
         {
             Assert.Equal("DOCUMENT_REVIEW_REQUIRED", doc.RootElement.GetProperty("code").GetString());
-            Assert.Equal(capturePublicId, doc.RootElement.GetProperty("captureId").GetString());
+            serverSource = doc.RootElement.GetProperty("sourceGrandTotal").GetDecimal();
+            serverForm = doc.RootElement.GetProperty("formTotal").GetDecimal();
+            Assert.Equal(1.09m, serverSource);
+            Assert.Equal(1.08m, serverForm);
         }
 
-        // Approving with current bound acknowledgement succeeds.
-        var ack = new Dto.Purchasing.CaptureReviewContext
-        {
-            CaptureId = captureId,
-            SourceGrandTotal = 100m,
-            FormTotal = 95m,
-            DiscrepancyAcknowledged = true,
-        };
-        var ok = await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={PubId<PurchaseInvoiceHeader>(draft.Id)}", ack);
-        var approved = await BillOk(ok);
+        // Resending with the exact server-reported values succeeds.
+        bill.CaptureReviews =
+        [
+            new Dto.Purchasing.CaptureReviewContext
+            {
+                CaptureId = captureId,
+                SourceGrandTotal = serverSource,
+                FormTotal = serverForm,
+                DiscrepancyAcknowledged = true,
+            }
+        ];
+        var approved = await SaveBillOk(bill);
         Assert.True(approved.Approved);
-        Assert.Equal(95m, approved.Total);
+        Assert.Equal(1.08m, approved.Total);
     }
 
     [Fact]
-    public async Task SaveBill_RejectsWrongKind_UnacceptedCapture_AndNumericCaptureId()
+    public async Task ApproveBill_MultipleLinkedDiscrepantCaptures_RequiresBothAcknowledged_AndWritesTwoAuditEvents()
+    {
+        var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Multi Capture Vendor" });
+        var draft = await SaveBillOk(NewBill(vendor.Id, ("Combined items", 1m, 150m, null)));
+        var (cap1Id, cap1Pub) = SeedCapture(
+            kind: "purchase-invoice",
+            acceptedFieldsJson: """{"date":"2026-11-10","sourceTotals":{"grandTotal":"100.00","priceBasis":"exclusive"}}""");
+        var (cap2Id, cap2Pub) = SeedCapture(
+            kind: "expense-receipt",
+            acceptedFieldsJson: """{"date":"2026-11-10","sourceTotals":{"grandTotal":"60.00","priceBasis":"exclusive"}}""");
+        SeedCaptureLink(cap1Id, draft.Id);
+        SeedCaptureLink(cap2Id, draft.Id);
+
+        // Acknowledging only one of the two still returns 409.
+        var partialReq = new Dto.Purchasing.ApproveBillRequest
+        {
+            CaptureReviews =
+            [
+                new Dto.Purchasing.CaptureReviewContext
+                {
+                    CaptureId = cap1Id,
+                    SourceGrandTotal = 100m,
+                    FormTotal = 150m,
+                    DiscrepancyAcknowledged = true,
+                }
+            ]
+        };
+        var partialRes = await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={PubId<PurchaseInvoiceHeader>(draft.Id)}", partialReq);
+        Assert.Equal(HttpStatusCode.Conflict, partialRes.StatusCode);
+        using (var doc = JsonDocument.Parse(await partialRes.Content.ReadAsStringAsync()))
+        {
+            Assert.Equal("DOCUMENT_REVIEW_REQUIRED", doc.RootElement.GetProperty("code").GetString());
+            Assert.Equal(cap2Pub, doc.RootElement.GetProperty("captureId").GetString());
+        }
+
+        // Acknowledging both succeeds over HTTP and records both audit events.
+        var fullReq = new Dto.Purchasing.ApproveBillRequest
+        {
+            CaptureReviews =
+            [
+                new Dto.Purchasing.CaptureReviewContext
+                {
+                    CaptureId = cap1Id,
+                    SourceGrandTotal = 100m,
+                    FormTotal = 150m,
+                    DiscrepancyAcknowledged = true,
+                },
+                new Dto.Purchasing.CaptureReviewContext
+                {
+                    CaptureId = cap2Id,
+                    SourceGrandTotal = 60m,
+                    FormTotal = 150m,
+                    DiscrepancyAcknowledged = true,
+                }
+            ]
+        };
+        var okRes = await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={PubId<PurchaseInvoiceHeader>(draft.Id)}", fullReq);
+        var approved = await BillOk(okRes);
+        Assert.True(approved.Approved);
+        Assert.Equal(150m, approved.Total);
+
+        var events = ReadDiscrepancyAuditMetadata();
+        Assert.Equal(2, events.Count);
+        Assert.Contains(events, m => m.Contains(cap1Pub));
+        Assert.Contains(events, m => m.Contains(cap2Pub));
+    }
+
+    [Fact]
+    public async Task ApproveBill_EmptyBodyWithoutCaptures_BehavesAsBefore()
+    {
+        var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Plain Draft Vendor" });
+        var draft = await SaveBillOk(NewBill(vendor.Id, ("Consulting", 1m, 250m, null)));
+
+        var res = await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={PubId<PurchaseInvoiceHeader>(draft.Id)}");
+        var approved = await BillOk(res);
+        Assert.True(approved.Approved);
+        Assert.Equal(250m, approved.Total);
+        Assert.Empty(ReadDiscrepancyAuditMetadata());
+    }
+
+    [Fact]
+    public async Task SaveBill_RejectsCrossCompany_WrongKind_Unaccepted_LinkedToOtherBill_DuplicateIds_AndNumericId()
     {
         var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Guard Vendor" });
+        var otherBill = await SaveBillOk(NewBill(vendor.Id, ("Other", 1m, 25m, null)));
+
         var (bankCaptureId, _) = SeedCapture(kind: "bank", status: "accepted", acceptedFieldsJson: """{"name":"Main Checking"}""");
         var (readyCaptureId, _) = SeedCapture(kind: "expense-receipt", status: "ready", acceptedFieldsJson: """{"date":"2026-11-10"}""");
+        var (linkedCaptureId, _) = SeedCapture(kind: "expense-receipt", status: "accepted", acceptedFieldsJson: """{"date":"2026-11-10"}""");
+        SeedCaptureLink(linkedCaptureId, otherBill.Id);
 
+        // Create a second company and seed a capture there for cross-company check.
+        int otherCompanyId = 0;
+        WithDb(db =>
+        {
+            var otherCo = new Company { Name = "Other Co", CompanyCode = "OTH", Slug = $"other-{Guid.NewGuid():N}"[..16] };
+            db.Companies.Add(otherCo);
+            db.SaveChanges();
+            otherCompanyId = otherCo.Id;
+        });
+        var (_, otherCompanyCapPub) = SeedCapture(
+            kind: "expense-receipt",
+            status: "accepted",
+            acceptedFieldsJson: """{"date":"2026-11-10"}""",
+            companyIdOverride: otherCompanyId);
+
+        // 1. Cross-company capture ID returns 404 unknown_id
+        using (var crossReq = new HttpRequestMessage(HttpMethod.Post, "/api/Purchasing/SaveBill"))
+        {
+            crossReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _ownerToken);
+            crossReq.Headers.Add("X-AccountGo-Org", _slug);
+            var crossPayload = $$"""
+            {
+              "vendorId": "{{PubId<Vendor>(vendor.Id)}}",
+              "date": "2026-11-10",
+              "status": "Open",
+              "lines": [{ "description": "Item", "quantity": 1, "amount": 50 }],
+              "captureReviews": [{ "captureId": "{{otherCompanyCapPub}}", "discrepancyAcknowledged": true }]
+            }
+            """;
+            crossReq.Content = new StringContent(crossPayload, Encoding.UTF8, "application/json");
+            var crossRes = await _client.SendAsync(crossReq);
+            Assert.Equal(HttpStatusCode.NotFound, crossRes.StatusCode);
+            Assert.Contains("unknown_id", await crossRes.Content.ReadAsStringAsync());
+        }
+
+        // 2. Non-bill kind returns 400
         var wrongKind = NewBill(vendor.Id, ("Item", 1m, 50m, null));
         wrongKind.Status = "Open";
-        wrongKind.CaptureReview = new Dto.Purchasing.CaptureReviewContext { CaptureId = bankCaptureId };
+        wrongKind.CaptureReviews = [new Dto.Purchasing.CaptureReviewContext { CaptureId = bankCaptureId }];
         var wrongKindRes = await SaveBill(wrongKind);
         Assert.Equal(HttpStatusCode.BadRequest, wrongKindRes.StatusCode);
 
+        // 3. Unaccepted capture returns 409
         var notAccepted = NewBill(vendor.Id, ("Item", 1m, 50m, null));
         notAccepted.Status = "Open";
-        notAccepted.CaptureReview = new Dto.Purchasing.CaptureReviewContext { CaptureId = readyCaptureId };
+        notAccepted.CaptureReviews = [new Dto.Purchasing.CaptureReviewContext { CaptureId = readyCaptureId }];
         var notAcceptedRes = await SaveBill(notAccepted);
         Assert.Equal(HttpStatusCode.Conflict, notAcceptedRes.StatusCode);
 
-        // Raw numeric captureId must be rejected by the shared PublicId serializer.
-        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/Purchasing/SaveBill");
-        req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _ownerToken);
-        req.Headers.Add("X-AccountGo-Org", _slug);
-        var payload = $$"""
+        // 4. Capture linked to a different bill returns 409 DOCUMENT_LINK_CONFLICT
+        var linkedElsewhere = NewBill(vendor.Id, ("Item", 1m, 50m, null));
+        linkedElsewhere.Status = "Open";
+        linkedElsewhere.CaptureReviews = [new Dto.Purchasing.CaptureReviewContext { CaptureId = linkedCaptureId }];
+        var linkedElsewhereRes = await SaveBill(linkedElsewhere);
+        Assert.Equal(HttpStatusCode.Conflict, linkedElsewhereRes.StatusCode);
+        Assert.Contains("DOCUMENT_LINK_CONFLICT", await linkedElsewhereRes.Content.ReadAsStringAsync());
+
+        // 5. Duplicate capture IDs return 400
+        var (okCapId, _) = SeedCapture(kind: "expense-receipt", status: "accepted", acceptedFieldsJson: """{"date":"2026-11-10"}""");
+        var dupReviews = NewBill(vendor.Id, ("Item", 1m, 50m, null));
+        dupReviews.Status = "Open";
+        dupReviews.CaptureReviews =
+        [
+            new Dto.Purchasing.CaptureReviewContext { CaptureId = okCapId },
+            new Dto.Purchasing.CaptureReviewContext { CaptureId = okCapId },
+        ];
+        var dupRes = await SaveBill(dupReviews);
+        Assert.Equal(HttpStatusCode.BadRequest, dupRes.StatusCode);
+
+        // 6. Raw numeric captureId fails shared public-ID validation with 400 invalid_id
+        using var numReq = new HttpRequestMessage(HttpMethod.Post, "/api/Purchasing/SaveBill");
+        numReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _ownerToken);
+        numReq.Headers.Add("X-AccountGo-Org", _slug);
+        var numPayload = $$"""
         {
           "vendorId": "{{PubId<Vendor>(vendor.Id)}}",
           "date": "2026-11-10",
           "status": "Open",
           "lines": [{ "description": "Item", "quantity": 1, "amount": 50 }],
-          "captureReview": { "captureId": 123, "discrepancyAcknowledged": true }
+          "captureReviews": [{ "captureId": 123, "discrepancyAcknowledged": true }]
         }
         """;
-        req.Content = new StringContent(payload, Encoding.UTF8, "application/json");
-        var numericRes = await _client.SendAsync(req);
+        numReq.Content = new StringContent(numPayload, Encoding.UTF8, "application/json");
+        var numericRes = await _client.SendAsync(numReq);
         Assert.Equal(HttpStatusCode.BadRequest, numericRes.StatusCode);
         Assert.Contains("invalid_id", await numericRes.Content.ReadAsStringAsync());
     }

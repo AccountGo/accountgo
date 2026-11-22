@@ -15,117 +15,97 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Api.Service;
 
+public sealed record AcknowledgedCaptureDiscrepancy(
+    string CapturePublicId,
+    decimal SourceGrandTotal,
+    decimal FormTotal,
+    decimal Difference);
+
+public sealed record BillCaptureReviewValidationResult(
+    IActionResult? Failure,
+    IReadOnlyList<AcknowledgedCaptureDiscrepancy> AcknowledgedDiscrepancies)
+{
+    public bool Succeeded => Failure is null;
+}
+
 /// <summary>
 /// Read-only reconciliation policy consulted by existing bill writers (<c>SaveBill</c> and <c>ApproveBill</c>).
-/// Independently loads canonical accepted capture fields, compares them against authoritative bill totals, and
-/// refuses unacknowledged or stale discrepancies without ever trusting client-supplied total-match flags or OCR taxes.
+/// Independently loads canonical accepted capture fields, compares them against the persisted entity's
+/// authoritative <see cref="PurchaseInvoiceHeader.Total"/>, and refuses unacknowledged or stale discrepancies
+/// without ever trusting client-supplied total-match flags or OCR taxes.
 /// </summary>
 public static class BillCaptureReviewValidator
 {
+    public const int MaxCaptureReviews = 10;
+
     private static readonly HashSet<string> BillCaptureKinds = new(StringComparer.Ordinal)
     {
         "expense-receipt",
         "purchase-invoice",
     };
 
-    public static IActionResult? ValidateForSave(
+    public static IActionResult? ValidateForDraft(
         ApiDbContext db,
         ITenantContext tenantContext,
-        Dto.Purchasing.Bill billDto,
-        bool approving)
+        int? billId,
+        IReadOnlyList<Dto.Purchasing.CaptureReviewContext>? reviews)
     {
-        var companyId = tenantContext.RequireCompanyId();
-        var review = billDto.CaptureReview;
-
-        if (!approving)
-        {
-            if (review is { CaptureId: > 0 })
-                return ValidateCaptureReferenceOnly(db, companyId, review.CaptureId, billDto.Id > 0 ? billDto.Id : null);
+        if (reviews is null || reviews.Count == 0)
             return null;
-        }
 
-        var authoritativeTotal = ComputeAuthoritativeBillTotal(db, billDto.Lines);
-        return ValidateForApprovalCore(db, companyId, billDto.Id > 0 ? billDto.Id : null, authoritativeTotal, review);
-    }
+        var structureError = ValidateReviewListStructure(reviews);
+        if (structureError is not null)
+            return structureError;
 
-    public static IActionResult? ValidateForApprove(
-        ApiDbContext db,
-        ITenantContext tenantContext,
-        PurchaseInvoiceHeader bill,
-        Dto.Purchasing.CaptureReviewContext? review)
-    {
         var companyId = tenantContext.RequireCompanyId();
-        var authoritativeTotal = bill.Total();
-        return ValidateForApprovalCore(db, companyId, bill.Id, authoritativeTotal, review);
-    }
-
-    private static IActionResult? ValidateCaptureReferenceOnly(
-        ApiDbContext db,
-        int companyId,
-        int captureId,
-        int? billId)
-    {
-        var capture = LoadLiveCapture(db, companyId, captureId);
-        if (capture is null)
-            return new NotFoundObjectResult(new { message = PublicIdErrorCodes.NotFoundMessage, code = PublicIdErrorCodes.UnknownId });
-
-        if (!BillCaptureKinds.Contains(capture.Kind))
-            return Problem(StatusCodes.Status400BadRequest, "DOCUMENT_REVIEW_INVALID",
-                "This document capture kind cannot be reviewed for a bill.", capture.PublicId);
-
-        if (capture.Status != "accepted" || string.IsNullOrWhiteSpace(capture.AcceptedFieldsJson))
-            return Problem(StatusCodes.Status409Conflict, "DOCUMENT_STATE_CONFLICT",
-                "Accept the captured fields before attaching them to a bill.", capture.PublicId);
-
-        var existingLink = db.DocumentCaptureLinks.AsNoTracking()
-            .SingleOrDefault(l => l.CompanyId == companyId && l.CaptureId == capture.Id);
-        if (existingLink is not null && (existingLink.TargetType != "bill" || (billId.HasValue && existingLink.TargetId != billId.Value)))
-            return Problem(StatusCodes.Status409Conflict, "DOCUMENT_LINK_CONFLICT",
-                "This document capture is already linked to another record.", capture.PublicId);
+        foreach (var review in reviews)
+        {
+            var err = ValidateCaptureReference(db, companyId, review.CaptureId, billId, out _);
+            if (err is not null)
+                return err;
+        }
 
         return null;
     }
 
-    private static IActionResult? ValidateForApprovalCore(
+    public static BillCaptureReviewValidationResult ValidateForApproval(
         ApiDbContext db,
-        int companyId,
-        int? billId,
-        decimal authoritativeTotal,
-        Dto.Purchasing.CaptureReviewContext? review)
+        ITenantContext tenantContext,
+        PurchaseInvoiceHeader bill,
+        IReadOnlyList<Dto.Purchasing.CaptureReviewContext>? reviews)
     {
-        var roundedFormTotal = Round2(authoritativeTotal);
-        var checkedCaptureIds = new HashSet<int>();
-
-        if (review is { CaptureId: > 0 })
+        if (reviews is { Count: > 0 })
         {
-            var capture = LoadLiveCapture(db, companyId, review.CaptureId);
-            if (capture is null)
-                return new NotFoundObjectResult(new { message = PublicIdErrorCodes.NotFoundMessage, code = PublicIdErrorCodes.UnknownId });
-
-            if (!BillCaptureKinds.Contains(capture.Kind))
-                return Problem(StatusCodes.Status400BadRequest, "DOCUMENT_REVIEW_INVALID",
-                    "This document capture kind cannot be reviewed for a bill.", capture.PublicId);
-
-            if (capture.Status != "accepted" || string.IsNullOrWhiteSpace(capture.AcceptedFieldsJson))
-                return Problem(StatusCodes.Status409Conflict, "DOCUMENT_STATE_CONFLICT",
-                    "Accept the captured fields before approving with capture review context.", capture.PublicId);
-
-            var existingLink = db.DocumentCaptureLinks.AsNoTracking()
-                .SingleOrDefault(l => l.CompanyId == companyId && l.CaptureId == capture.Id);
-            if (existingLink is not null && (existingLink.TargetType != "bill" || (billId.HasValue && existingLink.TargetId != billId.Value)))
-                return Problem(StatusCodes.Status409Conflict, "DOCUMENT_LINK_CONFLICT",
-                    "This document capture is already linked to another record.", capture.PublicId);
-
-            checkedCaptureIds.Add(capture.Id);
-            var failure = CheckReconciliation(capture, roundedFormTotal, review);
-            if (failure is not null)
-                return failure;
+            var structureError = ValidateReviewListStructure(reviews);
+            if (structureError is not null)
+                return new(structureError, Array.Empty<AcknowledgedCaptureDiscrepancy>());
         }
 
-        if (billId.HasValue)
+        var companyId = tenantContext.RequireCompanyId();
+        var roundedFormTotal = Round2(bill.Total());
+        var reviewsByCaptureId = reviews is { Count: > 0 }
+            ? reviews.ToDictionary(r => r.CaptureId)
+            : new Dictionary<int, Dto.Purchasing.CaptureReviewContext>();
+
+        var capturesToCheck = new List<DocumentCapture>();
+        var seenCaptureIds = new HashSet<int>();
+
+        if (reviews is { Count: > 0 })
+        {
+            foreach (var review in reviews)
+            {
+                var err = ValidateCaptureReference(db, companyId, review.CaptureId, bill.Id > 0 ? bill.Id : null, out var capture);
+                if (err is not null)
+                    return new(err, Array.Empty<AcknowledgedCaptureDiscrepancy>());
+                if (seenCaptureIds.Add(capture!.Id))
+                    capturesToCheck.Add(capture);
+            }
+        }
+
+        if (bill.Id > 0)
         {
             var linkedCaptureIds = db.DocumentCaptureLinks.AsNoTracking()
-                .Where(l => l.CompanyId == companyId && l.TargetType == "bill" && l.TargetId == billId.Value)
+                .Where(l => l.CompanyId == companyId && l.TargetType == "bill" && l.TargetId == bill.Id)
                 .OrderBy(l => l.LinkedAt)
                 .Select(l => l.CaptureId)
                 .ToList();
@@ -139,58 +119,124 @@ public static class BillCaptureReviewValidator
                         && c.AcceptedFieldsJson != null)
                     .ToList();
 
-                foreach (var capture in linkedCaptures)
+                var byId = linkedCaptures.ToDictionary(c => c.Id);
+                foreach (var linkedId in linkedCaptureIds)
                 {
-                    if (checkedCaptureIds.Contains(capture.Id))
-                        continue;
-
-                    var matchingReview = review is not null && review.CaptureId == capture.Id ? review : null;
-                    var failure = CheckReconciliation(capture, roundedFormTotal, matchingReview);
-                    if (failure is not null)
-                        return failure;
+                    if (byId.TryGetValue(linkedId, out var capture) && seenCaptureIds.Add(capture.Id))
+                        capturesToCheck.Add(capture);
                 }
             }
+        }
+
+        var unacknowledged = new List<object>();
+        AcknowledgedCaptureDiscrepancy? firstMissing = null;
+        var acknowledged = new List<AcknowledgedCaptureDiscrepancy>();
+
+        foreach (var capture in capturesToCheck)
+        {
+            var sourceGrandTotal = ExtractCanonicalSourceGrandTotal(capture.AcceptedFieldsJson);
+            if (!sourceGrandTotal.HasValue)
+                continue;
+
+            var roundedSourceTotal = Round2(sourceGrandTotal.Value);
+            if (roundedSourceTotal == roundedFormTotal)
+                continue;
+
+            var difference = Round2(roundedFormTotal - roundedSourceTotal);
+            reviewsByCaptureId.TryGetValue(capture.Id, out var review);
+            var acknowledgedForCurrentValues = review is not null
+                && review.DiscrepancyAcknowledged
+                && review.SourceGrandTotal.HasValue
+                && Round2(review.SourceGrandTotal.Value) == roundedSourceTotal
+                && review.FormTotal.HasValue
+                && Round2(review.FormTotal.Value) == roundedFormTotal;
+
+            if (acknowledgedForCurrentValues)
+            {
+                acknowledged.Add(new AcknowledgedCaptureDiscrepancy(
+                    capture.PublicId, roundedSourceTotal, roundedFormTotal, difference));
+            }
+            else
+            {
+                firstMissing ??= new AcknowledgedCaptureDiscrepancy(
+                    capture.PublicId, roundedSourceTotal, roundedFormTotal, difference);
+                unacknowledged.Add(new
+                {
+                    captureId = capture.PublicId,
+                    sourceGrandTotal = roundedSourceTotal,
+                    formTotal = roundedFormTotal,
+                    difference,
+                });
+            }
+        }
+
+        if (firstMissing is not null)
+        {
+            var problem = new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "DOCUMENT_REVIEW_REQUIRED",
+                Detail = "The bill total differs from one or more captured source document totals. Correct the bill or explicitly acknowledge each difference before approving.",
+            };
+            problem.Extensions["code"] = "DOCUMENT_REVIEW_REQUIRED";
+            problem.Extensions["captureId"] = firstMissing.CapturePublicId;
+            problem.Extensions["sourceGrandTotal"] = firstMissing.SourceGrandTotal;
+            problem.Extensions["formTotal"] = firstMissing.FormTotal;
+            problem.Extensions["difference"] = firstMissing.Difference;
+            problem.Extensions["discrepancies"] = unacknowledged;
+            return new(new ObjectResult(problem) { StatusCode = StatusCodes.Status409Conflict }, Array.Empty<AcknowledgedCaptureDiscrepancy>());
+        }
+
+        return new(null, acknowledged);
+    }
+
+    private static IActionResult? ValidateReviewListStructure(IReadOnlyList<Dto.Purchasing.CaptureReviewContext> reviews)
+    {
+        if (reviews.Count > MaxCaptureReviews)
+            return Problem(StatusCodes.Status400BadRequest, "DOCUMENT_REVIEW_INVALID",
+                $"At most {MaxCaptureReviews} capture review entries may be submitted.");
+
+        var distinct = new HashSet<int>();
+        foreach (var review in reviews)
+        {
+            if (review is null || review.CaptureId <= 0)
+                return Problem(StatusCodes.Status400BadRequest, "DOCUMENT_REVIEW_INVALID",
+                    "Each capture review entry must reference a valid capture identifier.");
+            if (!distinct.Add(review.CaptureId))
+                return Problem(StatusCodes.Status400BadRequest, "DOCUMENT_REVIEW_INVALID",
+                    "Duplicate capture identifiers are not allowed in capture reviews.");
         }
 
         return null;
     }
 
-    private static IActionResult? CheckReconciliation(
-        DocumentCapture capture,
-        decimal roundedFormTotal,
-        Dto.Purchasing.CaptureReviewContext? review)
+    private static IActionResult? ValidateCaptureReference(
+        ApiDbContext db,
+        int companyId,
+        int captureId,
+        int? billId,
+        out DocumentCapture? capture)
     {
-        var sourceGrandTotal = ExtractCanonicalSourceGrandTotal(capture.AcceptedFieldsJson);
-        if (!sourceGrandTotal.HasValue)
-            return null;
+        var found = LoadLiveCapture(db, companyId, captureId);
+        capture = found;
+        if (found is null)
+            return new NotFoundObjectResult(new { message = PublicIdErrorCodes.NotFoundMessage, code = PublicIdErrorCodes.UnknownId });
 
-        var roundedSourceTotal = Round2(sourceGrandTotal.Value);
-        if (roundedSourceTotal == roundedFormTotal)
-            return null;
+        if (!BillCaptureKinds.Contains(found.Kind))
+            return Problem(StatusCodes.Status400BadRequest, "DOCUMENT_REVIEW_INVALID",
+                "This document capture kind cannot be reviewed for a bill.", found.PublicId);
 
-        var acknowledgedForCurrentValues = review is not null
-            && review.CaptureId == capture.Id
-            && review.DiscrepancyAcknowledged
-            && review.SourceGrandTotal.HasValue
-            && Round2(review.SourceGrandTotal.Value) == roundedSourceTotal
-            && review.FormTotal.HasValue
-            && Round2(review.FormTotal.Value) == roundedFormTotal;
+        if (found.Status != "accepted" || string.IsNullOrWhiteSpace(found.AcceptedFieldsJson))
+            return Problem(StatusCodes.Status409Conflict, "DOCUMENT_STATE_CONFLICT",
+                "Accept the captured fields before approving or attaching them to a bill.", found.PublicId);
 
-        if (acknowledgedForCurrentValues)
-            return null;
+        var existingLink = db.DocumentCaptureLinks.AsNoTracking()
+            .SingleOrDefault(l => l.CompanyId == companyId && l.CaptureId == found.Id);
+        if (existingLink is not null && (existingLink.TargetType != "bill" || !billId.HasValue || existingLink.TargetId != billId.Value))
+            return Problem(StatusCodes.Status409Conflict, "DOCUMENT_LINK_CONFLICT",
+                "This document capture is already linked to another record.", found.PublicId);
 
-        var problem = new ProblemDetails
-        {
-            Status = StatusCodes.Status409Conflict,
-            Title = "DOCUMENT_REVIEW_REQUIRED",
-            Detail = "The bill total differs from the captured source document total. Correct the bill or explicitly acknowledge the difference before approving.",
-        };
-        problem.Extensions["code"] = "DOCUMENT_REVIEW_REQUIRED";
-        problem.Extensions["captureId"] = capture.PublicId;
-        problem.Extensions["sourceGrandTotal"] = roundedSourceTotal;
-        problem.Extensions["formTotal"] = roundedFormTotal;
-        problem.Extensions["difference"] = Round2(roundedFormTotal - roundedSourceTotal);
-        return new ObjectResult(problem) { StatusCode = StatusCodes.Status409Conflict };
+        return null;
     }
 
     private static DocumentCapture? LoadLiveCapture(ApiDbContext db, int companyId, int captureId) =>
@@ -198,19 +244,6 @@ public static class BillCaptureReviewValidator
             .SingleOrDefault(c => c.CompanyId == companyId
                 && c.Id == captureId
                 && db.Companies.IgnoreQueryFilters().Any(company => company.Id == companyId && company.DeletedAt == null));
-
-    private static decimal ComputeAuthoritativeBillTotal(ApiDbContext db, IReadOnlyList<Dto.Purchasing.BillLine> lines)
-    {
-        var taxes = db.Taxes.AsNoTracking().ToDictionary(t => t.Id, t => t.Rate);
-        decimal total = 0m;
-        foreach (var line in lines)
-        {
-            var subtotal = PurchaseInvoiceLine.SubtotalOf(line.Quantity, line.Amount, line.Discount);
-            var taxRate = line.TaxId.HasValue && taxes.TryGetValue(line.TaxId.Value, out var rate) ? rate : (decimal?)null;
-            total += subtotal + PurchaseInvoiceLine.TaxOf(subtotal, taxRate);
-        }
-        return total;
-    }
 
     internal static decimal? ExtractCanonicalSourceGrandTotal(string? acceptedFieldsJson)
     {

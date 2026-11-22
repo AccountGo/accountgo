@@ -38,6 +38,7 @@ namespace Api.Controllers
         private readonly Api.Data.ApiDbContext _db;
         private readonly ILogger<PurchasingController> _logger;
         private readonly Services.Financial.IBooksLockGuard _booksLockGuard;
+        private readonly Api.Service.ISecurityAuditService? _securityAudit;
 
         public PurchasingController(IAdministrationService adminService,
             IPurchasingService purchasingService,
@@ -50,7 +51,8 @@ namespace Api.Controllers
             Api.Data.ApiDbContext db,
             ILogger<PurchasingController> logger,
             Services.Financial.IBooksLockGuard booksLockGuard,
-            Core.Authorization.IWorkspacePolicyTransaction? policyTransaction = null)
+            Core.Authorization.IWorkspacePolicyTransaction? policyTransaction = null,
+            Api.Service.ISecurityAuditService? securityAudit = null)
         {
             _adminService = adminService;
             _purchasingService = purchasingService;
@@ -64,6 +66,7 @@ namespace Api.Controllers
             _logger = logger;
             _booksLockGuard = booksLockGuard;
             _policyTransaction = policyTransaction;
+            _securityAudit = securityAudit;
         }
 
         private IActionResult? RefuseIfBooksLocked(DateTime date)
@@ -858,8 +861,8 @@ namespace Api.Controllers
             if (paymentTermId.HasValue)
                 _tenantGuard.EnsureOwned<PaymentTerm>(paymentTermId.Value, nameof(billDto.PaymentTermId));
 
-            if (Api.Service.BillCaptureReviewValidator.ValidateForSave(_db, _tenantContext, billDto, approving) is { } captureReviewFailure)
-                return captureReviewFailure;
+            if (!approving && Api.Service.BillCaptureReviewValidator.ValidateForDraft(_db, _tenantContext, billDto.Id > 0 ? billDto.Id : null, billDto.CaptureReviews) is { } draftReviewFailure)
+                return draftReviewFailure;
 
             Core.Authorization.IWorkspacePolicyCompletionToken? scope = null;
             try
@@ -959,8 +962,18 @@ namespace Api.Controllers
                     bill.PurchaseInvoiceLines.Remove(removed);
 
                 _purchasingService.SaveBill(bill);
+                IReadOnlyList<Api.Service.AcknowledgedCaptureDiscrepancy> acknowledgedDiscrepancies = Array.Empty<Api.Service.AcknowledgedCaptureDiscrepancy>();
                 if (approving)
+                {
+                    var reviewResult = Api.Service.BillCaptureReviewValidator.ValidateForApproval(_db, _tenantContext, bill, billDto.CaptureReviews);
+                    if (!reviewResult.Succeeded)
+                    {
+                        scope?.RolledBack();
+                        return reviewResult.Failure!;
+                    }
+                    acknowledgedDiscrepancies = reviewResult.AcknowledgedDiscrepancies;
                     _purchasingService.ApproveBill(bill.Id, GetUserNameFromRequestHeader(), DateTime.UtcNow);
+                }
                 tx.Commit();
 
                 // Bill approval committed and the transaction will dispose: drain ONLY this scope's deferred
@@ -968,6 +981,9 @@ namespace Api.Controllers
                 // transaction first so the drain sees no ambient transaction. Never throws into the response.
                 tx.Dispose();
                 scope?.Committed();
+
+                if (acknowledgedDiscrepancies.Count > 0)
+                    RecordCaptureDiscrepancyAcknowledgements(bill.PublicId, acknowledgedDiscrepancies);
 
                 return Ok(ToBill(BillsQuery().Single(b => b.Id == bill.Id), _adminService.GetPaymentTerms().ToList()));
             }
@@ -987,12 +1003,13 @@ namespace Api.Controllers
         public IActionResult ApproveBill(
             [Dto.Common.PublicId("bill")] int id,
             bool confirmDuplicate = false,
-            [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] Dto.Purchasing.CaptureReviewContext? captureReview = null)
+            [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] Dto.Purchasing.ApproveBillRequest? request = null)
         {
             _tenantGuard.EnsureOwned<PurchaseInvoiceHeader>(id, nameof(id));
             var bill = _db.PurchaseInvoiceHeaders.Include(b => b.PurchaseInvoiceLines).Single(b => b.Id == id);
-            if (Api.Service.BillCaptureReviewValidator.ValidateForApprove(_db, _tenantContext, bill, captureReview) is { } captureReviewFailure)
-                return captureReviewFailure;
+            var reviewResult = Api.Service.BillCaptureReviewValidator.ValidateForApproval(_db, _tenantContext, bill, request?.CaptureReviews);
+            if (!reviewResult.Succeeded)
+                return reviewResult.Failure!;
             var vendorInvoiceNo = Blank(bill.VendorInvoiceNo);
             if (vendorInvoiceNo != null)
             {
@@ -1015,7 +1032,39 @@ namespace Api.Controllers
             }
 
             var user = GetUserNameFromRequestHeader();
-            return BillAction(id, () => _purchasingService.ApproveBill(id, user, DateTime.UtcNow), "approve");
+            var result = BillAction(id, () => _purchasingService.ApproveBill(id, user, DateTime.UtcNow), "approve");
+            if (result is OkObjectResult && reviewResult.AcknowledgedDiscrepancies.Count > 0)
+                RecordCaptureDiscrepancyAcknowledgements(bill.PublicId, reviewResult.AcknowledgedDiscrepancies);
+            return result;
+        }
+
+        private void RecordCaptureDiscrepancyAcknowledgements(
+            string billPublicId,
+            IReadOnlyList<Api.Service.AcknowledgedCaptureDiscrepancy> acknowledgements)
+        {
+            var audit = _securityAudit ?? HttpContext?.RequestServices?.GetService(typeof(Api.Service.ISecurityAuditService)) as Api.Service.ISecurityAuditService;
+            if (audit is null || acknowledgements.Count == 0)
+                return;
+
+            var actor = _tenantContext.UserId ?? GetUserNameFromRequestHeader();
+            var companyId = _tenantContext.RequireCompanyId();
+            foreach (var ack in acknowledgements)
+            {
+                audit.LogEventAsync(
+                    "bill.capture_discrepancy.acknowledged",
+                    "success",
+                    actor,
+                    companyId,
+                    new
+                    {
+                        billId = billPublicId,
+                        captureId = ack.CapturePublicId,
+                        sourceGrandTotal = ack.SourceGrandTotal,
+                        formTotal = ack.FormTotal,
+                        difference = ack.Difference,
+                        actor,
+                    }).GetAwaiter().GetResult();
+            }
         }
 
         /// <summary>Voids a bill; an approved one has its posting reversed. A bill with payments can't be voided.</summary>

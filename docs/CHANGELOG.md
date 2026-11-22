@@ -11,10 +11,6 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ## [Unreleased]
 
-### Added
-
-- Shared document capture review panel for scanning receipts and supplier bills into draft bills, with source-total reconciliation and approval acknowledgement, paid-receipt settlement guidance, foreign-currency and document-class safeguards, confirmed vendor suggestions, post-save evidence linking, and source evidence retrieval on bill details (disabled by default until enabled for a workspace).
-
 ### Fixed
 
 - Document capture now applies the correct banking permissions, keeps review actions available for existing captures after plan changes, and reports unsupported file types consistently.

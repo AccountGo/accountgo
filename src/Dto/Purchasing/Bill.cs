@@ -53,14 +53,20 @@ namespace Dto.Purchasing
         public DateTime? VoidedAt { get; set; }
         public string? VoidReason { get; set; }
         public bool ConfirmDuplicate { get; set; }
-        /// <summary>Optional document-capture review context bound to the current totals when saving or approving.</summary>
-        public CaptureReviewContext? CaptureReview { get; set; }
+        /// <summary>Optional document-capture review contexts bound to the current totals when saving or approving (max 10).</summary>
+        public List<CaptureReviewContext>? CaptureReviews { get; set; }
         public List<BillPayment> Payments { get; set; } = new();
+    }
+
+    /// <summary>Optional request body for <c>POST /api/Purchasing/ApproveBill</c> when approving a draft with linked captures.</summary>
+    public class ApproveBillRequest
+    {
+        public List<CaptureReviewContext>? CaptureReviews { get; set; }
     }
 
     /// <summary>
     /// Narrowly scoped review context sent with a bill save/approval when backed by an accepted document capture.
-    /// Authoritative totals are always recalculated on the server from the bill lines and canonical capture fields.
+    /// Authoritative totals are always recalculated on the server from the bill entity and canonical capture fields.
     /// </summary>
     public class CaptureReviewContext
     {
@@ -72,8 +78,6 @@ namespace Dto.Purchasing
         public decimal? FormTotal { get; set; }
         /// <summary>Explicit acknowledgement of a discrepancy between source and form totals.</summary>
         public bool DiscrepancyAcknowledged { get; set; }
-        /// <summary>Explicit acknowledgement when approving before evidence association has completed.</summary>
-        public bool MissingEvidenceAcknowledged { get; set; }
     }
 
     public class BillLine
