@@ -40,6 +40,16 @@ namespace AccountGo.BackendTests.Ai
         }
 
         [Fact]
+        public void MintAssertion_BindsChatSessionIdIntoSignedPayload()
+        {
+            var service = CreateService();
+            var token = service.MintAssertion("user-123", 42, "ph-financials", sessionId: "session-abc");
+
+            Assert.True(service.TryValidateAssertion(token, out var payload));
+            Assert.Equal("session-abc", payload!.SessionId);
+        }
+
+        [Fact]
         public void TryValidateAssertion_RejectsTamperedSignatureOrPayload()
         {
             var service = CreateService();

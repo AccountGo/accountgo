@@ -134,7 +134,7 @@ namespace Api.Controllers
 
             var companySlug = _tenantContext.CompanySlug ?? $"company-{companyId}";
             var scopedUserId = AnterRunStreamBody.BuildScopedUserId(companyId, userId);
-            var callerAssertion = _assertionService.MintAssertion(userId, companyId, companySlug);
+            var callerAssertion = _assertionService.MintAssertion(userId, companyId, companySlug, sessionId: body?.SessionId);
             var safeContext = SanitizeClientContext(body?.ContextVariables);
             ResolveEntitlementContext(
                 out var companyPlan,

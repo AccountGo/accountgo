@@ -39,6 +39,9 @@ namespace Api.Service.Ai
 
             [JsonPropertyName("exp")]
             public long ExpiresAt { get; set; }
+
+            [JsonPropertyName("sid")]
+            public string? SessionId { get; set; }
         }
 
         public McpCallerAssertionService(
@@ -63,7 +66,7 @@ namespace Api.Service.Ai
             _clock = clock ?? (() => DateTimeOffset.UtcNow);
         }
 
-        public string MintAssertion(string userId, int companyId, string companySlug, TimeSpan? ttl = null)
+        public string MintAssertion(string userId, int companyId, string companySlug, TimeSpan? ttl = null, string? sessionId = null)
         {
             if (string.IsNullOrWhiteSpace(userId))
                 throw new ArgumentException("User ID is required.", nameof(userId));
@@ -81,6 +84,7 @@ namespace Api.Service.Ai
                 CompanySlug = companySlug.Trim(),
                 IssuedAt = now.ToUnixTimeSeconds(),
                 ExpiresAt = now.Add(lifetime).ToUnixTimeSeconds(),
+                SessionId = string.IsNullOrWhiteSpace(sessionId) ? null : sessionId.Trim(),
             };
 
             var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(wire);
@@ -156,7 +160,8 @@ namespace Api.Service.Ai
                 wire.CompanyId,
                 wire.CompanySlug,
                 wire.IssuedAt,
-                wire.ExpiresAt);
+                wire.ExpiresAt,
+                wire.SessionId);
             return true;
         }
 
