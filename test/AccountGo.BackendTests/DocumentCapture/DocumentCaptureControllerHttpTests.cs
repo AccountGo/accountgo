@@ -766,4 +766,95 @@ public sealed class DocumentCaptureControllerHttpTests : IAsyncLifetime
             foreach (var item in value.EnumerateArray()) AssertJsonHasNoNumericWireIds(item);
         }
     }
+
+    [Fact]
+    public async Task ExtractionHostFalse_RejectsUploadsWithoutReservationOrWorker_WhileOtherCaptureEndpointsWork()
+    {
+        var capToAccept = await UploadWithoutKeyAsync(CreatePng(0xFF112233u));
+        var capToReject = await UploadWithoutKeyAsync(CreatePng(0xFF445566u));
+        var billId = await SeedBillAsync();
+
+        var spyExtractor = new Mock<Api.DocumentCaptures.IDocumentFieldExtractor>();
+        spyExtractor.SetupGet(e => e.IsConfigured).Returns(true);
+        spyExtractor.SetupGet(e => e.ProviderName).Returns("spy");
+
+        using var nonHostFactory = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.UseSetting("DocumentCapture:ExtractionHost", "false");
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<Api.DocumentCaptures.IDocumentFieldExtractor>();
+                services.AddSingleton(spyExtractor.Object);
+            });
+        });
+        using var nonHostClient = nonHostFactory.CreateClient();
+
+        // 1. Capabilities still reports enabled and providerAvailable.
+        using (var capReq = NewRequest(HttpMethod.Get, "/api/document-captures/capabilities"))
+        using (var capRes = await nonHostClient.SendAsync(capReq))
+        {
+            Assert.Equal(HttpStatusCode.OK, capRes.StatusCode);
+            using var body = JsonDocument.Parse(await capRes.Content.ReadAsStringAsync());
+            Assert.True(body.RootElement.GetProperty("enabled").GetBoolean());
+            Assert.True(body.RootElement.GetProperty("providerAvailable").GetBoolean());
+        }
+
+        var (beforeAttempts, beforeCaptures) = await CountCaptureRowsAsync();
+
+        // 2. Normal upload and forced re-upload both return 503 DOCUMENT_CAPTURE_UNCONFIGURED with Retry-After: 1
+        // without creating reservations, quota attempts, or calling the extractor.
+        foreach (var force in new[] { false, true })
+        {
+            using var uploadReq = NewRequest(HttpMethod.Post, "/api/document-captures");
+            uploadReq.Headers.Add("Idempotency-Key", $"non-host-{force}");
+            using var form = CreateUploadForm("purchase-invoice", CreatePng(0xFF778899u), "image/png");
+            if (force)
+                form.Add(new StringContent("true"), "Force");
+            uploadReq.Content = form;
+
+            using var uploadRes = await nonHostClient.SendAsync(uploadReq);
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, uploadRes.StatusCode);
+            Assert.Equal("1", uploadRes.Headers.RetryAfter?.Delta?.TotalSeconds.ToString("0") ?? uploadRes.Headers.GetValues("Retry-After").FirstOrDefault());
+            Assert.Equal("DOCUMENT_CAPTURE_UNCONFIGURED", await ReadProblemCodeAsync(uploadRes));
+        }
+
+        Assert.Equal((beforeAttempts, beforeCaptures), await CountCaptureRowsAsync());
+        spyExtractor.Verify(e => e.ExtractAsync(It.IsAny<Api.DocumentCaptures.DocumentExtractionRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+
+        // 3. Evidence reads (metadata + bytes), accept, link, and reject still work on ExtractionHost=false.
+        using (var getReq = NewRequest(HttpMethod.Get, $"/api/document-captures/{capToAccept}"))
+        using (var getRes = await nonHostClient.SendAsync(getReq))
+            Assert.Equal(HttpStatusCode.OK, getRes.StatusCode);
+
+        using (var imgReq = NewRequest(HttpMethod.Get, $"/api/document-captures/{capToAccept}/image"))
+        using (var imgRes = await nonHostClient.SendAsync(imgReq))
+            Assert.Equal(HttpStatusCode.OK, imgRes.StatusCode);
+
+        using (var acceptReq = NewRequest(HttpMethod.Post, $"/api/document-captures/{capToAccept}/accept"))
+        {
+            acceptReq.Content = JsonContent.Create(new { fields = new { date = "2026-11-20", vendorName = "Fixture Vendor" } });
+            using var acceptRes = await nonHostClient.SendAsync(acceptReq);
+            Assert.Equal(HttpStatusCode.OK, acceptRes.StatusCode);
+        }
+
+        using (var linkReq = NewRequest(HttpMethod.Post, $"/api/document-captures/{capToAccept}/links"))
+        {
+            linkReq.Content = JsonContent.Create(new { targetType = "bill", targetId = billId });
+            using var linkRes = await nonHostClient.SendAsync(linkReq);
+            Assert.Equal(HttpStatusCode.OK, linkRes.StatusCode);
+        }
+
+        using (var rejectReq = NewRequest(HttpMethod.Post, $"/api/document-captures/{capToReject}/reject"))
+        using (var rejectRes = await nonHostClient.SendAsync(rejectReq))
+            Assert.Equal(HttpStatusCode.OK, rejectRes.StatusCode);
+
+        async Task<(int Attempts, int Captures)> CountCaptureRowsAsync()
+        {
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            var attempts = await db.DocumentCaptureAttempts.IgnoreQueryFilters().CountAsync(row => row.CompanyId == _companyId);
+            var captures = await db.DocumentCaptures.IgnoreQueryFilters().CountAsync(row => row.CompanyId == _companyId);
+            return (attempts, captures);
+        }
+    }
 }

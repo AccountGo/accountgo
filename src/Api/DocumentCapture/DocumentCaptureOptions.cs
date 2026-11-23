@@ -11,6 +11,7 @@ public sealed class DocumentCaptureOptions
 {
     public const string SectionName = "DocumentCapture";
     public bool Enabled { get; set; }
+    public bool ExtractionHost { get; set; } = true;
     public string Extractor { get; set; } = string.Empty;
     public DocumentCaptureOcrWorkerOptions OcrWorker { get; set; } = new();
     public int ExtractionLeaseSeconds { get; set; } = 60;
@@ -37,6 +38,11 @@ public sealed class DocumentCaptureOptions
             && !string.Equals(options.Extractor, "fake", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(options.Extractor, "local-ocr", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("DocumentCapture:Extractor must be empty, fake, or local-ocr.");
+
+        if (!options.ExtractionHost
+            && (!options.Enabled || string.IsNullOrWhiteSpace(options.Extractor)))
+            throw new InvalidOperationException(
+                "DocumentCapture:ExtractionHost=false requires DocumentCapture:Enabled=true and a configured DocumentCapture:Extractor.");
 
         if (string.Equals(options.Extractor, "local-ocr", StringComparison.OrdinalIgnoreCase))
         {

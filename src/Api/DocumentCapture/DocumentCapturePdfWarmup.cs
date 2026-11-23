@@ -40,7 +40,7 @@ internal sealed class DocumentCapturePdfWarmup : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!_options.Value.Enabled)
+        if (!_options.Value.Enabled || !_options.Value.ExtractionHost)
             return;
 
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
