@@ -645,6 +645,105 @@ public sealed class McpDeidentificationTests : IAsyncLifetime
         Assert.Equal("InvalidRequest", noSession["status"]!.GetValue<string>());
     }
 
+    [Fact]
+    public async Task ReidentifyEndpoint_ResolvesAuthorizedTokens_EnforcesPermissionsScopeAnd200Cap()
+    {
+        const string sessionId = "sess_reid_1";
+        var clientsRes = await CallMcpToolAsync("search_clients", null, sessionId: sessionId);
+        var customerToken = clientsRes["data"]![0]!["name"]!.GetValue<string>();
+        var vendorsRes = await CallMcpToolAsync("search_vendors", null, sessionId: sessionId);
+        var vendorToken = vendorsRes["data"]![0]!["name"]!.GetValue<string>();
+        var banksRes = await CallMcpToolAsync("list_bank_accounts", null, sessionId: sessionId);
+        var bankList = banksRes["data"] as JsonArray ?? banksRes["data"]?["items"] as JsonArray ?? banksRes["data"]?["accounts"] as JsonArray;
+        var bankToken = bankList![0]!["name"]!.GetValue<string>();
+
+        // 1. Valid tokens resolve to real names; unknown token is omitted.
+        using (var req = new HttpRequestMessage(HttpMethod.Post, $"/api/ai/chat/sessions/{sessionId}/reidentify"))
+        {
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+            req.Headers.Add("X-AccountGo-Org", _slug);
+            req.Content = JsonContent.Create(new { tokens = new[] { customerToken, vendorToken, bankToken, "C-DEADBEEF" } });
+
+            using var res = await _client.SendAsync(req);
+            Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+            using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+            var names = doc.RootElement.GetProperty("names");
+            Assert.Equal(SentinelCustomerName, names.GetProperty(customerToken).GetString());
+            Assert.Equal(SentinelVendorName, names.GetProperty(vendorToken).GetString());
+            Assert.Equal(SentinelBankName, names.GetProperty(bankToken).GetString());
+            Assert.False(names.TryGetProperty("C-DEADBEEF", out _));
+        }
+
+        // 2. Cross-session request omits tokens from another session.
+        using (var req = new HttpRequestMessage(HttpMethod.Post, "/api/ai/chat/sessions/sess_reid_other/reidentify"))
+        {
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+            req.Headers.Add("X-AccountGo-Org", _slug);
+            req.Content = JsonContent.Create(new { tokens = new[] { customerToken, vendorToken } });
+
+            using var res = await _client.SendAsync(req);
+            Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+            using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+            Assert.Empty(doc.RootElement.GetProperty("names").EnumerateObject());
+        }
+
+        // 3. More than 200 tokens -> 400 BadRequest.
+        using (var req = new HttpRequestMessage(HttpMethod.Post, $"/api/ai/chat/sessions/{sessionId}/reidentify"))
+        {
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+            req.Headers.Add("X-AccountGo-Org", _slug);
+            var tooMany = Enumerable.Range(0, 201).Select(i => $"C-{i:X8}").ToArray();
+            req.Content = JsonContent.Create(new { tokens = tooMany });
+
+            using var res = await _client.SendAsync(req);
+            Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+        }
+
+        // 4. Cross-workspace request omits tokens from workspace A.
+        var otherSlug = "deid-org-b-" + Guid.NewGuid().ToString("N")[..8];
+        using (var createOrgReq = new HttpRequestMessage(HttpMethod.Post, "/api/organizations"))
+        {
+            createOrgReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+            createOrgReq.Content = JsonContent.Create(new { name = "Deid Other Org", slug = otherSlug });
+            var createOrgRes = await _client.SendAsync(createOrgReq);
+            Assert.Equal(HttpStatusCode.Created, createOrgRes.StatusCode);
+        }
+
+        using (var req = new HttpRequestMessage(HttpMethod.Post, $"/api/ai/chat/sessions/{sessionId}/reidentify"))
+        {
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+            req.Headers.Add("X-AccountGo-Org", otherSlug);
+            req.Content = JsonContent.Create(new { tokens = new[] { customerToken } });
+
+            using var res = await _client.SendAsync(req);
+            Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+            using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+            Assert.Empty(doc.RootElement.GetProperty("names").EnumerateObject());
+        }
+
+        // 5. Revoking functional read permissions omits forbidden entity tokens.
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            var ownerMember = await db.CompanyMembers.SingleAsync(m => m.CompanyId == _companyId && m.UserId == _userId);
+            var roles = await db.CompanyMemberSecurityRoles.Where(r => r.CompanyMemberId == ownerMember.Id).ToListAsync();
+            db.CompanyMemberSecurityRoles.RemoveRange(roles);
+            await db.SaveChangesAsync();
+        }
+
+        using (var req = new HttpRequestMessage(HttpMethod.Post, $"/api/ai/chat/sessions/{sessionId}/reidentify"))
+        {
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+            req.Headers.Add("X-AccountGo-Org", _slug);
+            req.Content = JsonContent.Create(new { tokens = new[] { customerToken, vendorToken, bankToken } });
+
+            using var res = await _client.SendAsync(req);
+            Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+            using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+            Assert.Empty(doc.RootElement.GetProperty("names").EnumerateObject());
+        }
+    }
+
     private static void CollectUnclassifiedStringProperties(JsonNode node, HashSet<string> unclassified)
     {
         switch (node)

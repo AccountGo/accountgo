@@ -19,6 +19,10 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 - Notices and banners now use readable colours in the dark theme when the device itself is in light mode.
 
+### Security
+
+- Assistant workspace queries now replace customer, vendor, bank account, and person names with per-session pseudonyms and mask contacts, addresses, tax identifiers, and free-text notes before sending data to the AI model, restoring authorized names only in the browser.
+
 ## [0.3.0] - 2026-11-21
 
 Release notes: https://github.com/AccountGo/accountgo/releases/tag/v0.3.0
