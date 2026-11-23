@@ -20,6 +20,7 @@ public sealed class DocumentCaptureOptions
     public int ImageDecodeSlots { get; set; } = DocumentCaptureImageLimits.DecodeGateSlots;
     public int PdfParseSlots { get; set; } = DocumentCapturePdfLimits.ParseGateSlots;
     public int RetentionStartDelaySeconds { get; set; } = 60;
+    public int AbandonedRetentionHours { get; set; } = 24;
     public Dictionary<string, string> FakeFixtures { get; set; } = new(StringComparer.Ordinal);
 
     public static void Validate(DocumentCaptureOptions options, IHostEnvironment environment)
@@ -31,7 +32,8 @@ public sealed class DocumentCaptureOptions
             || options.MaxAttemptsPerDay is < 1 or > 60
             || options.ImageDecodeSlots is < 1 or > DocumentCaptureImageLimits.DecodeGateSlots
             || options.PdfParseSlots is < 1 or > DocumentCapturePdfLimits.MaxParseGateSlots
-            || options.RetentionStartDelaySeconds is < 0 or > 3_600)
+            || options.RetentionStartDelaySeconds is < 0 or > 3_600
+            || options.AbandonedRetentionHours is < 1 or > 168)
             throw new InvalidOperationException("Document capture limits are outside the supported range.");
 
         if (!string.Equals(options.Extractor, "", StringComparison.Ordinal)

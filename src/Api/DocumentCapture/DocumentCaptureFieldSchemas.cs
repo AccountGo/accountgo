@@ -25,6 +25,14 @@ public static partial class DocumentCaptureFieldSchemas
     public const int MaxDecimalSignificantDigits = 18;
     public const int MaxDecimalScale = 4;
 
+    public const string EmptyObjectJson = "{}";
+    public const string EmptyAssistantFieldsJson = "{\"fields\":[]}";
+
+    public static string EmptyFieldsJsonForKind(string kind) =>
+        string.Equals(kind, "assistant-attachment", StringComparison.Ordinal)
+            ? EmptyAssistantFieldsJson
+            : EmptyObjectJson;
+
     private static readonly HashSet<string> VendorFields = new(StringComparer.Ordinal)
     {
         "vendorName", "vendorInvoiceNo", "date", "dueDate", "referenceNo", "currency", "notes",

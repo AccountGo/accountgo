@@ -85,6 +85,130 @@ public sealed class DocumentCaptureServiceTests
         Assert.Empty(await harness.Db.Banks.ToListAsync());
     }
 
+    [Theory]
+    [InlineData("expense-receipt", "{\"vendorName\":\"Corner Cafe\",\"date\":\"2026-11-20\"}", "{}")]
+    [InlineData("purchase-invoice", "{\"vendorName\":\"Acme Ltd\",\"date\":\"2026-11-20\"}", "{}")]
+    [InlineData("sales-invoice", "{\"customerName\":\"Blue Harbor LLC\",\"date\":\"2026-11-20\"}", "{}")]
+    [InlineData("bank", "{\"bankName\":\"First Test Bank\",\"name\":\"Acme Ops\"}", "{}")]
+    [InlineData("assistant-attachment", "{\"fields\":[{\"label\":\"Reference\",\"value\":\"INV-42\"}]}", "{\"fields\":[]}")]
+    public async Task Reject_DeletesBytesAndClearsExtractedContentForEveryKind_IsIdempotent_AndSkipsDeduplication(
+        string kind, string extractedJson, string expectedEmptyJson)
+    {
+        using var harness = new Harness(enabled: true);
+        var extractor = new WarningStaticExtractor(extractedJson);
+        var service = harness.CreateService(extractor);
+        var source = CreatePng();
+
+        var uploaded = await service.UploadAsync(kind, 1, "image/png", source, $"reject-{kind}", CancellationToken.None);
+        var internalId = await harness.Db.DocumentCaptures.Where(c => c.PublicId == uploaded.Id)
+            .Select(c => c.Id).SingleAsync();
+
+        var rejected = await service.RejectAsync(internalId, CancellationToken.None);
+        Assert.Equal("rejected", rejected.Status);
+        Assert.False(rejected.BytesAvailable);
+        Assert.Null(rejected.Warnings);
+        Assert.Equal(expectedEmptyJson, rejected.Fields!.ToString(Newtonsoft.Json.Formatting.None));
+        Assert.NotNull(rejected.RejectedAt);
+
+        var stored = await harness.Db.DocumentCaptures.AsNoTracking().SingleAsync(c => c.Id == internalId);
+        Assert.Equal("rejected", stored.Status);
+        Assert.Equal(uploaded.Id, stored.PublicId);
+        Assert.Equal(kind, stored.Kind);
+        Assert.Equal(uploaded.SourceHash, stored.SourceHash);
+        Assert.Equal(uploaded.ContentHash, stored.ContentHash);
+        Assert.Equal(1, stored.ExtractionGeneration);
+        Assert.NotNull(stored.RejectedBy);
+        Assert.NotNull(stored.RejectedAt);
+        Assert.NotNull(stored.BytesDeletedAt);
+        Assert.NotNull(stored.FieldsWipedAt);
+        Assert.Equal(expectedEmptyJson, stored.FieldsJson);
+        Assert.Null(stored.RawText);
+        Assert.Null(stored.WarningsJson);
+        Assert.False(await harness.Db.DocumentCaptureBlobs.AnyAsync(b => b.CaptureId == internalId));
+
+        // Image endpoint throws existing bytes-unavailable error.
+        var bytesEx = await Assert.ThrowsAsync<DocumentCaptureServiceException>(() =>
+            service.GetBytesAsync(internalId, CancellationToken.None));
+        Assert.Equal(404, bytesEx.StatusCode);
+        Assert.Equal("DOCUMENT_BYTES_UNAVAILABLE", bytesEx.ErrorCode);
+
+        // Reject is idempotent.
+        var rejectedAgain = await service.RejectAsync(internalId, CancellationToken.None);
+        Assert.Equal("rejected", rejectedAgain.Status);
+        Assert.False(rejectedAgain.BytesAvailable);
+
+        // Deduplication never returns a rejected capture.
+        var reuploaded = await service.UploadAsync(kind, 1, "image/png", source, $"reupload-{kind}", CancellationToken.None);
+        Assert.NotEqual(uploaded.Id, reuploaded.Id);
+        Assert.Equal("ready", reuploaded.Status);
+    }
+
+    [Theory]
+    [InlineData(24)]
+    [InlineData(6)]
+    public async Task AbandonedPurge_HonoursConfiguredRetentionHours_WipesContent_AndPreventsDuplicateReplay(int retentionHours)
+    {
+        var start = new DateTimeOffset(2026, 11, 23, 0, 0, 0, TimeSpan.Zero);
+        var clock = new MutableTimeProvider(start);
+        using var harness = new Harness(enabled: true, abandonedRetentionHours: retentionHours);
+        var service = harness.CreateService(new WarningStaticExtractor("{\"vendorName\":\"Acme Ltd\",\"date\":\"2026-11-20\"}"), timeProvider: clock);
+        var retention = new DocumentCaptureRetentionService(harness.Db, new DocumentCaptureAdmissionLock(harness.Db), clock);
+        var source = CreatePng();
+
+        var uploaded = await service.UploadAsync("purchase-invoice", 1, "image/png", source, "abandoned-key", CancellationToken.None);
+        var internalId = await harness.Db.DocumentCaptures.Where(c => c.PublicId == uploaded.Id)
+            .Select(c => c.Id).SingleAsync();
+
+        // 1 hour before expiry: still intact.
+        clock.SetUtcNow(start.AddHours(retentionHours - 1));
+        await retention.PurgeAsync(CancellationToken.None);
+        Assert.True(await harness.Db.DocumentCaptureBlobs.AnyAsync(b => b.CaptureId == internalId));
+        var beforeExpiry = await harness.Db.DocumentCaptures.AsNoTracking().SingleAsync(c => c.Id == internalId);
+        Assert.Null(beforeExpiry.BytesDeletedAt);
+        Assert.Null(beforeExpiry.FieldsWipedAt);
+
+        // At expiry: bytes deleted and extracted content wiped.
+        clock.SetUtcNow(start.AddHours(retentionHours));
+        await retention.PurgeAsync(CancellationToken.None);
+        Assert.False(await harness.Db.DocumentCaptureBlobs.AnyAsync(b => b.CaptureId == internalId));
+        var afterExpiry = await harness.Db.DocumentCaptures.AsNoTracking().SingleAsync(c => c.Id == internalId);
+        Assert.NotNull(afterExpiry.BytesDeletedAt);
+        Assert.NotNull(afterExpiry.FieldsWipedAt);
+        Assert.Equal("{}", afterExpiry.FieldsJson);
+        Assert.Null(afterExpiry.RawText);
+        Assert.Null(afterExpiry.WarningsJson);
+
+        // Deduplication never returns a purged capture.
+        var reuploaded = await service.UploadAsync("purchase-invoice", 1, "image/png", source, "abandoned-reupload", CancellationToken.None);
+        Assert.NotEqual(uploaded.Id, reuploaded.Id);
+        Assert.Equal("ready", reuploaded.Status);
+    }
+
+    [Fact]
+    public void OptionsValidate_EnforcesAbandonedRetentionHoursRange()
+    {
+        var dev = new Mock<Microsoft.Extensions.Hosting.IHostEnvironment>();
+        dev.SetupGet(e => e.EnvironmentName).Returns("Development");
+
+        Assert.Throws<InvalidOperationException>(() => DocumentCaptureOptions.Validate(
+            new DocumentCaptureOptions { AbandonedRetentionHours = 0 }, dev.Object));
+        Assert.Throws<InvalidOperationException>(() => DocumentCaptureOptions.Validate(
+            new DocumentCaptureOptions { AbandonedRetentionHours = 169 }, dev.Object));
+
+        DocumentCaptureOptions.Validate(new DocumentCaptureOptions { AbandonedRetentionHours = 1 }, dev.Object);
+        DocumentCaptureOptions.Validate(new DocumentCaptureOptions { AbandonedRetentionHours = 24 }, dev.Object);
+        DocumentCaptureOptions.Validate(new DocumentCaptureOptions { AbandonedRetentionHours = 168 }, dev.Object);
+    }
+
+    private sealed class WarningStaticExtractor(string fieldsJson) : IDocumentFieldExtractor
+    {
+        public bool IsConfigured => true;
+        public string ProviderName => "fixture";
+        public Task<DocumentExtractionResult> ExtractAsync(DocumentExtractionRequest request, CancellationToken cancellationToken) =>
+            Task.FromResult(new DocumentExtractionResult(fieldsJson, request.Kind, 1, ["TOTAL_UNLABELED"],
+                "sensitive raw text", "fixture", "1"));
+    }
+
     [Fact]
     public async Task Upload_TerminalReplayDoesNotNeedAnImageDecodeSlot()
     {
@@ -912,7 +1036,7 @@ public sealed class DocumentCaptureServiceTests
         public Mock<IEntitlementService> EntitlementMock { get; private set; } = null!;
         public IDocumentFieldExtractor Extractor { get; }
 
-        public Harness(bool enabled, int maxAttemptsPerHour = 20, int maxAttemptsPerDay = 60, DbCommandInterceptor? interceptor = null)
+        public Harness(bool enabled, int maxAttemptsPerHour = 20, int maxAttemptsPerDay = 60, DbCommandInterceptor? interceptor = null, int abandonedRetentionHours = 24)
         {
             _connection.Open();
             _tenant = new TestTenantContext(1);
@@ -926,7 +1050,10 @@ public sealed class DocumentCaptureServiceTests
             _tenant.Permissions = new HashSet<string>(StringComparer.Ordinal)
             {
                 SystemPermissions.PurchasesBillsCreate,
-                SystemPermissions.PurchasesBillsView
+                SystemPermissions.PurchasesBillsView,
+                SystemPermissions.SalesInvoicesCreate,
+                SystemPermissions.SalesInvoicesView,
+                SystemPermissions.BankingAccountsManage
             };
 
             var snapshot = new EntitlementSnapshot(true, "invoicing", "invoicing", false, [], [], [], null,
@@ -943,6 +1070,7 @@ public sealed class DocumentCaptureServiceTests
                 Extractor = "Fake",
                 MaxAttemptsPerHour = maxAttemptsPerHour,
                 MaxAttemptsPerDay = maxAttemptsPerDay,
+                AbandonedRetentionHours = abandonedRetentionHours,
                 FakeFixtures = new Dictionary<string, string>
                 {
                     ["purchase-invoice"] = "{\"vendorName\":\"Fixture Vendor\",\"date\":\"2026-11-20\",\"lines\":[]}",
