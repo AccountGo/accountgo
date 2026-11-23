@@ -377,12 +377,26 @@ public sealed class McpResponseDeidentifier : IMcpResponseDeidentifier
         Dictionary<string, string> bankMap)
     {
         var baseDisposition = McpFieldClassificationRegistry.Classify(propertyName);
+        if (baseDisposition == McpFieldDisposition.ContextualLabel)
+        {
+            if (string.Equals(toolName, "get_equity_statement", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(rootKind, "equityStatement", StringComparison.OrdinalIgnoreCase))
+            {
+                return McpFieldDisposition.KeepAndScrub;
+            }
+            return McpFieldDisposition.HideFreeText;
+        }
+
         if (baseDisposition == McpFieldDisposition.AccountNameOrBankPseudonym)
         {
-            var acctId = GetStringProp(owner, "accountId")
-                ?? GetStringProp(owner, "ledgerAccountId")
-                ?? GetStringProp(owner, "linkedAccountId")
-                ?? GetStringProp(owner, "id");
+            var acctId = propertyName.Equals("accountToDebit", StringComparison.OrdinalIgnoreCase)
+                ? GetStringProp(owner, "accountToDebitId")
+                : propertyName.Equals("accountToCredit", StringComparison.OrdinalIgnoreCase)
+                    ? GetStringProp(owner, "accountToCreditId")
+                    : (GetStringProp(owner, "accountId")
+                        ?? GetStringProp(owner, "ledgerAccountId")
+                        ?? GetStringProp(owner, "linkedAccountId")
+                        ?? GetStringProp(owner, "id"));
 
             if (!string.IsNullOrEmpty(acctId) && bankMap.ContainsKey(acctId))
                 return McpFieldDisposition.PseudonymizeBankAccount;
@@ -490,13 +504,18 @@ public sealed class McpResponseDeidentifier : IMcpResponseDeidentifier
 
             McpFieldDisposition.PseudonymizeBankAccount => BuildEntity(
                 AssistantPseudonymKind.BankAccount,
-                ResolveBankPublicId(owner, bankMap),
+                ResolveBankPublicId(owner, propertyName, bankMap),
                 value),
 
             McpFieldDisposition.PseudonymizePerson => BuildEntity(
                 AssistantPseudonymKind.Person,
                 FindSiblingId(owner, "mem_", "memberId", "companyMemberId", "id"),
                 value),
+
+            McpFieldDisposition.PseudonymizePersonUser => new AssistantPseudonymEntity(
+                AssistantPseudonymKind.Person,
+                $"usr:{value.Trim()}",
+                DisplayText: null),
 
             _ => null,
         };
@@ -511,13 +530,26 @@ public sealed class McpResponseDeidentifier : IMcpResponseDeidentifier
         return new AssistantPseudonymEntity(kind, synKey, DisplayText: displayValue);
     }
 
-    private static string? ResolveBankPublicId(JsonObject owner, Dictionary<string, string> bankMap)
+    private static string? ResolveBankPublicId(JsonObject owner, string propertyName, Dictionary<string, string> bankMap)
     {
         var direct = FindSiblingId(owner, "ba_", "bankId", "bankAccountId", "id");
         if (direct is not null)
             return direct;
 
-        foreach (var prop in new[] { "accountId", "ledgerAccountId", "linkedAccountId", "id" })
+        var preferredAcctProp = propertyName.Equals("accountToDebit", StringComparison.OrdinalIgnoreCase)
+            ? "accountToDebitId"
+            : propertyName.Equals("accountToCredit", StringComparison.OrdinalIgnoreCase)
+                ? "accountToCreditId"
+                : null;
+
+        if (preferredAcctProp is not null)
+        {
+            var preferredId = GetStringProp(owner, preferredAcctProp);
+            if (!string.IsNullOrEmpty(preferredId) && bankMap.TryGetValue(preferredId, out var bankPub))
+                return bankPub;
+        }
+
+        foreach (var prop in new[] { "accountId", "ledgerAccountId", "linkedAccountId", "accountToDebitId", "accountToCreditId", "id" })
         {
             var acctId = GetStringProp(owner, prop);
             if (!string.IsNullOrEmpty(acctId) && bankMap.TryGetValue(acctId, out var bankPublicId))

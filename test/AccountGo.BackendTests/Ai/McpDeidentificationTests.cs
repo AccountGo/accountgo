@@ -750,11 +750,20 @@ public sealed class McpDeidentificationTests : IAsyncLifetime
         var bankToken = bankList![0]!["name"]!.GetValue<string>();
 
         // 1. Valid tokens resolve to real names; unknown token is omitted.
+        string memberUserToken;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var tenant = scope.ServiceProvider.GetRequiredService<Core.Tenancy.ITenantContext>();
+            using var _ = tenant.Impersonate(_companyId, _slug);
+            var svc = scope.ServiceProvider.GetRequiredService<IAssistantPseudonymService>();
+            memberUserToken = await svc.PseudonymizeAsync(_companyId, _userId, sessionId, AssistantPseudonymKind.Person, "usr:" + _userId);
+        }
+
         using (var req = new HttpRequestMessage(HttpMethod.Post, $"/api/ai/chat/sessions/{sessionId}/reidentify"))
         {
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
             req.Headers.Add("X-AccountGo-Org", _slug);
-            req.Content = JsonContent.Create(new { tokens = new[] { customerToken, vendorToken, bankToken, "C-DEADBEEF" } });
+            req.Content = JsonContent.Create(new { tokens = new[] { customerToken, vendorToken, bankToken, memberUserToken, "C-DEADBEEF" } });
 
             using var res = await _client.SendAsync(req);
             Assert.Equal(HttpStatusCode.OK, res.StatusCode);
@@ -763,7 +772,35 @@ public sealed class McpDeidentificationTests : IAsyncLifetime
             Assert.Equal(SentinelCustomerName, names.GetProperty(customerToken).GetString());
             Assert.Equal(SentinelVendorName, names.GetProperty(vendorToken).GetString());
             Assert.Equal(SentinelBankName, names.GetProperty(bankToken).GetString());
+            // Accountant role does not include AdminMembersManage/AuditLogsView -> P- user token is omitted without permission.
+            Assert.False(names.TryGetProperty(memberUserToken, out _));
             Assert.False(names.TryGetProperty("C-DEADBEEF", out _));
+        }
+
+        // Granting Auditor / Viewer (audit.logs.view) allows re-identifying P- user token via membership.
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            var ownerMember = await db.CompanyMembers.SingleAsync(m => m.CompanyId == _companyId && m.UserId == _userId);
+            var viewerRole = await db.SecurityRoles.SingleAsync(r => r.Name == "Auditor / Viewer");
+            db.CompanyMemberSecurityRoles.Add(new CompanyMemberSecurityRole
+            {
+                CompanyMemberId = ownerMember.Id,
+                SecurityRoleId = viewerRole.Id,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        using (var req = new HttpRequestMessage(HttpMethod.Post, $"/api/ai/chat/sessions/{sessionId}/reidentify"))
+        {
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+            req.Headers.Add("X-AccountGo-Org", _slug);
+            req.Content = JsonContent.Create(new { tokens = new[] { memberUserToken } });
+
+            using var res = await _client.SendAsync(req);
+            Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+            using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+            Assert.Equal("deid-tester@example.com", doc.RootElement.GetProperty("names").GetProperty(memberUserToken).GetString());
         }
 
         // 2. Cross-session request omits tokens from another session.

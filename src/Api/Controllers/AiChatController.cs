@@ -369,22 +369,33 @@ namespace Api.Controllers
                 }
             }
 
-            var canViewMembers = _tenantContext.Role is CompanyMemberRole.Owner or CompanyMemberRole.Admin
-                || permissions.Contains(Core.Domain.Security.SystemPermissions.AdminMembersManage)
+            var canViewMembers = permissions.Contains(Core.Domain.Security.SystemPermissions.AdminMembersManage)
                 || permissions.Contains(Core.Domain.Security.SystemPermissions.AuditLogsView);
 
             if (canViewMembers)
             {
                 var personTokens = resolved.Values
                     .Where(r => string.Equals(r.Kind, AssistantPseudonymKind.Person, StringComparison.Ordinal)
-                        && r.PublicId.StartsWith("mem_", StringComparison.OrdinalIgnoreCase))
+                        && (r.PublicId.StartsWith("mem_", StringComparison.OrdinalIgnoreCase)
+                            || r.PublicId.StartsWith("usr:", StringComparison.Ordinal)))
                     .ToList();
                 if (personTokens.Count > 0)
                 {
-                    var ids = personTokens.Select(t => t.PublicId).Distinct(StringComparer.Ordinal).ToList();
+                    var memIds = personTokens
+                        .Where(t => t.PublicId.StartsWith("mem_", StringComparison.OrdinalIgnoreCase))
+                        .Select(t => t.PublicId)
+                        .Distinct(StringComparer.Ordinal)
+                        .ToList();
+                    var usrIds = personTokens
+                        .Where(t => t.PublicId.StartsWith("usr:", StringComparison.Ordinal))
+                        .Select(t => t.PublicId["usr:".Length..])
+                        .Distinct(StringComparer.Ordinal)
+                        .ToList();
+
                     var memberRows = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
                         _db.CompanyMembers
-                            .Where(m => m.CompanyId == companyId && ids.Contains(m.PublicId))
+                            .Where(m => m.CompanyId == companyId
+                                && (memIds.Contains(m.PublicId) || usrIds.Contains(m.UserId)))
                             .Select(m => new { m.PublicId, m.UserId }),
                         cancellationToken);
 
@@ -409,7 +420,9 @@ namespace Api.Controllers
                             var display = !string.IsNullOrWhiteSpace(u.Email) ? u.Email : (u.UserName ?? string.Empty);
                             if (!string.IsNullOrWhiteSpace(display))
                             {
-                                lookup[m.PublicId] = display;
+                                if (!string.IsNullOrWhiteSpace(m.PublicId))
+                                    lookup[m.PublicId] = display;
+                                lookup["usr:" + m.UserId] = display;
                             }
                         }
                     }

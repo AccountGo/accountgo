@@ -25,6 +25,9 @@ public enum McpFieldDisposition
     /// <summary>Replace with a per-session person/member/contact pseudonym token (<c>P-XXXXXXXX</c>).</summary>
     PseudonymizePerson,
 
+    /// <summary>Replace a user-id / actor-id field with a per-session person pseudonym (<c>P-XXXXXXXX</c>) keyed by the user id.</summary>
+    PseudonymizePersonUser,
+
     /// <summary>Replace with a per-session bank account pseudonym token (<c>B-XXXXXXXX</c>).</summary>
     PseudonymizeBankAccount,
 
@@ -33,6 +36,9 @@ public enum McpFieldDisposition
 
     /// <summary>Resolve generic <c>name</c> property from object context; fail closed to <see cref="MaskSensitive"/> if unknown.</summary>
     ContextualName,
+
+    /// <summary>Resolve <c>label</c>: keep scrubbed report headings (e.g. equity statement), hide free-text examples elsewhere.</summary>
+    ContextualLabel,
 
     /// <summary>Chart-of-accounts account name: pseudonymize as <c>B-…</c> if linked to a bank account, otherwise <see cref="KeepAndScrub"/>.</summary>
     AccountNameOrBankPseudonym,
@@ -174,6 +180,8 @@ public static partial class McpFieldClassificationRegistry
         ["publicId"] = McpFieldDisposition.KeepUnmasked,
         ["companyId"] = McpFieldDisposition.KeepUnmasked,
         ["accountId"] = McpFieldDisposition.KeepUnmasked,
+        ["accountToDebitId"] = McpFieldDisposition.KeepUnmasked,
+        ["accountToCreditId"] = McpFieldDisposition.KeepUnmasked,
         ["ledgerAccountId"] = McpFieldDisposition.KeepUnmasked,
         ["linkedAccountId"] = McpFieldDisposition.KeepUnmasked,
         ["expenseAccountId"] = McpFieldDisposition.KeepUnmasked,
@@ -196,6 +204,8 @@ public static partial class McpFieldClassificationRegistry
         ["receiptId"] = McpFieldDisposition.KeepUnmasked,
         ["journalEntryId"] = McpFieldDisposition.KeepUnmasked,
         ["generalLedgerHeaderId"] = McpFieldDisposition.KeepUnmasked,
+        ["generalLedgerHederId"] = McpFieldDisposition.KeepUnmasked,
+        ["closingGeneralLedgerHeaderId"] = McpFieldDisposition.KeepUnmasked,
         ["reversedGeneralLedgerHeaderId"] = McpFieldDisposition.KeepUnmasked,
         ["sourceDocumentId"] = McpFieldDisposition.KeepUnmasked,
         ["sourceJournalId"] = McpFieldDisposition.KeepUnmasked,
@@ -280,6 +290,8 @@ public static partial class McpFieldClassificationRegistry
 
         // --- KeepAndScrub: CoA account names (non-bank), item names, tax rate names, system messages ---
         ["accountName"] = McpFieldDisposition.AccountNameOrBankPseudonym,
+        ["accountToDebit"] = McpFieldDisposition.AccountNameOrBankPseudonym,
+        ["accountToCredit"] = McpFieldDisposition.AccountNameOrBankPseudonym,
         ["ledgerAccountName"] = McpFieldDisposition.AccountNameOrBankPseudonym,
         ["linkedAccountName"] = McpFieldDisposition.AccountNameOrBankPseudonym,
         ["expenseAccountName"] = McpFieldDisposition.KeepAndScrub,
@@ -298,13 +310,14 @@ public static partial class McpFieldClassificationRegistry
         ["companyName"] = McpFieldDisposition.KeepAndScrub,
         ["workspaceName"] = McpFieldDisposition.KeepAndScrub,
         ["title"] = McpFieldDisposition.KeepAndScrub,
-        ["label"] = McpFieldDisposition.HideFreeText,
+        ["label"] = McpFieldDisposition.ContextualLabel,
         ["message"] = McpFieldDisposition.KeepAndScrub,
         ["recentInvoicesNote"] = McpFieldDisposition.KeepAndScrub,
         ["recentBillsNote"] = McpFieldDisposition.KeepAndScrub,
 
         // --- Contextual generic name ---
         ["name"] = McpFieldDisposition.ContextualName,
+        ["displayName"] = McpFieldDisposition.ContextualName,
 
         // --- Pseudonymize: Customer ---
         ["customerName"] = McpFieldDisposition.PseudonymizeCustomer,
@@ -334,23 +347,39 @@ public static partial class McpFieldClassificationRegistry
         ["memberName"] = McpFieldDisposition.PseudonymizePerson,
         ["userName"] = McpFieldDisposition.PseudonymizePerson,
         ["fullName"] = McpFieldDisposition.PseudonymizePerson,
-        ["displayName"] = McpFieldDisposition.PseudonymizePerson,
         ["contactName"] = McpFieldDisposition.PseudonymizePerson,
         ["firstName"] = McpFieldDisposition.PseudonymizePerson,
         ["lastName"] = McpFieldDisposition.PseudonymizePerson,
         ["actorName"] = McpFieldDisposition.PseudonymizePerson,
         ["actorDisplayName"] = McpFieldDisposition.PseudonymizePerson,
-        ["createdBy"] = McpFieldDisposition.PseudonymizePerson,
         ["createdByName"] = McpFieldDisposition.PseudonymizePerson,
-        ["updatedBy"] = McpFieldDisposition.PseudonymizePerson,
         ["updatedByName"] = McpFieldDisposition.PseudonymizePerson,
-        ["approvedBy"] = McpFieldDisposition.PseudonymizePerson,
         ["approvedByName"] = McpFieldDisposition.PseudonymizePerson,
-        ["postedBy"] = McpFieldDisposition.PseudonymizePerson,
-        ["voidedBy"] = McpFieldDisposition.PseudonymizePerson,
-        ["invitedBy"] = McpFieldDisposition.PseudonymizePerson,
         ["invitedByName"] = McpFieldDisposition.PseudonymizePerson,
         ["ownerName"] = McpFieldDisposition.PseudonymizePerson,
+
+        // --- Pseudonymize: Person User IDs (consistent P- token per user across attribution/audit fields) ---
+        ["userId"] = McpFieldDisposition.PseudonymizePersonUser,
+        ["actorUserId"] = McpFieldDisposition.PseudonymizePersonUser,
+        ["postedByUserId"] = McpFieldDisposition.PseudonymizePersonUser,
+        ["preparedByUserId"] = McpFieldDisposition.PseudonymizePersonUser,
+        ["reviewedByUserId"] = McpFieldDisposition.PseudonymizePersonUser,
+        ["approvedByUserId"] = McpFieldDisposition.PseudonymizePersonUser,
+        ["createdByUserId"] = McpFieldDisposition.PseudonymizePersonUser,
+        ["updatedByUserId"] = McpFieldDisposition.PseudonymizePersonUser,
+        ["voidedByUserId"] = McpFieldDisposition.PseudonymizePersonUser,
+        ["closedByUserId"] = McpFieldDisposition.PseudonymizePersonUser,
+        ["invitedByUserId"] = McpFieldDisposition.PseudonymizePersonUser,
+        ["ownerUserId"] = McpFieldDisposition.PseudonymizePersonUser,
+        ["closedBy"] = McpFieldDisposition.PseudonymizePersonUser,
+        ["createdBy"] = McpFieldDisposition.PseudonymizePersonUser,
+        ["updatedBy"] = McpFieldDisposition.PseudonymizePersonUser,
+        ["approvedBy"] = McpFieldDisposition.PseudonymizePersonUser,
+        ["postedBy"] = McpFieldDisposition.PseudonymizePersonUser,
+        ["voidedBy"] = McpFieldDisposition.PseudonymizePersonUser,
+        ["reviewedBy"] = McpFieldDisposition.PseudonymizePersonUser,
+        ["preparedBy"] = McpFieldDisposition.PseudonymizePersonUser,
+        ["invitedBy"] = McpFieldDisposition.PseudonymizePersonUser,
 
         // --- HideFreeText -> "[text hidden]" ---
         ["description"] = McpFieldDisposition.HideFreeText,
@@ -446,10 +475,6 @@ public static partial class McpFieldClassificationRegistry
         ["registrationNumber"] = McpFieldDisposition.MaskSensitive,
         ["businessNumber"] = McpFieldDisposition.MaskSensitive,
         ["companyRegistrationNumber"] = McpFieldDisposition.MaskSensitive,
-        ["actorUserId"] = McpFieldDisposition.KeepUnmasked,
-        ["userId"] = McpFieldDisposition.KeepUnmasked,
-        ["invitedByUserId"] = McpFieldDisposition.KeepUnmasked,
-        ["ownerUserId"] = McpFieldDisposition.KeepUnmasked,
     };
 
     public static bool IsExplicitlyClassified(string propertyName) =>
