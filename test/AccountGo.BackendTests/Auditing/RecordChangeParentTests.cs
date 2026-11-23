@@ -32,7 +32,8 @@ public sealed class RecordChangeParentTests
             typeof(SalesReceiptLine),
             typeof(RecurringScheduleLine),
             typeof(TaxGroupTax),
-            typeof(CompanyMemberSecurityRole)
+            typeof(CompanyMemberSecurityRole),
+            typeof(PartyAlias)
         };
         Assert.Equal(expected.OrderBy(t => t.Name), RecordChangeInterceptor.ParentLinks.Keys.OrderBy(t => t.Name));
         Assert.All(RecordChangeInterceptor.ParentLinks.Keys, type =>
@@ -47,6 +48,7 @@ public sealed class RecordChangeParentTests
     [InlineData(typeof(RecurringScheduleLine), "RecurringSchedule", nameof(RecurringScheduleLine.RecurringScheduleId), 14)]
     [InlineData(typeof(TaxGroupTax), "TaxGroup", nameof(TaxGroupTax.TaxGroupId), 15)]
     [InlineData(typeof(CompanyMemberSecurityRole), "CompanyMember", nameof(CompanyMemberSecurityRole.CompanyMemberId), 16)]
+    [InlineData(typeof(PartyAlias), "Party", nameof(PartyAlias.PartyId), 17)]
     public void ResolveParent_AddedModifiedDeleted_UsesForeignKey(Type lineType, string parentType, string fkProperty, int parentId)
     {
         using var connection = Open();
