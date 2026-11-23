@@ -1033,6 +1033,51 @@ public sealed class DocumentTextFieldParserTests
         Assert.Equal("INV-999", labelledWins.GetProperty("vendorInvoiceNo").GetString());
     }
 
+    // --- E10: skewed item rows with inflated OCR box heights must never replace the top-block issuer ---
+
+    [Fact]
+    public void Parse_Vendor_E10_SkewedTallItemRowsDoNotReplaceTopBlockIssuer()
+    {
+        var s04 = new[]
+        {
+            Line("Harbor Hardware", y0: 0, y1: 25),
+            Line("123 Example Road, Unit 4", y0: 30, y1: 54),
+            Line("RECEIPT", y0: 60, y1: 83),
+            Line("Receipt #: S04-2738", y0: 90, y1: 112),
+            Line("Date: 03.10.2026", y0: 120, y1: 141),
+            Line("1 €34.90 €34.90", y0: 150, y1: 178),
+            Line("Drill bits set €7.45 €14.90", y0: 185, y1: 220),
+            Line("Screws 200pc 2", y0: 225, y1: 256),
+        };
+        Assert.Equal("Harbor Hardware", ParseAndValidate("expense-receipt", s04, out _).GetProperty("vendorName").GetString());
+
+        var s06 = new[]
+        {
+            Line("Green Leaf Grocers", y0: 0, y1: 26),
+            Line("123 Example Road, Unit 4", y0: 30, y1: 56),
+            Line("RECEIPT", y0: 60, y1: 85),
+            Line("Receipt #: S06-5197", y0: 90, y1: 113),
+            Line("Date: 2026/09/30", y0: 120, y1: 143),
+            Line("Organic apples 3 $4.99 $14.97", y0: 150, y1: 187),
+            Line("Milk 2L 2 $3.49 $6.98", y0: 190, y1: 228),
+            Line("Bread 1 $5.25 $5.25", y0: 230, y1: 268),
+        };
+        Assert.Equal("Green Leaf Grocers", ParseAndValidate("expense-receipt", s06, out _).GetProperty("vendorName").GetString());
+
+        var s08 = new[]
+        {
+            Line("Sunrise Bakery", y0: 0, y1: 28),
+            Line("123 Example Road, Unit 4", y0: 30, y1: 54),
+            Line("RECEIPT", y0: 60, y1: 85),
+            Line("Receipt #: S08-7103", y0: 90, y1: 112),
+            Line("Date: 12/11/2026", y0: 120, y1: 142),
+            Line("6 $2.75 $16.50", y0: 150, y1: 178),
+            Line("Croissant $3.50 $14.00", y0: 185, y1: 221),
+            Line("Coffee 4", y0: 225, y1: 253),
+        };
+        Assert.Equal("Sunrise Bakery", ParseAndValidate("expense-receipt", s08, out _).GetProperty("vendorName").GetString());
+    }
+
     // --- E3: strip leading row-number column from line item descriptions ---
 
     [Fact]

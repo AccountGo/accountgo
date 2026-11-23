@@ -569,10 +569,13 @@ public static class DocumentTextFieldParser
         return null;
     }
 
-    // E2 + E6: for bill kinds, the issuer is the first qualifying line in the top block;
-    // a later line may replace it only for a legal suffix or clearly larger text height;
-    // single-word lines after an address line are address continuations (city/region/country) and never candidates;
-    // nothing at or after "BILLED TO" / "BILL TO" / "SHIP TO" / "CUSTOMER" is a candidate.
+    // E2 + E6 + E7 + E10:
+    // - Vendor candidates come only from the top block, stopping at recipient headers, document-number/date label lines,
+    //   table headers, or any line containing an amount.
+    // - Lines with amounts or table-row shape are never candidates.
+    // - Single-word lines after an address line (city/region/country) are address continuations, never candidates.
+    // - The issuer is the first qualifying top-block line; a later top-block line replaces it only for a legal suffix
+    //   or as a height tie-breaker (>= 1.3x height) among candidates with the same legal-suffix status.
     private static string? ExtractVendorName(List<NormalizedLine> lines)
     {
         var page1 = lines.Where(l => l.Page <= 1).Take(12).ToList();
@@ -590,8 +593,19 @@ public static class DocumentTextFieldParser
             var c = candidates[i];
             var text = c.Text;
 
-            if (VendorBlockStopRegex.IsMatch(text))
+            if (VendorBlockStopRegex.IsMatch(text)
+                || TableHeaderRowRegex.IsMatch(text)
+                || InvoiceNumberRegex.IsMatch(text)
+                || InvoiceNumberLabelOnlyRegex.IsMatch(text)
+                || DateLabelRegex.IsMatch(text)
+                || DueDateLabelRegex.IsMatch(text)
+                || DateAndAmountParser.ExtractAmounts(text).Count > 0)
+            {
                 break;
+            }
+
+            if (text.Length <= 300 && LineItemRowRegex.IsMatch(text))
+                continue;
 
             var isAddress = IsAddressLine(text);
             if (isAddress)
@@ -628,11 +642,12 @@ public static class DocumentTextFieldParser
                 continue;
             }
 
-            // A later qualifying line replaces the first issuer only for a legal suffix (when current lacks one)
-            // or clearly larger text height (when current lacks a legal suffix, or both have one).
-            var clearlyLargerHeight = c.Height >= bestHeight * 1.25f && (c.Height - bestHeight) >= 3.0f;
-            if ((hasLegalSuffix && !bestHasLegalSuffix)
-                || (clearlyLargerHeight && (!bestHasLegalSuffix || hasLegalSuffix)))
+            // E10: legal suffix beats a plain line; height only breaks ties (>= 1.3x) among top-block candidates.
+            var heightTieBreaker = hasLegalSuffix == bestHasLegalSuffix
+                && bestHeight > 0.5f
+                && c.Height >= bestHeight * 1.3f
+                && (c.Height - bestHeight) >= 3.0f;
+            if ((hasLegalSuffix && !bestHasLegalSuffix) || heightTieBreaker)
             {
                 bestText = candidateText;
                 bestHasLegalSuffix = hasLegalSuffix;
