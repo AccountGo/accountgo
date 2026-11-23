@@ -35,7 +35,8 @@ public sealed record CaptureReviewTargetPolicy(
     string TargetType,
     string InvalidKindDetail,
     string StateConflictDetail,
-    string DiscrepancyDetail);
+    string DiscrepancyDetail,
+    bool RejectTaxOnlyDifference = false);
 
 /// <summary>
 /// Shared read-only reconciliation and audit helper consulted by existing financial document writers
@@ -156,6 +157,25 @@ public static class CaptureReviewReconciler
                 && Round2(review.SourceGrandTotal.Value) == roundedSourceTotal
                 && review.FormTotal.HasValue
                 && Round2(review.FormTotal.Value) == roundedFormTotal;
+
+            // A tax the document charges but the target doesn't carry can't be acknowledged away: it needs a tax rate or the tax in the costs.
+            if (acknowledgedForCurrentValues
+                && policy.RejectTaxOnlyDifference
+                && ExtractCanonicalSourceTaxTotal(capture.AcceptedFieldsJson) is { } sourceTax
+                && sourceTax > 0
+                && Math.Abs(-difference - sourceTax) <= 0.01m)
+            {
+                var problem = new ProblemDetails
+                {
+                    Status = StatusCodes.Status400BadRequest,
+                    Title = "CAPTURE_TAX_NOT_APPLIED",
+                    Detail = $"Tax of {sourceTax:0.00} on the document isn't on this bill. Choose a tax rate or include it in the line costs.",
+                };
+                problem.Extensions["code"] = "CAPTURE_TAX_NOT_APPLIED";
+                problem.Extensions["captureId"] = capture.PublicId;
+                problem.Extensions["taxTotal"] = Round2(sourceTax);
+                return new(new ObjectResult(problem) { StatusCode = StatusCodes.Status400BadRequest }, Array.Empty<AcknowledgedCaptureDiscrepancy>());
+            }
 
             if (acknowledgedForCurrentValues)
             {
@@ -298,7 +318,13 @@ public static class CaptureReviewReconciler
     private static DocumentCapture? LoadLiveCapture(ApiDbContext db, int companyId, int captureId) =>
         DocumentCaptureService.LiveCompanyCaptures(db, companyId).SingleOrDefault(c => c.Id == captureId);
 
-    internal static decimal? ExtractCanonicalSourceGrandTotal(string? acceptedFieldsJson)
+    internal static decimal? ExtractCanonicalSourceGrandTotal(string? acceptedFieldsJson) =>
+        ExtractCanonicalSourceTotal(acceptedFieldsJson, "grandTotal");
+
+    internal static decimal? ExtractCanonicalSourceTaxTotal(string? acceptedFieldsJson) =>
+        ExtractCanonicalSourceTotal(acceptedFieldsJson, "taxTotal");
+
+    private static decimal? ExtractCanonicalSourceTotal(string? acceptedFieldsJson, string totalName)
     {
         if (string.IsNullOrWhiteSpace(acceptedFieldsJson))
             return null;
@@ -309,7 +335,7 @@ public static class CaptureReviewReconciler
                 return null;
             if (!doc.RootElement.TryGetProperty("sourceTotals", out var totals) || totals.ValueKind != JsonValueKind.Object)
                 return null;
-            if (!totals.TryGetProperty("grandTotal", out var grandTotal) || grandTotal.ValueKind != JsonValueKind.String)
+            if (!totals.TryGetProperty(totalName, out var grandTotal) || grandTotal.ValueKind != JsonValueKind.String)
                 return null;
             var raw = grandTotal.GetString();
             if (string.IsNullOrWhiteSpace(raw))

@@ -11,18 +11,23 @@ import { usePermissions } from '../components/Gating';
 import { DocumentCapturePanel } from '../components/document-capture/DocumentCapturePanel';
 import { PartyMatchPrompt } from '../components/document-capture/PartyMatchPrompt';
 import {
+  CaptureTaxRegime,
+  CaptureTaxTreatment,
   computeCaptureDiscrepancy,
   describeCaptureError,
+  describeCaptureTaxTreatment,
   DocumentCaptureCapabilities,
   DocumentCaptureView,
   evaluateFinancialApplyGates,
   fetchPartyMatchCandidates,
   formatSignedCurrencyDifference,
+  isTaxOnlyDifference,
   isValidIsoDate,
   MAX_REFERENCE_NO_LENGTH,
   MAX_VENDOR_INVOICE_NO_LENGTH,
   parseStrictDecimal,
   PartyMatchCandidate,
+  planCaptureTax,
   resolveAutoPreselectCandidate,
   VendorCaptureFields,
 } from '../components/document-capture/fields';
@@ -58,6 +63,9 @@ const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-[v
 const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 // The same rounding as the server: each line to the cent, tax on top of the line at the tax's rate.
 const lineSubtotal = (line: LineDraft) => round2((Number(line.quantity) || 0) * (Number(line.amount) || 0) * (1 - (Number(line.discount) || 0) / 100));
+
+/** Adds a line to the bill notes without overwriting what the user wrote, and never twice. */
+const appendNote = (notes: string, note: string) => (notes.includes(note) ? notes : notes.trim() ? `${notes.trim()}\n${note}` : note);
 
 let nextKey = 1;
 
@@ -122,6 +130,10 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
   const [newVendorInitialName, setNewVendorInitialName] = useState<string | undefined>(undefined);
   const [pendingDueDate, setPendingDueDate] = useState<string | null>(null);
   const [pendingLineMerge, setPendingLineMerge] = useState<LineDraft[] | null>(null);
+  // How the scanned tax was applied, per capture, and the bill note that goes with lines held for the merge choice.
+  const [taxRegime, setTaxRegime] = useState<CaptureTaxRegime | null>(null);
+  const [captureTaxTreatments, setCaptureTaxTreatments] = useState<Record<string, CaptureTaxTreatment>>({});
+  const [pendingTaxNote, setPendingTaxNote] = useState<string | null>(null);
   const [ackSnapshots, setAckSnapshots] = useState<
     Record<string, { sourceGrandTotal: number | null; formTotal: number }>
   >({});
@@ -185,14 +197,20 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
     (async () => {
       setIsLoading(true);
       try {
-        const [vendorsRes, termsRes, accountsRes, taxesRes, catalogRes] = await Promise.all([
+        const [vendorsRes, termsRes, accountsRes, taxesRes, catalogRes, policyRes] = await Promise.all([
           authFetch('/api/Purchasing/Vendors'),
           authFetch('/api/Common/PaymentTerms'),
           authFetch('/api/Purchasing/BillAccounts'),
           authFetch('/api/Tax/Taxes'),
           authFetch('/api/Catalog/Items'),
+          authFetch('/api/organizations/current/accounting-policy').catch(() => null),
         ]);
         if (cancelled) return;
+        if (policyRes?.ok) {
+          const policy = await policyRes.json().catch(() => null);
+          const regime = policy?.taxRegime;
+          setTaxRegime(regime === 'None' || regime === 'SalesTax' || regime === 'VatGst' ? regime : null);
+        }
         if (!vendorsRes.ok || !accountsRes.ok) throw new Error('The bill form could not be loaded.');
         const vendorList: Vendor[] = await vendorsRes.json();
         setVendors(vendorList.map((v) => ({ id: v.id, name: v.name, email: v.email ?? undefined, phone: v.phone ?? undefined, paymentTermId: v.paymentTermId ?? undefined, archived: v.archived })));
@@ -285,6 +303,10 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
 
   const updateLine = (index: number, changes: Partial<LineDraft>) =>
     setLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...changes } : line)));
+
+  const addTaxNote = (note: string | null) => {
+    if (note) setNotes((prev) => appendNote(prev, note));
+  };
 
   const taxRate = (taxId: string | '') => taxes.find((t) => t.id === taxId)?.rate ?? 0;
   const totals = useMemo(() => {
@@ -415,17 +437,40 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
   );
 
   const applyCapturedMonetaryLines = useCallback(
-    (fields: VendorCaptureFields) => {
+    (fields: VendorCaptureFields, captureId: string) => {
       const mapped = mapCapturedLines(fields);
       if (mapped.length === 0) return;
+
+      // Rules T-09 and T-10: the document's tax goes to a tax rate (VAT/GST) or into the line costs (everything else).
+      const plan = planCaptureTax(
+        taxRegime,
+        fields.sourceTotals,
+        fields.lines ?? [],
+        mapped.map((l) => ({ quantity: l.quantity, amount: l.amount === '' ? null : Number(l.amount), discount: l.discount })),
+        taxes
+      );
+      const withTax = mapped.map((l, i) => ({
+        ...l,
+        amount: plan.unitAmounts ? plan.unitAmounts[i] : l.amount,
+        taxId: plan.taxId,
+      }));
+      setCaptureTaxTreatments((prev) => ({ ...prev, [captureId]: plan.treatment }));
+      const note =
+        plan.treatment.kind === 'added-to-cost'
+          ? `Includes ${plan.treatment.taxTotal.toFixed(2)} tax from the scanned document (not recoverable).`
+          : null;
+
       if (hasPopulatedLines) {
-        setPendingLineMerge(mapped);
+        setPendingLineMerge(withTax);
+        setPendingTaxNote(note);
       } else {
-        setLines(mapped);
+        setLines(withTax);
         setPendingLineMerge(null);
+        setPendingTaxNote(null);
+        if (note) setNotes((prev) => appendNote(prev, note));
       }
     },
-    [hasPopulatedLines, mapCapturedLines]
+    [hasPopulatedLines, mapCapturedLines, taxRegime, taxes]
   );
 
   const handleCaptureAccepted = useCallback(
@@ -441,6 +486,12 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
       setPendingLink(null);
       setPendingDueDate(null);
       setPendingLineMerge(null);
+      setPendingTaxNote(null);
+      setCaptureTaxTreatments((prev) => {
+        const next = { ...prev };
+        delete next[canonical.id];
+        return next;
+      });
 
       const fields = ((canonical.acceptedFields ?? canonical.fields) as VendorCaptureFields | null) ?? {};
       const gates = evaluateFinancialApplyGates(canonical, currentOrg.currency, false);
@@ -491,7 +542,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
       }
 
       if (gates.canApplyMonetary) {
-        applyCapturedMonetaryLines(fields);
+        applyCapturedMonetaryLines(fields, canonical.id);
       }
     },
     [applyCapturedMonetaryLines, currentOrg.currency, paymentTermId, vendorId, vendors]
@@ -558,6 +609,16 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
     if (approve && reviewedCaptures.some((c) => getDiscrepancyForCapture(c).hasDiscrepancy && !isCaptureAcknowledged(c))) {
       setError('The bill total differs from one or more captured source totals. Correct the lines or check each reconciliation acknowledgement before approving.');
       return;
+    }
+    if (approve) {
+      const taxMissing = reviewedCaptures.find((c) => {
+        const f = ((c.acceptedFields ?? c.fields) as VendorCaptureFields | null) ?? null;
+        return isTaxOnlyDifference(f?.sourceTotals, getDiscrepancyForCapture(c).difference);
+      });
+      if (taxMissing) {
+        setError("The document's tax isn't on this bill. Choose a tax rate or include the tax in the line costs before approving.");
+        return;
+      }
     }
     const archived = firstArchivedTax(taxes, lines.map((line) => line.taxId));
     if (archived) {
@@ -640,6 +701,11 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
             setServerReconciliation((prev) => ({ ...prev, ...nextOverrides }));
           }
           setError(data?.detail || 'The bill total differs from one or more captured source totals. Correct the bill or acknowledge the difference before approving.');
+          setSaving(null);
+          return;
+        }
+        if (res.status === 400 && data?.code === 'CAPTURE_TAX_NOT_APPLIED') {
+          setError(data?.detail || "The document's tax isn't on this bill. Choose a tax rate or include the tax in the line costs.");
           setSaving(null);
           return;
         }
@@ -804,7 +870,10 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setPendingLineMerge(null)}
+              onClick={() => {
+                setPendingLineMerge(null);
+                setPendingTaxNote(null);
+              }}
               className="px-3 py-1.5 font-semibold rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-main)]"
             >
               Keep existing lines
@@ -813,7 +882,9 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
               type="button"
               onClick={() => {
                 setLines((prev) => [...prev, ...pendingLineMerge]);
+                addTaxNote(pendingTaxNote);
                 setPendingLineMerge(null);
+                setPendingTaxNote(null);
               }}
               className="px-3 py-1.5 font-semibold rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-main)]"
             >
@@ -823,7 +894,9 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
               type="button"
               onClick={() => {
                 setLines(pendingLineMerge);
+                addTaxNote(pendingTaxNote);
                 setPendingLineMerge(null);
+                setPendingTaxNote(null);
               }}
               className="px-3 py-1.5 font-semibold rounded-lg bg-amber-600 text-white hover:opacity-90 transition"
             >
@@ -882,7 +955,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
                     type="button"
                     onClick={() => {
                       setAmbiguousCurrencyConfirmed(true);
-                      applyCapturedMonetaryLines(capFields);
+                      applyCapturedMonetaryLines(capFields, reviewCap.id);
                     }}
                     className="mt-1 px-3 py-1.5 font-semibold rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-main)]"
                   >
@@ -892,7 +965,47 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
               </div>
             )}
 
-            {capGates.priceBasis === 'inclusive' && (
+            {(() => {
+              const treatment = captureTaxTreatments[reviewCap.id];
+              const summary = treatment ? describeCaptureTaxTreatment(treatment) : null;
+              if (!treatment || !summary) return null;
+              const needsRate = treatment.kind === 'needs-rate';
+              return (
+                <div
+                  aria-label={`Tax treatment ${reviewCap.id}`}
+                  className={`rounded-xl border p-3 space-y-1 ${
+                    needsRate || treatment.kind === 'unresolved'
+                      ? 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300'
+                      : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
+                  }`}
+                >
+                  <p className="font-semibold">{summary}</p>
+                  {treatment.kind === 'tax-rate' && (
+                    <p>Tax rate from scan: {treatment.tax.taxName} {treatment.tax.rate}%. Change it on any line if the document says otherwise.</p>
+                  )}
+                  {needsRate && (
+                    <p>
+                      This document charges {treatment.taxTotal.toFixed(2)} tax. Choose a tax rate
+                      {hasPermission('admin.taxes.manage') && (
+                        <>
+                          {' '}
+                          <Link to={`/org/${orgSlug}/settings?tab=taxes`} className="font-semibold underline">Manage taxes</Link>
+                        </>
+                      )}
+                      .
+                    </p>
+                  )}
+                  {treatment.kind === 'unresolved' && (
+                    <p>The tax couldn't be applied automatically. Choose a tax rate or include it in the line costs.</p>
+                  )}
+                  {treatment.kind === 'added-to-cost' && treatment.unregistered && (
+                    <p>This document charges tax but your workspace isn't set up for tax.</p>
+                  )}
+                </div>
+              );
+            })()}
+
+            {capGates.priceBasis === 'inclusive' && !['tax-rate', 'added-to-cost'].includes(captureTaxTreatments[reviewCap.id]?.kind ?? '') && (
               <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-amber-800 dark:text-amber-300">
                 Source amounts include tax. Adjust unit costs to tax-exclusive amounts before selecting a tax rate so tax is not added a second time.
               </div>
@@ -960,7 +1073,13 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
               </div>
             </div>
 
-            {capDisc.hasDiscrepancy && (
+            {capDisc.hasDiscrepancy && isTaxOnlyDifference(capFields.sourceTotals, capDisc.difference) && (
+              <div role="alert" className="rounded-xl border border-rose-500/25 bg-rose-500/10 p-3 text-rose-700 dark:text-rose-300 font-semibold">
+                Tax of {capFields.sourceTotals?.taxTotal} on the document isn't on this bill. Choose a tax rate or include it in the line costs.
+              </div>
+            )}
+
+            {capDisc.hasDiscrepancy && !isTaxOnlyDifference(capFields.sourceTotals, capDisc.difference) && (
               <label className="flex items-start gap-2.5 rounded-xl border border-rose-500/25 bg-rose-500/10 p-3 text-rose-700 dark:text-rose-300 cursor-pointer">
                 <input
                   type="checkbox"

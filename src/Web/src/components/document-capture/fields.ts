@@ -1155,3 +1155,279 @@ export function describeCaptureWarning(code: string): string {
       return 'Review extracted values carefully before applying.';
   }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Scanned tax (rules T-09, T-10): match the document's tax to a workspace rate, then apply it per
+// the workspace tax regime. Pure functions; the bill page owns the state.
+// ---------------------------------------------------------------------------------------------
+
+export type CaptureTaxRegime = 'None' | 'SalesTax' | 'VatGst';
+
+export interface CaptureTaxCandidate {
+  id: string;
+  taxCode?: string | null;
+  taxName: string;
+  rate: number;
+  isActive: boolean;
+}
+
+export type CaptureTaxMatch<T extends CaptureTaxCandidate = CaptureTaxCandidate> =
+  | { kind: 'single'; tax: T; effectiveRate: number }
+  | { kind: 'none'; effectiveRate: number | null }
+  | { kind: 'ambiguous'; taxes: T[]; effectiveRate: number | null }
+  | { kind: 'not-applicable' };
+
+/** Rates within this many percentage points of the document's effective rate count as a match. */
+export const CAPTURE_TAX_RATE_TOLERANCE = 0.05;
+
+const isMatchableTax = (tax: CaptureTaxCandidate) =>
+  tax.isActive !== false && (tax.taxCode ?? '').trim().toUpperCase() !== 'NONE' && tax.rate > 0;
+
+/** Reads a scanned line's free-text tax hint as a percentage ("7%", "VAT 7", "exempt" → 0), or null when it says nothing. */
+function parseTaxHintRate(hint: string | null | undefined): number | null {
+  const text = (hint ?? '').trim().toLowerCase();
+  if (!text) return null;
+  if (/(exempt|non[- ]?tax|zero[- ]?rat|no tax|untaxed)/.test(text)) return 0;
+  const match = text.match(/(\d+(?:\.\d+)?)\s*%?/);
+  return match ? Number(match[1]) : null;
+}
+
+/**
+ * Rule T-09: derives the document's effective tax rate and matches it to exactly one active workspace tax.
+ * Exclusive or unknown basis: taxTotal / subtotal. Inclusive: taxTotal / (grandTotal - taxTotal).
+ * Mixed-rate documents (scanned lines carry different tax hints) are never auto-assigned.
+ */
+export function matchCaptureTaxRate<T extends CaptureTaxCandidate>(
+  sourceTotals: CaptureSourceTotals | null | undefined,
+  lines: ReadonlyArray<{ taxHint?: string | null }> | null | undefined,
+  taxes: readonly T[]
+): CaptureTaxMatch<T> {
+  const tax = parseStrictDecimal(sourceTotals?.taxTotal ?? null).numeric;
+  if (tax === null || !(tax > 0)) return { kind: 'not-applicable' };
+
+  const candidates = taxes.filter(isMatchableTax);
+  const inclusive = sourceTotals?.priceBasis === 'inclusive';
+  const subtotal = parseStrictDecimal(sourceTotals?.subtotal ?? null).numeric;
+  const grand = parseStrictDecimal(sourceTotals?.grandTotal ?? null).numeric;
+
+  let base: number | null = null;
+  if (inclusive) {
+    if (grand !== null && grand - tax > 0) base = grand - tax;
+  } else if (subtotal !== null && subtotal > 0) {
+    base = subtotal;
+  } else if (grand !== null && grand - tax > 0) {
+    base = grand - tax;
+  }
+  const effectiveRate = base !== null ? (tax / base) * 100 : null;
+
+  const hintRates = new Set(
+    (lines ?? []).map((l) => parseTaxHintRate(l.taxHint)).filter((r): r is number => r !== null)
+  );
+  if (hintRates.size > 1) {
+    return { kind: 'ambiguous', taxes: candidates, effectiveRate };
+  }
+
+  if (effectiveRate === null) return { kind: 'none', effectiveRate: null };
+  const matches = candidates.filter((t) => Math.abs(t.rate - effectiveRate) <= CAPTURE_TAX_RATE_TOLERANCE + 1e-9);
+  if (matches.length === 1) return { kind: 'single', tax: matches[0], effectiveRate };
+  if (matches.length > 1) return { kind: 'ambiguous', taxes: matches, effectiveRate };
+  return { kind: 'none', effectiveRate };
+}
+
+const roundCents = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
+
+export interface CaptureTaxLine {
+  quantity: number;
+  /** Unit amount; null when the scan had no usable amount. */
+  amount: number | null;
+  discount: number;
+}
+
+const lineNet = (l: CaptureTaxLine) => roundCents(l.quantity * (l.amount ?? 0) * (1 - l.discount / 100));
+
+/** Unit amounts are stored to the cent (decimal(18, 2)), so every unit amount returned here has at most 2 decimals. */
+const unitFor = (target: number, l: CaptureTaxLine) => {
+  const factor = l.quantity * (1 - l.discount / 100);
+  return factor > 0 ? roundCents(target / factor) : null;
+};
+
+/** A line whose unit amount carries cents exactly: quantity 1 and no discount. */
+const carriesCentsExactly = (l: CaptureTaxLine) => l.quantity === 1 && l.discount === 0;
+
+/**
+ * Turns per-line target totals into 2-decimal unit amounts. Lines that can't hit their target exactly (quantity above 1 or a
+ * discount) leave a residual of a few cents; the given line (quantity 1, no discount) absorbs it. `accept` checks the result,
+ * and `carrierShift` lets the caller try neighbouring cent shifts on the carrier. Returns null when no result is accepted.
+ */
+function unitsForTargets(
+  lines: readonly CaptureTaxLine[],
+  targets: readonly number[],
+  carrier: number | null,
+  accept: (achievedNets: number[]) => boolean,
+  carrierShifts: readonly number[] = [0]
+): number[] | null {
+  const units: number[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const unit = i === carrier ? 0 : unitFor(targets[i], lines[i]);
+    if (unit === null) return null;
+    units.push(unit);
+  }
+  const achievedOthers = lines.reduce((sum, l, i) => (i === carrier ? sum : sum + lineNet({ ...l, amount: units[i] })), 0);
+  const targetTotal = targets.reduce((a, b) => a + b, 0);
+  for (const shift of carrier === null ? [0] : carrierShifts) {
+    if (carrier !== null) units[carrier] = roundCents(targetTotal - achievedOthers + shift / 100);
+    const nets = lines.map((l, i) => lineNet({ ...l, amount: units[i] }));
+    if (accept(nets)) return [...units];
+  }
+  return null;
+}
+
+const carrierLine = (lines: readonly CaptureTaxLine[], nets: readonly number[]): number | null => {
+  let best: number | null = null;
+  lines.forEach((l, i) => {
+    if (carriesCentsExactly(l) && (best === null || nets[i] >= nets[best])) best = i;
+  });
+  return best;
+};
+
+/**
+ * Rule T-10 (SalesTax and None): spreads the document's tax over the lines in proportion to each line's net amount, so the
+ * tax becomes part of the cost. Each share is rounded to the cent and the leftover cent goes to the largest line. Unit amounts
+ * have at most 2 decimals; cents a multi-quantity or discounted line can't carry land on the largest line with quantity 1 and no
+ * discount. Returns the new unit amounts, or null when the lines can't carry the tax exactly.
+ */
+export function spreadTaxIntoLineCosts(lines: readonly CaptureTaxLine[], taxTotal: number): number[] | null {
+  if (!(taxTotal > 0) || lines.length === 0 || lines.some((l) => l.amount === null)) return null;
+  const nets = lines.map(lineNet);
+  const netSum = roundCents(nets.reduce((a, b) => a + b, 0));
+  if (!(netSum > 0)) return null;
+
+  const shares = nets.map((n) => roundCents((taxTotal * n) / netSum));
+  const leftover = roundCents(taxTotal - shares.reduce((a, b) => a + b, 0));
+  let largest = 0;
+  nets.forEach((n, i) => {
+    if (n > nets[largest]) largest = i;
+  });
+  shares[largest] = roundCents(shares[largest] + leftover);
+
+  const targets = nets.map((n, i) => roundCents(n + shares[i]));
+  const want = roundCents(netSum + taxTotal);
+  return unitsForTargets(lines, targets, carrierLine(lines, nets), (achieved) => roundCents(achieved.reduce((a, b) => a + b, 0)) === want);
+}
+
+/**
+ * Rule T-10 (VatGst, inclusive prices): converts each line's gross amount to net at the matched rate. The editor adds tax on
+ * top per line (rounded to the cent), so a line with quantity 1 and no discount absorbs rounding cents until the net lines plus
+ * that tax equal the document's grand total. Unit amounts have at most 2 decimals. Returns null when no result reproduces it.
+ */
+export function convertInclusiveLinesToNet(
+  lines: readonly CaptureTaxLine[],
+  ratePct: number,
+  grandTotal: number
+): number[] | null {
+  if (lines.length === 0 || lines.some((l) => l.amount === null) || !(ratePct > 0)) return null;
+  const targets = lines.map((l) => roundCents(lineNet(l) / (1 + ratePct / 100)));
+  const want = roundCents(grandTotal);
+  return unitsForTargets(
+    lines,
+    targets,
+    carrierLine(lines, targets),
+    (achieved) => roundCents(achieved.reduce((sum, n) => sum + n + roundCents((n * ratePct) / 100), 0)) === want,
+    [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5]
+  );
+}
+
+export type CaptureTaxTreatment =
+  | { kind: 'tax-rate'; tax: CaptureTaxCandidate; taxTotal: number; /** Bill tax minus document tax when per-line rounding makes them differ, else 0. */ roundingDifference: number }
+  | { kind: 'added-to-cost'; taxTotal: number; unregistered: boolean }
+  | { kind: 'needs-rate'; taxTotal: number; ambiguous: boolean }
+  | { kind: 'unresolved'; taxTotal: number }
+  | { kind: 'none' };
+
+export interface CaptureTaxPlan {
+  treatment: CaptureTaxTreatment;
+  /** New unit amounts per line, when the plan changes them. */
+  unitAmounts: number[] | null;
+  /** Tax to set on every applied line (VatGst single match), or '' to leave the lines untaxed. */
+  taxId: string;
+}
+
+/**
+ * Decides how a scanned bill's tax is applied for the workspace's tax regime (rules T-09 and T-10).
+ * `regime` is null when the workspace policy couldn't be read: the tax is then left alone and the reconciliation gate holds approval.
+ */
+export function planCaptureTax<T extends CaptureTaxCandidate>(
+  regime: CaptureTaxRegime | null,
+  sourceTotals: CaptureSourceTotals | null | undefined,
+  scannedLines: ReadonlyArray<{ taxHint?: string | null }>,
+  lines: readonly CaptureTaxLine[],
+  taxes: readonly T[]
+): CaptureTaxPlan {
+  const taxTotal = parseStrictDecimal(sourceTotals?.taxTotal ?? null).numeric;
+  const none: CaptureTaxPlan = { treatment: { kind: 'none' }, unitAmounts: null, taxId: '' };
+  if (taxTotal === null || !(taxTotal > 0)) return none;
+  if (regime === null) return { treatment: { kind: 'unresolved', taxTotal }, unitAmounts: null, taxId: '' };
+
+  if (regime === 'VatGst') {
+    const match = matchCaptureTaxRate(sourceTotals, scannedLines, taxes);
+    if (match.kind === 'single') {
+      const grand = parseStrictDecimal(sourceTotals?.grandTotal ?? null).numeric;
+      const inclusive = sourceTotals?.priceBasis === 'inclusive';
+      const unitAmounts = inclusive && grand !== null ? convertInclusiveLinesToNet(lines, match.tax.rate, grand) : null;
+      if (inclusive && unitAmounts === null) {
+        // Can't reproduce the grand total exactly: leave the amounts alone and let the reconciliation gate speak.
+        return { treatment: { kind: 'needs-rate', taxTotal, ambiguous: false }, unitAmounts: null, taxId: '' };
+      }
+      // The editor rounds tax per line, so the bill's tax can differ from the document's by a cent or two.
+      const finalLines = lines.map((l, i) => ({ ...l, amount: unitAmounts ? unitAmounts[i] : l.amount }));
+      const billTax = finalLines.reduce((sum, l) => sum + roundCents((lineNet(l) * match.tax.rate) / 100), 0);
+      const roundingDifference = roundCents(billTax - taxTotal);
+      return { treatment: { kind: 'tax-rate', tax: match.tax, taxTotal, roundingDifference }, unitAmounts, taxId: match.tax.id };
+    }
+    return {
+      treatment: { kind: 'needs-rate', taxTotal, ambiguous: match.kind === 'ambiguous' },
+      unitAmounts: null,
+      taxId: '',
+    };
+  }
+
+  const unitAmounts = spreadTaxIntoLineCosts(lines, taxTotal);
+  if (unitAmounts === null) return { treatment: { kind: 'unresolved', taxTotal }, unitAmounts: null, taxId: '' };
+  return {
+    treatment: { kind: 'added-to-cost', taxTotal, unregistered: regime === 'None' },
+    unitAmounts,
+    taxId: '',
+  };
+}
+
+/**
+ * The bill form's tax for one document: true when the form total is short of the document's grand total by exactly the
+ * document's tax (within one cent); `difference` is form total minus source total. Such a difference can't be acknowledged away; it needs a tax rate or the tax in the costs.
+ */
+export function isTaxOnlyDifference(
+  sourceTotals: CaptureSourceTotals | null | undefined,
+  difference: number | null
+): boolean {
+  const tax = parseStrictDecimal(sourceTotals?.taxTotal ?? null).numeric;
+  if (tax === null || !(tax > 0) || difference === null) return false;
+  return Math.abs(-difference - tax) <= 0.01 + 1e-9;
+}
+
+/** One line for the review panel saying where the document's tax went. */
+export function describeCaptureTaxTreatment(treatment: CaptureTaxTreatment): string | null {
+  switch (treatment.kind) {
+    case 'tax-rate': {
+      const base = `Tax ${treatment.taxTotal.toFixed(2)} → input tax ${treatment.tax.taxName} ${treatment.tax.rate}% (recoverable)`;
+      return treatment.roundingDifference === 0
+        ? base
+        : `${base}. Tax on the bill differs from the document by ${Math.abs(treatment.roundingDifference).toFixed(2)} (rounding)`;
+    }
+    case 'added-to-cost':
+      return `Tax ${treatment.taxTotal.toFixed(2)} → added to line costs (not recoverable)`;
+    case 'needs-rate':
+    case 'unresolved':
+      return `Tax ${treatment.taxTotal.toFixed(2)} → not on this bill yet`;
+    default:
+      return null;
+  }
+}

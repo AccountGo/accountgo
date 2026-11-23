@@ -27,7 +27,8 @@ public static class BillCaptureReviewValidator
         TargetType: "bill",
         InvalidKindDetail: "This document capture kind cannot be reviewed for a bill.",
         StateConflictDetail: "Accept the captured fields before approving or attaching them to a bill.",
-        DiscrepancyDetail: "The bill total differs from one or more captured source document totals. Correct the bill or explicitly acknowledge each difference before approving.");
+        DiscrepancyDetail: "The bill total differs from one or more captured source document totals. Correct the bill or explicitly acknowledge each difference before approving.",
+        RejectTaxOnlyDifference: true);
 
     public static IActionResult? ValidateForDraft(
         ApiDbContext db,
