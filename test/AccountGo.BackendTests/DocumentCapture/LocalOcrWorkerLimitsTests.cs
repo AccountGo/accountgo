@@ -1,5 +1,4 @@
 using Api.DocumentCaptures;
-using Api.DocumentCaptures.Mapping;
 using System.Text.Json;
 using Api.DocumentCaptures.Parsing;
 using Microsoft.Extensions.Logging;
@@ -156,87 +155,6 @@ public sealed class LocalOcrWorkerLimitsTests
         Assert.Equal("ocr-1+d5de5df3+20b69451+rules-3", result.ProviderVersion);
         Assert.Equal(LocalOcrDocumentFieldExtractor.CurrentProviderVersion, result.ProviderVersion);
         Assert.True(result.ProviderVersion.Length <= 100);
-    }
-
-    private static readonly TextLine[] MappedDocumentLines =
-    [
-        new(1, "Northstar Supplies Ltd", 0, 0, 100, 20, TextLineSource.Ocr),
-        new(1, "Invoice No: NS-20457", 0, 22, 100, 40, TextLineSource.Ocr),
-        new(1, "Account 123456789012", 0, 42, 100, 60, TextLineSource.Ocr),
-        new(1, "Date: 2026-11-12", 0, 62, 100, 80, TextLineSource.Ocr),
-        new(1, "Subtotal: 100.00", 0, 82, 100, 100, TextLineSource.Ocr),
-        new(1, "Tax: 7.00", 0, 102, 100, 120, TextLineSource.Ocr),
-        new(1, "Total: 107.00", 0, 122, 100, 140, TextLineSource.Ocr),
-    ];
-
-    [Fact]
-    public async Task ExtractionWithTheDefaultMapperStoresExactlyWhatTheRuleParserFound()
-    {
-        var json = JsonSerializer.SerializeToUtf8Bytes(new CaptureWorkerResult(MappedDocumentLines, [1], [], []), CaptureWorkerProtocol.Json);
-        var worker = new FakeWorker(json);
-        using var extractor = new LocalOcrDocumentFieldExtractor(Options.Create(new DocumentCaptureOptions()),
-            TimeProvider.System, new MetricsLogger(), _ => worker);
-        var resultTask = extractor.ExtractAsync(new DocumentExtractionRequest("purchase-invoice", 1, "image/png", Input, 1),
-            CancellationToken.None);
-        worker.Complete();
-        var result = await resultTask;
-
-        var expected = DocumentTextFieldParser.Parse("purchase-invoice", MappedDocumentLines);
-        Assert.Equal(expected.FieldsJson, result.FieldsJson);
-        Assert.Equal(expected.Warnings, result.Warnings);
-    }
-
-    [Fact]
-    public async Task ExtractionGivesTheMapperOnlyMaskedTextAndGuardsWhatItReturns()
-    {
-        var json = JsonSerializer.SerializeToUtf8Bytes(new CaptureWorkerResult(MappedDocumentLines, [1], [], []), CaptureWorkerProtocol.Json);
-        var worker = new FakeWorker(json);
-        var mapper = new RecordingMapper(request =>
-            // The mapper invents an invoice number and a different vendor spelling.
-            request.RuleFieldsJson.Replace("NS-20457", "NS-99999", StringComparison.Ordinal)
-                .Replace("Northstar Supplies Ltd", "Northstar Supplies Limited", StringComparison.Ordinal));
-        using var extractor = new LocalOcrDocumentFieldExtractor(Options.Create(new DocumentCaptureOptions()),
-            TimeProvider.System, new MetricsLogger(), _ => worker, mapper);
-        var resultTask = extractor.ExtractAsync(new DocumentExtractionRequest("purchase-invoice", 1, "image/png", Input, 1),
-            CancellationToken.None);
-        worker.Complete();
-        var result = await resultTask;
-
-        var seen = Assert.Single(mapper.Requests);
-        Assert.DoesNotContain("123456789012", string.Join('\n', seen.Lines.Select(l => l.Text)), StringComparison.Ordinal);
-        Assert.Contains("NS-20457", string.Join('\n', seen.Lines.Select(l => l.Text)), StringComparison.Ordinal);
-        using var fields = JsonDocument.Parse(result.FieldsJson);
-        Assert.Equal("NS-20457", fields.RootElement.GetProperty("vendorInvoiceNo").GetString());
-        Assert.Equal("Northstar Supplies Limited", fields.RootElement.GetProperty("vendorName").GetString());
-        Assert.Equal("ai", fields.RootElement.GetProperty("fieldSources").GetProperty("vendorName").GetString());
-        Assert.Contains("AI_VALUE_NOT_IN_SOURCE", result.Warnings);
-        Assert.Contains("AI_DISAGREES_WITH_RULES", result.Warnings);
-    }
-
-    [Fact]
-    public async Task ExtractionNeverCallsTheMapperForBankDocuments()
-    {
-        var json = JsonSerializer.SerializeToUtf8Bytes(new CaptureWorkerResult(MappedDocumentLines, [1], [], []), CaptureWorkerProtocol.Json);
-        var worker = new FakeWorker(json);
-        var mapper = new RecordingMapper(request => request.RuleFieldsJson);
-        using var extractor = new LocalOcrDocumentFieldExtractor(Options.Create(new DocumentCaptureOptions()),
-            TimeProvider.System, new MetricsLogger(), _ => worker, mapper);
-        var resultTask = extractor.ExtractAsync(new DocumentExtractionRequest("bank", 1, "image/png", Input, 1), CancellationToken.None);
-        worker.Complete();
-        await resultTask;
-
-        Assert.Empty(mapper.Requests);
-    }
-
-    private sealed class RecordingMapper(Func<CaptureMappingRequest, string> map) : ICaptureFieldMapper
-    {
-        public List<CaptureMappingRequest> Requests { get; } = [];
-
-        public Task<CaptureMappingResult> MapAsync(CaptureMappingRequest request, CancellationToken cancellationToken)
-        {
-            Requests.Add(request);
-            return Task.FromResult(new CaptureMappingResult(map(request), "recording", "1", Array.Empty<string>()));
-        }
     }
 
     private sealed class MetricsLogger : ILogger<LocalOcrDocumentFieldExtractor>

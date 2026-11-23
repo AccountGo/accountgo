@@ -251,7 +251,8 @@ public static class AccountGoApp
                 return true;
             }, "Document capture options are invalid.")
             .ValidateOnStart();
-        // The default field mapper returns the rule fields unchanged. A later change can register an optional mapper here.
+        // The default field mapper returns the rule fields unchanged. It is not called when a document is scanned; a later background
+        // job calls it through CaptureFieldMappingRunner, and a later change can register an optional mapper here.
         builder.Services.AddSingleton<Api.DocumentCaptures.Mapping.ICaptureFieldMapper, Api.DocumentCaptures.Mapping.RuleOnlyFieldMapper>();
         builder.Services.AddSingleton<Api.DocumentCaptures.IDocumentFieldExtractor>(serviceProvider =>
         {
@@ -260,8 +261,7 @@ public static class AccountGoApp
             {
                 "fake" => new Api.DocumentCaptures.FakeDocumentFieldExtractor(options),
                 "local-ocr" => new Api.DocumentCaptures.LocalOcrDocumentFieldExtractor(options, serviceProvider.GetService<TimeProvider>(),
-                    serviceProvider.GetRequiredService<ILogger<Api.DocumentCaptures.LocalOcrDocumentFieldExtractor>>(),
-                    serviceProvider.GetRequiredService<Api.DocumentCaptures.Mapping.ICaptureFieldMapper>()),
+                    serviceProvider.GetRequiredService<ILogger<Api.DocumentCaptures.LocalOcrDocumentFieldExtractor>>()),
                 _ => new Api.DocumentCaptures.UnconfiguredDocumentFieldExtractor()
             };
         });

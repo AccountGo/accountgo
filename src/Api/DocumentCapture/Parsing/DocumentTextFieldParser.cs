@@ -470,6 +470,11 @@ public static class DocumentTextFieldParser
         return (labeledDocDate ?? fallbackDocDate, dueDate);
     }
 
+    /// <summary>True for a line the parser reads as a total, subtotal or tax line, using the same label patterns as the totals rules.</summary>
+    internal static bool IsTotalsLabelLine(string line) =>
+        !string.IsNullOrWhiteSpace(line)
+        && (TotalKeywordRegex.IsMatch(line) || SubtotalLabelRegex.IsMatch(line) || TaxLabelRegex.IsMatch(line));
+
     private static bool IsGrandTotalLine(string line)
     {
         if (!TotalKeywordRegex.IsMatch(line))

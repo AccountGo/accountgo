@@ -242,6 +242,146 @@ public sealed class CaptureFieldMapperTests
         Assert.Contains(CaptureMappingGuards.WarningNotInSource, result.Warnings);
     }
 
+    // ---- review fixes: party names, whole-number totals, line descriptions -----------------------------------------
+
+    [Fact]
+    [Trait("Rule", "AI-01")]
+    public void Guard_DropsAnInventedPartyNameAndKeepsTheRuleName()
+    {
+        var mapped = Merge(RuleFields, o => o["vendorName"] = "Harborview Traders");
+
+        var result = Guard(mapped);
+
+        Assert.Equal(RuleFields, result.FieldsJson);
+        Assert.Equal([CaptureMappingGuards.WarningNotInSource], result.Warnings);
+    }
+
+    [Fact]
+    [Trait("Rule", "AI-01")]
+    public void Guard_DropsANameWithOneWordTheDocumentDoesNotPrint()
+    {
+        var mapped = Merge(RuleFields, o => o["vendorName"] = "Northstar Supplies Limited");
+
+        var result = Guard(mapped);
+
+        Assert.Equal(RuleFields, result.FieldsJson);
+        Assert.Contains(CaptureMappingGuards.WarningNotInSource, result.Warnings);
+    }
+
+    [Fact]
+    [Trait("Rule", "AI-01")]
+    public void Guard_AcceptsANameReassembledFromAMergedTwoColumnLine()
+    {
+        string[] lines =
+        [
+            "Northstar   Supplies   Ltd        Invoice No: NS-20457",
+            "Date: 12 Nov 2026",
+            "Subtotal 407.47",
+            "Tax 8.25% 33.62",
+            "Total 441.09",
+        ];
+        var rule = Merge(RuleFields, o => o["vendorName"] = "Northstar Supplies Ltd Invoice No NS");
+
+        var result = Guard(Merge(RuleFields, o => o["vendorName"] = "Northstar Supplies Ltd"), rule, lines: lines);
+
+        using var doc = JsonDocument.Parse(result.FieldsJson);
+        Assert.Equal("Northstar Supplies Ltd", doc.RootElement.GetProperty("vendorName").GetString());
+        Assert.Equal("ai", doc.RootElement.GetProperty("fieldSources").GetProperty("vendorName").GetString());
+    }
+
+    [Fact]
+    [Trait("Rule", "AI-01")]
+    public void Guard_DoesNotLetAQuantityBecomeATotal()
+    {
+        string[] lines = ["Northstar Supplies Ltd", "Paper A4 qty 3 at 12.00", "Subtotal 36.00", "Tax 0.00", "Total 36.00"];
+        var rule = """{"sourceTotals":{"grandTotal":"36.00","subtotal":"36.00","taxTotal":"0.00"},"vendorName":"Northstar Supplies Ltd"}""";
+
+        var result = Guard(Merge(rule, o => o["sourceTotals"]!["grandTotal"] = "3"), rule, lines: lines);
+
+        Assert.Equal(rule, result.FieldsJson);
+        Assert.Contains(CaptureMappingGuards.WarningNotInSource, result.Warnings);
+    }
+
+    [Fact]
+    [Trait("Rule", "AI-01")]
+    public void Guard_AcceptsAWholeNumberTotalPrintedOnATotalsLine()
+    {
+        string[] lines = ["Northstar Supplies Ltd", "Paper A4 qty 3 at 12", "Subtotal 36", "Tax 0", "Total 36"];
+        var rule = """{"vendorName":"Northstar Supplies Ltd"}""";
+
+        var result = Guard(Merge(rule, o => o["sourceTotals"] = System.Text.Json.Nodes.JsonNode.Parse("""{"subtotal":"36","taxTotal":"0","grandTotal":"36"}""")), rule, lines: lines);
+
+        using var doc = JsonDocument.Parse(result.FieldsJson);
+        Assert.Equal("36", doc.RootElement.GetProperty("sourceTotals").GetProperty("grandTotal").GetString());
+        Assert.Equal("ai", doc.RootElement.GetProperty("fieldSources").GetProperty("sourceTotals.grandTotal").GetString());
+    }
+
+    [Fact]
+    [Trait("Rule", "AI-01")]
+    public void Guard_RejectsAWholeNumberTotalThatIsOnlyPrintedOnAnOrdinaryLine()
+    {
+        string[] lines = ["Northstar Supplies Ltd", "Paper A4 qty 36", "Subtotal 36.50"];
+        var rule = """{"vendorName":"Northstar Supplies Ltd"}""";
+
+        var result = Guard(Merge(rule, o => o["sourceTotals"] = System.Text.Json.Nodes.JsonNode.Parse("""{"grandTotal":"36"}""")), rule, lines: lines);
+
+        Assert.Equal(rule, result.FieldsJson);
+        Assert.Contains(CaptureMappingGuards.WarningNotInSource, result.Warnings);
+    }
+
+    [Fact]
+    [Trait("Rule", "AI-01")]
+    public void Guard_RejectsInventedLineDescriptionsAsAGroup()
+    {
+        var mapped = Merge(RuleFields, o => o["lines"] = System.Text.Json.Nodes.JsonNode.Parse(
+            """[{"description":"Premium consulting package","quantity":"1","unitAmount":"244.48"},{"description":"Toner","quantity":"1","unitAmount":"162.99"}]"""));
+
+        var result = Guard(mapped);
+
+        Assert.Equal(RuleFields, result.FieldsJson);
+        Assert.Contains(CaptureMappingGuards.WarningNotInSource, result.Warnings);
+    }
+
+    [Theory]
+    [InlineData("Paper A4 sheets", true)]   // 2 of 3 words printed = 67%
+    [InlineData("Paper sheets boxes", false)] // 1 of 3 words printed = 33%
+    [InlineData("A4 Paper", true)]
+    [InlineData("Toner cartridge magenta XL", false)] // 1 of 4 = 25%
+    [InlineData("Toner cartridge", false)] // 1 of 2 = 50%, below 60%
+    public void Guard_RequiresSixtyPercentOfADescriptionsWordsToBePrinted(string description, bool accepted)
+    {
+        var mapped = Merge(RuleFields, o => o["lines"] = System.Text.Json.Nodes.JsonNode.Parse(
+            $$"""[{"description":"{{description}}","quantity":"1","unitAmount":"244.48"},{"description":"Toner","quantity":"1","unitAmount":"162.99"}]"""));
+
+        var result = Guard(mapped);
+
+        Assert.Equal(accepted, result.FieldsJson != RuleFields);
+        Assert.Equal(accepted, !result.Warnings.Contains(CaptureMappingGuards.WarningNotInSource));
+        Assert.Equal(0.6, CaptureMappingGuards.MinimumDescriptionWordShare);
+    }
+
+    [Fact]
+    public async Task Runner_GivesTheMapperOnlyMaskedLines()
+    {
+        var mapper = new ScriptedMapper(request =>
+        {
+            var seen = string.Join('\n', request.Lines.Select(l => l.Text));
+            Assert.DoesNotContain("123456789012", seen, StringComparison.Ordinal);
+            Assert.DoesNotContain("GB82", seen, StringComparison.Ordinal);
+            Assert.Contains("NS-20457", seen, StringComparison.Ordinal);
+            return Result(RuleFields);
+        });
+
+        var outcome = await CaptureFieldMappingRunner.RunAsync(mapper, "purchase-invoice", 1, RuleFields,
+        [
+            new TextLine(1, "Invoice No: NS-20457", 0, 0, 1, 1, TextLineSource.Ocr),
+            new TextLine(1, "Account 123456789012 IBAN GB82 WEST 1234 5698 7654 32", 0, 2, 1, 3, TextLineSource.Ocr),
+        ], "rules-3", CancellationToken.None);
+
+        Assert.Equal(1, mapper.Calls);
+        Assert.Equal(RuleFields, outcome.FieldsJson);
+    }
+
     // ---- G-AI-02: arithmetic ----------------------------------------------------------------------------------
 
     [Fact]
@@ -262,7 +402,7 @@ public sealed class CaptureFieldMapperTests
     public void Guard_RejectsMappedLinesThatDoNotSumToTheSubtotal()
     {
         var mapped = Merge(RuleFields, o => o["lines"] = System.Text.Json.Nodes.JsonNode.Parse(
-            """[{"description":"Paper A4","quantity":"1","unitAmount":"244.48"},{"description":"Other","quantity":"1","unitAmount":"450.00"}]"""));
+            """[{"description":"Paper A4","quantity":"1","unitAmount":"244.48"},{"description":"Toner","quantity":"1","unitAmount":"450.00"}]"""));
 
         var result = Guard(mapped);
 
@@ -307,12 +447,12 @@ public sealed class CaptureFieldMapperTests
     [Trait("Rule", "AI-03")]
     public void Guard_KeepsTheMapperVendorNameAsASuggestionAndRecordsWhatTheRulesFound()
     {
-        var mapped = Merge(RuleFields, o => o["vendorName"] = "Northstar Supplies Limited");
+        var mapped = Merge(RuleFields, o => o["vendorName"] = "Northstar Supplies");
 
         var result = Guard(mapped);
 
         using var doc = JsonDocument.Parse(result.FieldsJson);
-        Assert.Equal("Northstar Supplies Limited", doc.RootElement.GetProperty("vendorName").GetString());
+        Assert.Equal("Northstar Supplies", doc.RootElement.GetProperty("vendorName").GetString());
         Assert.Equal("ai", doc.RootElement.GetProperty("fieldSources").GetProperty("vendorName").GetString());
         Assert.Equal([CaptureMappingGuards.WarningDisagreesWithRules], result.Warnings);
         Assert.Equal("Northstar Supplies Ltd", result.RuleValueHints["vendorName"]);
@@ -324,7 +464,7 @@ public sealed class CaptureFieldMapperTests
     {
         var mapped = Merge(RuleFields, o =>
         {
-            o["vendorName"] = "Northstar Supplies Limited";
+            o["vendorName"] = "Northstar Supplies";
             o["vendorInvoiceNo"] = "ZZ-1";
         });
 
@@ -453,12 +593,12 @@ public sealed class CaptureFieldMapperTests
     [Fact]
     public async Task Runner_StoresAGuardedMapperSuggestionAndNamesTheMapper()
     {
-        var mapped = Merge(RuleFields, o => o["vendorName"] = "Northstar Supplies Limited");
+        var mapped = Merge(RuleFields, o => o["vendorName"] = "Northstar Supplies");
         var outcome = await RunAsync(new ScriptedMapper(_ => Result(mapped, "test-mapper", "7")));
 
         Assert.Equal("test-mapper", outcome.MapperName);
         Assert.Equal("7", outcome.MapperVersion);
-        Assert.Contains("Northstar Supplies Limited", outcome.FieldsJson, StringComparison.Ordinal);
+        Assert.Contains("\"vendorName\":\"Northstar Supplies\"", outcome.FieldsJson, StringComparison.Ordinal);
         Assert.Contains(CaptureMappingGuards.WarningDisagreesWithRules, outcome.Warnings);
     }
 

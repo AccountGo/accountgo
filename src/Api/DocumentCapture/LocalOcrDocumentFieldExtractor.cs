@@ -5,7 +5,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
-using Api.DocumentCaptures.Mapping;
 using Api.DocumentCaptures.Parsing;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -47,21 +46,18 @@ public sealed class LocalOcrDocumentFieldExtractor : IDocumentFieldExtractor, ID
     private readonly TimeProvider _clock;
     private readonly ILogger<LocalOcrDocumentFieldExtractor> _logger;
     private readonly Func<ProcessStartInfo, ICaptureWorkerProcess> _startWorker;
-    private readonly ICaptureFieldMapper _mapper;
     private int _waiting;
 
     public LocalOcrDocumentFieldExtractor(IOptions<DocumentCaptureOptions> options, TimeProvider? clock = null,
-        ILogger<LocalOcrDocumentFieldExtractor>? logger = null, ICaptureFieldMapper? mapper = null)
+        ILogger<LocalOcrDocumentFieldExtractor>? logger = null)
         : this(options, clock ?? TimeProvider.System, logger ?? NullLogger<LocalOcrDocumentFieldExtractor>.Instance,
-            start => new CaptureWorkerProcess(Process.Start(start) ?? throw new InvalidOperationException()), mapper)
+            start => new CaptureWorkerProcess(Process.Start(start) ?? throw new InvalidOperationException()))
     {
     }
 
     internal LocalOcrDocumentFieldExtractor(IOptions<DocumentCaptureOptions> options, TimeProvider clock,
-        ILogger<LocalOcrDocumentFieldExtractor> logger, Func<ProcessStartInfo, ICaptureWorkerProcess> startWorker,
-        ICaptureFieldMapper? mapper = null)
+        ILogger<LocalOcrDocumentFieldExtractor> logger, Func<ProcessStartInfo, ICaptureWorkerProcess> startWorker)
     {
-        _mapper = mapper ?? new RuleOnlyFieldMapper();
         _options = options.Value.OcrWorker;
         _workerPath = _options.ResolveWorkerPath();
         _gate = new SemaphoreSlim(_options.MaxConcurrency, _options.MaxConcurrency);
@@ -150,12 +146,10 @@ public sealed class LocalOcrDocumentFieldExtractor : IDocumentFieldExtractor, ID
             result = ParseWorkerResponse(payload, request.PageCount);
             var (lines, rawText) = BoundLines(result.Lines);
             var parsed = DocumentTextFieldParser.Parse(request.Kind, lines);
-            // The mapper only suggests: whatever it returns goes through the guards, and the rule fields stay if it fails.
-            // With the default rules-only mapper the stored fields are byte-identical to the parser's.
-            var mapping = await CaptureFieldMappingRunner.RunAsync(_mapper, request.Kind, request.SchemaVersion,
-                parsed.FieldsJson, lines, DocumentTextFieldParser.RulesVersion, cancellationToken).ConfigureAwait(false);
-            var extraction = new DocumentExtractionResult(mapping.FieldsJson, request.Kind, 1,
-                result.Warnings.Concat(parsed.Warnings).Concat(mapping.Warnings).Distinct(StringComparer.Ordinal).Take(32).ToArray(),
+            // Rule fields are returned as soon as the rules have read the document. An optional field mapper never runs here: a later
+            // background job calls CaptureFieldMappingRunner, so a slow mapper can't delay a scan or hold the OCR admission slot.
+            var extraction = new DocumentExtractionResult(parsed.FieldsJson, request.Kind, 1,
+                result.Warnings.Concat(parsed.Warnings).Distinct(StringComparer.Ordinal).Take(32).ToArray(),
                 rawText, ProviderName, CurrentProviderVersion);
             outcome = "ok";
             return extraction;

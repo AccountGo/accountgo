@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Api.DocumentCaptures.Matching;
 using Api.DocumentCaptures.Parsing;
 
 namespace Api.DocumentCaptures.Mapping;
@@ -38,6 +39,9 @@ public static partial class CaptureMappingGuards
     public const string WarningUnavailable = "AI_UNAVAILABLE";
 
     private const decimal Cent = 0.01m;
+
+    /// <summary>At least this share of a mapped line description's words must be words the document prints (and at least one).</summary>
+    public const double MinimumDescriptionWordShare = 0.6;
     private static readonly string[] TotalAmountNames = ["subtotal", "taxTotal", "grandTotal", "discountTotal", "additionalCharges"];
     private static readonly string[] AmountLineFields = ["unitAmount", "sourceLineTotal"];
     private static readonly string[] NumberLineFields = ["quantity", "discount"];
@@ -84,10 +88,10 @@ public static partial class CaptureMappingGuards
             var found = Text(rule[name]);
             if (string.Equals(found, suggested, StringComparison.Ordinal))
                 continue;
-            // G-AI-01: a date, document number, reference or currency the mapper returns must be written in the document.
+            // G-AI-01: a party name, date, document number, reference or currency the mapper returns must be written in the document.
             if (name is "date" or "dueDate" ? !source.HasDate(suggested)
                 : name is "referenceNo" or "sourceInvoiceNo" or "vendorInvoiceNo" or "currency" ? !source.HasToken(suggested)
-                : false)
+                : !source.HasName(suggested))
             {
                 Warn(warnings, WarningNotInSource);
                 continue;
@@ -110,7 +114,7 @@ public static partial class CaptureMappingGuards
                 var found = Text(candidate[name]);
                 if (AmountsEqual(found, suggested))
                     continue;
-                if (!source.HasAmount(suggested))
+                if (!source.HasTotalAmount(suggested))
                 {
                     Warn(warnings, WarningNotInSource);
                     continue;
@@ -242,6 +246,14 @@ public static partial class CaptureMappingGuards
             if (mappedLines[i] is not JsonObject line)
                 return false;
             var before = ruleLines is not null && i < ruleLines.Count ? ruleLines[i] as JsonObject : null;
+            var description = Text(line["description"]);
+            if (description is not null
+                && !string.Equals(description, before is null ? null : Text(before["description"]), StringComparison.Ordinal)
+                && !source.HasDescription(description))
+            {
+                Warn(warnings, WarningNotInSource);
+                return false;
+            }
             foreach (var name in AmountLineFields)
             {
                 var suggested = Text(line[name]);
@@ -309,6 +321,8 @@ public static partial class CaptureMappingGuards
         private readonly HashSet<decimal> _amounts = [];
         private readonly HashSet<decimal> _numbers = [];
         private readonly HashSet<string> _tokenRuns = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _words = new(StringComparer.Ordinal);
+        private readonly HashSet<decimal> _labeledIntegers = [];
 
         public SourceIndex(IReadOnlyList<string> lines)
         {
@@ -318,9 +332,17 @@ public static partial class CaptureMappingGuards
                     _dates.Add(date);
                 foreach (var amount in DateAndAmountParser.ExtractAmounts(line))
                     _amounts.Add(Math.Round(amount, 2));
+                var labeled = DocumentTextFieldParser.IsTotalsLabelLine(line);
                 foreach (Match match in NumberTokenRegex().Matches(line))
                     if (NormalizeNumber(match.Value) is { } number)
+                    {
                         _numbers.Add(number);
+                        if (labeled && number == Math.Truncate(number))
+                            _labeledIntegers.Add(number);
+                    }
+
+                foreach (var word in Words(line))
+                    _words.Add(word);
 
                 var tokens = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
                 for (var start = 0; start < tokens.Length; start++)
@@ -337,6 +359,34 @@ public static partial class CaptureMappingGuards
         public bool HasAmount(string value) =>
             Amount(value) is { } amount
             && (_amounts.Contains(Math.Round(amount, 2)) || (amount == Math.Truncate(amount) && _numbers.Contains(amount)));
+
+        /// <summary>
+        /// A total, subtotal or tax must match a printed two-decimal amount. A whole-number total is only accepted when it is printed on a
+        /// line the parser reads as a totals line, so a quantity, a year or a unit number can never become a total.
+        /// </summary>
+        public bool HasTotalAmount(string value) =>
+            Amount(value) is { } amount
+            && (_amounts.Contains(Math.Round(amount, 2)) || (amount == Math.Truncate(amount) && _labeledIntegers.Contains(amount)));
+
+        /// <summary>Every word of a party name must be printed in the document (case, accents and punctuation folded).</summary>
+        public bool HasName(string name)
+        {
+            var words = Words(name).ToList();
+            return words.Count > 0 && words.All(_words.Contains);
+        }
+
+        /// <summary>At least <see cref="MinimumDescriptionWordShare"/> of a description's words, and at least one, are printed in the document.</summary>
+        public bool HasDescription(string description)
+        {
+            var words = Words(description).ToList();
+            if (words.Count == 0)
+                return false;
+            var found = words.Count(_words.Contains);
+            return found >= 1 && found >= Math.Ceiling(words.Count * MinimumDescriptionWordShare - 1e-9);
+        }
+
+        private static IEnumerable<string> Words(string text) =>
+            PartyNameNormalizer.NormalizeForAlias(text).Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
         public bool HasNumber(string value) => Amount(value) is { } number && _numbers.Contains(number);
 
