@@ -837,6 +837,43 @@ public sealed class DocumentTextFieldParserTests
         Assert.Equal("110.00", root.GetProperty("sourceTotals").GetProperty("grandTotal").GetString());
     }
 
+    // --- E5: item line containing "tax" must not become taxTotal or priceBasis inclusive ---
+
+    [Fact]
+    public void Parse_Totals_E5_ItemRowContainingTaxDoesNotSetTaxTotalOrInclusive()
+    {
+        var lines = new[]
+        {
+            Line("Acme Ltd"),
+            Line("Phone case 2 $5.00 $10.00"),
+            Line("Tax software licence 1 $90.00 $90.00"),
+            Line("Subtotal: $100.00"),
+            Line("Total: $100.00"),
+        };
+
+        var root = ParseAndValidate("purchase-invoice", lines, out var warnings);
+        var totals = root.GetProperty("sourceTotals");
+        Assert.Equal("100.00", totals.GetProperty("subtotal").GetString());
+        Assert.Equal("100.00", totals.GetProperty("grandTotal").GetString());
+        Assert.False(totals.TryGetProperty("taxTotal", out _));
+        Assert.False(totals.TryGetProperty("priceBasis", out _));
+        Assert.DoesNotContain("TOTALS_INCONSISTENT", warnings);
+    }
+
+    [Theory]
+    [InlineData("Tax 10%: $10.00", "10.00")]
+    [InlineData("VAT: 6.79", "6.79")]
+    [InlineData("GST (9%) 1.20", "1.20")]
+    public void Parse_Totals_E5_ValidTaxLabelLinesStillExtractTaxTotal(string taxLine, string expectedTax)
+    {
+        var root = ParseAndValidate("purchase-invoice", [
+            Line("Acme Ltd"),
+            Line(taxLine),
+            Line("Total: EUR 100.00"),
+        ], out _);
+        Assert.Equal(expectedTax, root.GetProperty("sourceTotals").GetProperty("taxTotal").GetString());
+    }
+
     // --- E2: vendor address detection (Unit/Tower/comma+digit) and earliest clean letters-only line ---
 
     [Fact]

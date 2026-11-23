@@ -66,8 +66,10 @@ public static class DocumentTextFieldParser
         @"(?:sub\s*-?\s*total|net\s*total|รวมเป็นเงิน|ยอดก่อนภาษี)",
         LinearI);
 
+    // E5: a tax total comes only from a label line (tax keyword at start followed by rate/:/=/inclusive/amount/EOL,
+    // or anywhere followed directly by a rate, ':' or '=').
     private static readonly Regex TaxLabelRegex = new(
-        @"(?:\btax\b|\bvat\b|\bgst\b|\bhst\b|\bpst\b|ภาษีมูลค่าเพิ่ม|ภาษี)",
+        @"(?:^(?:(?:sales|value\s*added|service|output|input|total)\s+)?(?:\btax\b|\bvat\b|\bgst\b|\bhst\b|\bpst\b|ภาษีมูลค่าเพิ่ม|ภาษี)(?:\s*(?:\(?\d+(?:\.\d+)?%\)?|[:=\-]|incl\.?|included|inclusive|รวมภาษีแล้ว)|\s+(?:(?:S\$|A\$|C\$|HK\$|NZ\$|RM|Rp|[A-Z]{3})\s*)?[$€£฿]?\s*\d|\s*$)|(?:\btax\b|\bvat\b|\bgst\b|\bhst\b|\bpst\b|ภาษีมูลค่าเพิ่ม|ภาษี)\s*(?:\(?\d+(?:\.\d+)?%\)?|[:=]))",
         LinearI);
 
     // K4: exclude tax invoice headers, tax dates, and tax registration/ID numbers.
@@ -462,6 +464,11 @@ public static class DocumentTextFieldParser
         {
             var line = lines[i];
             var next = i + 1 < lines.Count ? lines[i + 1] : null;
+
+            // E5: a line matching the table-row pattern is never a tax, subtotal, or total line.
+            if (line.Length <= 300 && LineItemRowRegex.IsMatch(line))
+                continue;
+
             var isTotalLine = IsGrandTotalLine(line);
 
             // K5: only set inclusive on tax-tied cues on non-total lines
