@@ -1097,6 +1097,8 @@ export function describeCaptureWarning(code: string): string {
       return 'Extracted date is ambiguous — confirm the exact YYYY-MM-DD date.';
     case 'AMBIGUOUS_CURRENCY':
       return 'Document currency symbol is ambiguous — confirm currency before applying amounts.';
+    case 'CURRENCY_AMBIGUOUS':
+      return 'The document uses a currency symbol shared by multiple currencies. Confirm the currency before applying amounts.';
     case 'FOREIGN_CURRENCY':
       return 'Document currency differs from workspace currency — monetary amounts cannot be auto-applied.';
     case 'PRICE_BASIS_UNKNOWN':
