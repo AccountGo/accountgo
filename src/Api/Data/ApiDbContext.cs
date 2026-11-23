@@ -464,6 +464,7 @@ namespace Api.Data
                 Postgres.PostgresModelConventions.UseDefaultSchema(builder);
 
             ConfigureDocumentCaptureModel(builder);
+            ConfigureAssistantPseudonymModel(builder);
 
             builder.Entity<RecordChange>(entity =>
             {

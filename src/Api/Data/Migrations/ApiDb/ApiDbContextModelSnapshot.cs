@@ -47,6 +47,63 @@ namespace Api.Data.Migrations.ApiDb
                     b.ToTable("Address");
                 });
 
+            modelBuilder.Entity("Core.Domain.AssistantPseudonym", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<DateTime>("LastUsedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("SessionId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("IX_AssistantPseudonyms_ExpiresAt");
+
+                    b.HasIndex("CompanyId", "UserId", "SessionId", "Token")
+                        .IsUnique()
+                        .HasDatabaseName("IX_AssistantPseudonyms_CompanyId_UserId_SessionId_Token");
+
+                    b.ToTable("AssistantPseudonyms", (string)null);
+                });
+
             modelBuilder.Entity("Core.Domain.Auditing.AuditLog", b =>
                 {
                     b.Property<int>("Id")
@@ -869,6 +926,10 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("IX_DocumentCaptures_ExpiresAt_Unaccepted")
+                        .HasFilter("\"AcceptedAt\" IS NULL AND \"RejectedAt\" IS NULL AND \"BytesDeletedAt\" IS NULL");
+
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasFilter("[PublicId] <> ''");
@@ -879,10 +940,6 @@ namespace Api.Data.Migrations.ApiDb
 
                     b.HasIndex("CompanyId", "PublicId")
                         .IsUnique();
-
-                    b.HasIndex("ExpiresAt")
-                        .HasDatabaseName("IX_DocumentCaptures_ExpiresAt_Unaccepted")
-                        .HasFilter("\"AcceptedAt\" IS NULL AND \"RejectedAt\" IS NULL AND \"BytesDeletedAt\" IS NULL");
 
                     b.HasIndex("CompanyId", "SourceHash", "Kind", "SchemaVersion", "CreatedAt");
 

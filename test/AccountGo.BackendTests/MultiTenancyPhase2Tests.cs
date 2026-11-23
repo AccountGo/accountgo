@@ -651,7 +651,9 @@ namespace AccountGo.BackendTests
                 // Document capture admission and lifecycle paths bypass tenant filters only while holding the company lock and add explicit company/live-workspace predicates.
                 "DocumentCaptureService.cs",
                 // Retention and purge enumerate workspaces and capture rows with explicit company and lifecycle predicates.
-                "DocumentCaptureRetentionService.cs"
+                "DocumentCaptureRetentionService.cs",
+                // Assistant pseudonym TTL purge sweeps expired rows across workspaces with an explicit ExpiresAt <= utcNow predicate.
+                "AssistantPseudonymRetentionService.cs"
             };
 
             var solutionRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
