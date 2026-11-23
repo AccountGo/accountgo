@@ -118,7 +118,8 @@ describe('DocumentCapturePanel & fields.ts', () => {
       <DocumentCapturePanel kind="expense-receipt" orgSlug="acme" onAccepted={vi.fn()} />
     );
 
-    await waitFor(() => expect(authFetch).toHaveBeenCalledWith('/api/document-captures/capabilities'));
+    await waitFor(() => expect(authFetch).toHaveBeenCalledWith('/api/document-captures/capabilities?warmup=1'));
+    expect(authFetch).not.toHaveBeenCalledWith('/api/document-captures/capabilities');
     expect(container.textContent).toBe('');
     expect(screen.queryByLabelText('Upload image or PDF')).toBeNull();
   });
@@ -148,7 +149,7 @@ describe('DocumentCapturePanel & fields.ts', () => {
     };
 
     authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (url === '/api/document-captures/capabilities') return makeJsonResponse(enabledCapabilities);
+      if (url === '/api/document-captures/capabilities?warmup=1') return makeJsonResponse(enabledCapabilities);
       if (url === '/api/document-captures' && init?.method === 'POST') return makeJsonResponse(ready);
       if (url.endsWith('/accept') && init?.method === 'POST') return makeJsonResponse(canonicalAccepted);
       return makeJsonResponse({}, 404);
@@ -187,7 +188,7 @@ describe('DocumentCapturePanel & fields.ts', () => {
       warnings: ['AMBIGUOUS_DATE'],
     });
     authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (url === '/api/document-captures/capabilities') return makeJsonResponse(enabledCapabilities);
+      if (url === '/api/document-captures/capabilities?warmup=1') return makeJsonResponse(enabledCapabilities);
       if (url === '/api/document-captures' && init?.method === 'POST') return makeJsonResponse(ambiguous);
       return makeJsonResponse({}, 404);
     });
@@ -210,7 +211,7 @@ describe('DocumentCapturePanel & fields.ts', () => {
   it('prevents application for unknown schema versions and refuses kinds without a typed handler', async () => {
     const unknownSchemaCapture = makeFakeExtractorReadyCapture({ schemaVersion: 99 });
     authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (url === '/api/document-captures/capabilities') return makeJsonResponse(enabledCapabilities);
+      if (url === '/api/document-captures/capabilities?warmup=1') return makeJsonResponse(enabledCapabilities);
       if (url === '/api/document-captures' && init?.method === 'POST') return makeJsonResponse(unknownSchemaCapture);
       return makeJsonResponse({}, 404);
     });
@@ -232,7 +233,7 @@ describe('DocumentCapturePanel & fields.ts', () => {
       fields: { raw: 'value' },
     });
     authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (url === '/api/document-captures/capabilities') {
+      if (url === '/api/document-captures/capabilities?warmup=1') {
         return makeJsonResponse({ ...enabledCapabilities, kinds: ['unknown-kind'] });
       }
       if (url === '/api/document-captures' && init?.method === 'POST') return makeJsonResponse(unknownCapture);
@@ -258,7 +259,7 @@ describe('DocumentCapturePanel & fields.ts', () => {
       link: { targetType: 'bill', targetId: 'bill_01existing00000000000001', linkedAt: '2026-11-10T11:00:00Z' },
     });
     authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (url === '/api/document-captures/capabilities') return makeJsonResponse(enabledCapabilities);
+      if (url === '/api/document-captures/capabilities?warmup=1') return makeJsonResponse(enabledCapabilities);
       if (url === '/api/document-captures' && init?.method === 'POST') return makeJsonResponse(linked);
       return makeJsonResponse({}, 404);
     });
@@ -289,7 +290,7 @@ describe('DocumentCapturePanel & fields.ts', () => {
     window.addEventListener(ENTITLEMENT_DENIED_EVENT, listener);
 
     authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (url === '/api/document-captures/capabilities') return makeJsonResponse(enabledCapabilities);
+      if (url === '/api/document-captures/capabilities?warmup=1') return makeJsonResponse(enabledCapabilities);
       if (url === '/api/document-captures' && init?.method === 'POST') {
         return makeJsonResponse({ code: 'FEATURE_NOT_ENTITLED', detail: 'Feature not included.' }, 403);
       }
@@ -311,7 +312,7 @@ describe('DocumentCapturePanel & fields.ts', () => {
   it('keeps 429 rate-limit and 504 timeout errors in panel without auto-retry', async () => {
     let postCalls = 0;
     authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (url === '/api/document-captures/capabilities') return makeJsonResponse(enabledCapabilities);
+      if (url === '/api/document-captures/capabilities?warmup=1') return makeJsonResponse(enabledCapabilities);
       if (url === '/api/document-captures' && init?.method === 'POST') {
         postCalls++;
         if (postCalls === 1) {
@@ -357,7 +358,7 @@ describe('DocumentCapturePanel & fields.ts', () => {
     };
 
     authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (url === '/api/document-captures/capabilities') return makeJsonResponse(enabledCapabilities);
+      if (url === '/api/document-captures/capabilities?warmup=1') return makeJsonResponse(enabledCapabilities);
       if (url === '/api/document-captures' && init?.method === 'POST') {
         uploadPosts++;
         return makeJsonResponse(ready);
@@ -404,7 +405,7 @@ describe('DocumentCapturePanel & fields.ts', () => {
     };
 
     authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (url === '/api/document-captures/capabilities') return makeJsonResponse(enabledCapabilities);
+      if (url === '/api/document-captures/capabilities?warmup=1') return makeJsonResponse(enabledCapabilities);
       if (url === '/api/document-captures' && init?.method === 'POST') return makeJsonResponse(ready);
       if (url.endsWith('/accept') && init?.method === 'POST') return acceptPromise;
       return makeJsonResponse({}, 404);
@@ -428,7 +429,7 @@ describe('DocumentCapturePanel & fields.ts', () => {
     );
 
     resolveAccept(makeJsonResponse(accepted));
-    await waitFor(() => expect(authFetch).toHaveBeenCalledWith('/api/document-captures/capabilities'));
+    await waitFor(() => expect(authFetch).toHaveBeenCalledWith('/api/document-captures/capabilities?warmup=1'));
     expect(onAccepted).not.toHaveBeenCalled();
   });
 
@@ -511,7 +512,7 @@ describe('DocumentCapturePanel & fields.ts', () => {
     expect(describeLinkedCaptureTarget(linked)).toBe('bill #INV-42 from Blue Bean Coffee Supply');
 
     authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (url === '/api/document-captures/capabilities') return makeJsonResponse(enabledCapabilities);
+      if (url === '/api/document-captures/capabilities?warmup=1') return makeJsonResponse(enabledCapabilities);
       if (url === '/api/document-captures' && init?.method === 'POST') return makeJsonResponse(linked);
       return makeJsonResponse({}, 404);
     });

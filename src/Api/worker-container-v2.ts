@@ -104,7 +104,11 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
   }
 
   private buildEnvVars(): Record<string, string> {
-    return buildContainerEnvVars(this.env as unknown as Record<string, unknown>, CONTAINER_PORT);
+    return buildContainerEnvVars(
+      this.env as unknown as Record<string, unknown>,
+      CONTAINER_PORT,
+      this.pool
+    );
   }
 
   private async destroyContainer(reason?: string): Promise<void> {

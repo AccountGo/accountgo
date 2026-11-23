@@ -11,6 +11,8 @@ export interface Env {
   /** Deployed default for tiered capacity: "true" routes to the CONTAINER_V2 pools. */
   TIERED_CAPACITY_ENABLED?: string;
   AUTH_CAPACITY_ENABLED?: string;
+  /** Optional pool for document capture uploads ("paid" routes POST /api/document-captures to V2 paid). */
+  DOCUMENT_CAPTURE_EXTRACTION_POOL?: string;
   /** Optional KV namespace with runtime switches (key "tiered_capacity" overrides TIERED_CAPACITY_ENABLED). */
   FLAGS?: KVNamespace;
   /** V2 start() instance for the paid pool (default standard-1) and the free pool (default lite). */

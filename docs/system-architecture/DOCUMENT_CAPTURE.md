@@ -88,6 +88,42 @@ p95 time per page, and 10 concurrent uploads against the one-slot gate, plus
 the existing storage, backup and rollout checks. Local OCR remains unsuitable
 for lite capacity.
 
+### Production topology (hosted Cloudflare Containers)
+
+In hosted production, ordinary traffic runs on the V1 `lite` container while
+capture uploads run on the V2 `paid` pool at `standard-1`:
+
+- Set `DOCUMENT_CAPTURE_EXTRACTION_POOL=paid` on the Cloudflare Worker to route
+  only `POST /api/document-captures` (uploads and forced re-uploads) to the V2
+  `paid` pool object (`v2-paid-<versionId>`, `standard-1`), regardless of
+  whether `TIERED_CAPACITY_ENABLED` is on. All other capture endpoints
+  (`capabilities`, metadata, evidence bytes, `accept`, `reject`, `links`) stay
+  on their existing route so normal browsing does not keep a `standard-1`
+  container awake.
+- The Cloudflare Worker always forces `DocumentCapture__ExtractionHost=false`
+  on the V1 `lite` container and any V2 `free` pool container, overriding any
+  ops-provided value (including case variants). The V2 `paid` pool gets
+  `DocumentCapture__ExtractionHost=true` only when
+  `DOCUMENT_CAPTURE_EXTRACTION_POOL=paid`; otherwise all pools fail safe to
+  `false` so clearing the pool var while capture is enabled never runs OCR on
+  V1 `lite` (uploads fail safe with a retryable 503). Self-hosted
+  (non-Cloudflare) installations do not run `worker.ts` and keep the default
+  `DocumentCapture:ExtractionHost=true`.
+- On an instance with `DocumentCapture:ExtractionHost=false`, `POST /api/document-captures`
+  returns `503 DOCUMENT_CAPTURE_UNCONFIGURED` with `Retry-After: 1` before any
+  reservation, quota attempt, media preparation, or worker start, and
+  `DocumentCapturePdfWarmup` does not run. `GET /api/document-captures/capabilities`
+  still reports `enabled` and `providerAvailable` from the normal flags, and
+  accept, reject, link, and evidence reads work normally.
+- `DocumentCapture:ExtractionHost=false` is also valid when `DocumentCapture:Enabled=false`
+  so ops can flip `DocumentCapture__Enabled=false` as a kill switch without
+  clearing `DOCUMENT_CAPTURE_EXTRACTION_POOL`.
+- On `GET /api/document-captures/capabilities?warmup=1` with the pool var set
+  (opt-in, sent only by `useDocumentCapture` when a scan panel opens), the
+  Worker fires a non-blocking `GET /health` warm-up to the V2 `paid` pool via
+  `ctx.waitUntil`, throttled to at most once per isolate per 60 seconds, so
+  ordinary sidebar/page availability checks never wake the `standard-1` container.
+
 ### Measured resource envelope
 
 Local OCR development-host measurements used an Apple M1 running macOS 26.6.2

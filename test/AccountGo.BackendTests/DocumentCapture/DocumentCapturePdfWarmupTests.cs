@@ -57,6 +57,48 @@ public sealed class DocumentCapturePdfWarmupTests
         }
     }
 
+    [Fact]
+    public async Task WarmupDoesNotRunWhenExtractionHostIsFalse()
+    {
+        using var startup = new CancellationTokenSource();
+        var lifetime = new Mock<IHostApplicationLifetime>();
+        lifetime.SetupGet(host => host.ApplicationStarted).Returns(startup.Token);
+        var logger = new WarmupLogger();
+        var calls = 0;
+        using var worker = new DocumentCapturePdfWarmup(lifetime.Object,
+            Options.Create(new DocumentCaptureOptions { Enabled = true, ExtractionHost = false, PdfParseSlots = 1 }), logger,
+            (_, _) =>
+            {
+                Interlocked.Increment(ref calls);
+                return Task.FromResult(new DocumentCapturePdfValidationResult(true, 1, null));
+            });
+
+        await worker.StartAsync(CancellationToken.None);
+        startup.Cancel();
+        await worker.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(5));
+        await worker.StopAsync(CancellationToken.None);
+
+        Assert.Equal(0, Volatile.Read(ref calls));
+        Assert.Empty(logger.Messages);
+    }
+
+    [Fact]
+    public void OptionsValidate_AllowsExtractionHostFalseEvenWhenCaptureDisabled()
+    {
+        var dev = new Mock<IHostEnvironment>();
+        dev.SetupGet(e => e.EnvironmentName).Returns("Development");
+
+        // Kill switch: Enabled=false with ExtractionHost=false (forced on V1 by pool var) must never block startup.
+        DocumentCaptureOptions.Validate(
+            new DocumentCaptureOptions { Enabled = false, ExtractionHost = false, Extractor = "" }, dev.Object);
+
+        DocumentCaptureOptions.Validate(
+            new DocumentCaptureOptions { Enabled = false, ExtractionHost = false, Extractor = "fake" }, dev.Object);
+
+        DocumentCaptureOptions.Validate(
+            new DocumentCaptureOptions { Enabled = true, ExtractionHost = false, Extractor = "fake" }, dev.Object);
+    }
+
     private sealed class WarmupLogger : ILogger<DocumentCapturePdfWarmup>
     {
         public List<(LogLevel Level, Exception? Exception, string Message)> Messages { get; } = [];

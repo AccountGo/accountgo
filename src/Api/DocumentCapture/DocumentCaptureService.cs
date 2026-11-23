@@ -75,7 +75,7 @@ public sealed class DocumentCaptureService(
         bool force = false)
     {
         var config = options.Value;
-        if (!config.Enabled || !extractor.IsConfigured)
+        if (!config.Enabled || !config.ExtractionHost || !extractor.IsConfigured)
             throw new DocumentCaptureServiceException(503, "DOCUMENT_CAPTURE_UNCONFIGURED");
         if (idempotencyKey is { Length: 0 or > 80 })
             throw new DocumentCaptureServiceException(400, "DOCUMENT_IDEMPOTENCY_KEY_INVALID");

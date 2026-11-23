@@ -11,6 +11,7 @@ public sealed class DocumentCaptureOptions
 {
     public const string SectionName = "DocumentCapture";
     public bool Enabled { get; set; }
+    public bool ExtractionHost { get; set; } = true;
     public string Extractor { get; set; } = string.Empty;
     public DocumentCaptureOcrWorkerOptions OcrWorker { get; set; } = new();
     public int ExtractionLeaseSeconds { get; set; } = 60;
