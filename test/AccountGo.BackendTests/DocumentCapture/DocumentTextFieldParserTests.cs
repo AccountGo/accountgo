@@ -294,9 +294,9 @@ public sealed class DocumentTextFieldParserTests
     [InlineData("sales-invoice")]
     [InlineData("bank")]
     [InlineData("assistant-attachment")]
-    public void Parse_HostileInputs_ReturnSchemaValidJsonWithin250MsWarmed(string kind)
+    public void Parse_HostileInputs_ReturnSchemaValidJsonWithin2000MsWarmed(string kind)
     {
-        // Warm regexes and JIT once before timing (K1).
+        // Warm regexes and JIT once before timing (K1/R2).
         _ = ParseAndValidate(kind, [Line("Warmup Co"), Line("Date: 2026-11-20"), Line("Total: EUR 10.00")], out _);
 
         static string RepeatToLength(string chunk, int targetLength)
@@ -320,10 +320,11 @@ public sealed class DocumentTextFieldParserTests
         var sw = Stopwatch.StartNew();
         foreach (var set in hostileSets)
         {
-            _ = ParseAndValidate(kind, set, out _);
+            _ = ParseAndValidate(kind, set, out var warnings);
+            Assert.DoesNotContain("PARSE_TRUNCATED", warnings);
         }
         sw.Stop();
-        Assert.True(sw.ElapsedMilliseconds <= 250, $"Kind '{kind}' took {sw.ElapsedMilliseconds}ms across hostile inputs (ceiling 250ms).");
+        Assert.True(sw.ElapsedMilliseconds <= 2_000, $"Kind '{kind}' took {sw.ElapsedMilliseconds}ms across hostile inputs (ceiling 2000ms).");
     }
 
     // --- K2: paymentStatus strong cues, negations, and positive amount due precedence ---

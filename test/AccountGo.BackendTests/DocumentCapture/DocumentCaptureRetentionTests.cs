@@ -148,6 +148,141 @@ public sealed class DocumentCaptureRetentionTests
         Assert.Contains("2 locked items", logger.Messages[0], StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Purge_CatchesUpPreviouslyRejectedCapturesRegardlessOfExpiresAt_AndLeavesAcceptedUntouched()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var tenant = new TestTenantContext(1);
+        var options = new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(connection).Options;
+        await using var db = new ApiDbContext(options, tenant);
+        await db.Database.EnsureCreatedAsync();
+        var company = new Company { Name = "Capture Co", CompanyCode = "CAP", Slug = "capture-co" };
+        db.Companies.Add(company);
+        await db.SaveChangesAsync();
+        tenant.SetCompanyId(company.Id);
+
+        var now = DateTime.UtcNow;
+        var rejectedBill = Capture(company.Id, "cap_rej_bill", "rejected", now.AddDays(5));
+        rejectedBill.RejectedAt = now.AddMinutes(-5);
+        rejectedBill.RejectedBy = "creator-1";
+        rejectedBill.FieldsJson = "{\"vendorName\":\"Old Vendor\"}";
+        rejectedBill.RawText = "old raw text";
+        rejectedBill.WarningsJson = "[\"TOTAL_UNLABELED\"]";
+
+        var rejectedAsst = Capture(company.Id, "cap_rej_asst", "rejected", now.AddDays(5));
+        rejectedAsst.Kind = "assistant-attachment";
+        rejectedAsst.RejectedAt = now.AddMinutes(-3);
+        rejectedAsst.RejectedBy = "creator-1";
+        rejectedAsst.FieldsJson = "{\"fields\":[{\"label\":\"Ref\",\"value\":\"123\"}]}";
+        rejectedAsst.RawText = "assistant raw text";
+        rejectedAsst.WarningsJson = "[\"REVIEW_REQUIRED\"]";
+
+        var accepted = Capture(company.Id, "cap_acc_keep", "accepted", now.AddDays(-10), now.AddDays(-10));
+        accepted.FieldsJson = "{\"vendorName\":\"Accepted Vendor\"}";
+        accepted.RawText = "accepted raw text";
+
+        db.DocumentCaptures.AddRange(rejectedBill, rejectedAsst, accepted);
+        await db.SaveChangesAsync();
+        foreach (var c in new[] { rejectedBill, rejectedAsst, accepted })
+        {
+            db.DocumentCaptureBlobs.Add(new DocumentCaptureBlob
+            {
+                CompanyId = company.Id,
+                CaptureId = c.Id,
+                DocumentBytes = [9, 8, 7]
+            });
+        }
+        await db.SaveChangesAsync();
+
+        var retention = new DocumentCaptureRetentionService(db, new DocumentCaptureAdmissionLock(db));
+        await retention.PurgeAsync(now, CancellationToken.None);
+
+        var blobs = await db.DocumentCaptureBlobs.IgnoreQueryFilters().Select(b => b.CaptureId).ToListAsync();
+        Assert.DoesNotContain(rejectedBill.Id, blobs);
+        Assert.DoesNotContain(rejectedAsst.Id, blobs);
+        Assert.Contains(accepted.Id, blobs);
+
+        var billAfter = await db.DocumentCaptures.IgnoreQueryFilters().AsNoTracking().SingleAsync(c => c.Id == rejectedBill.Id);
+        Assert.NotNull(billAfter.BytesDeletedAt);
+        Assert.NotNull(billAfter.FieldsWipedAt);
+        Assert.Equal("{}", billAfter.FieldsJson);
+        Assert.Null(billAfter.RawText);
+        Assert.Null(billAfter.WarningsJson);
+
+        var asstAfter = await db.DocumentCaptures.IgnoreQueryFilters().AsNoTracking().SingleAsync(c => c.Id == rejectedAsst.Id);
+        Assert.NotNull(asstAfter.BytesDeletedAt);
+        Assert.NotNull(asstAfter.FieldsWipedAt);
+        Assert.Equal("{\"fields\":[]}", asstAfter.FieldsJson);
+        Assert.Null(asstAfter.RawText);
+        Assert.Null(asstAfter.WarningsJson);
+
+        var accAfter = await db.DocumentCaptures.IgnoreQueryFilters().AsNoTracking().SingleAsync(c => c.Id == accepted.Id);
+        Assert.Null(accAfter.BytesDeletedAt);
+        Assert.Null(accAfter.FieldsWipedAt);
+        Assert.Equal("{\"date\":\"2026-11-20\"}", accAfter.AcceptedFieldsJson);
+    }
+
+    [Fact]
+    public async Task Purge_NeverRevisitsWipedRowsOnSubsequentPasses()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var tenant = new TestTenantContext(1);
+        var options = new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(connection).Options;
+        await using var db = new ApiDbContext(options, tenant);
+        await db.Database.EnsureCreatedAsync();
+        var company = new Company { Name = "Capture Co", CompanyCode = "CAP", Slug = "capture-co" };
+        db.Companies.Add(company);
+        await db.SaveChangesAsync();
+        tenant.SetCompanyId(company.Id);
+
+        var now = DateTime.UtcNow;
+        var abandoned = Capture(company.Id, "cap_once_abandoned", "ready", now.AddHours(-25));
+        abandoned.FieldsJson = "{\"vendorName\":\"Abandoned\"}";
+        abandoned.RawText = "raw";
+
+        var rejected = Capture(company.Id, "cap_once_rejected", "rejected", now.AddDays(5));
+        rejected.RejectedAt = now.AddMinutes(-5);
+        rejected.RejectedBy = "creator-1";
+        rejected.FieldsJson = "{\"vendorName\":\"Rejected\"}";
+        rejected.RawText = "raw";
+
+        db.DocumentCaptures.AddRange(abandoned, rejected);
+        await db.SaveChangesAsync();
+        foreach (var c in new[] { abandoned, rejected })
+            db.DocumentCaptureBlobs.Add(new DocumentCaptureBlob { CompanyId = company.Id, CaptureId = c.Id, DocumentBytes = [1, 2] });
+        await db.SaveChangesAsync();
+
+        var countingLock = new CountingAdmissionLock(db);
+        var retention = new DocumentCaptureRetentionService(db, countingLock);
+
+        await retention.PurgeAsync(now, CancellationToken.None);
+        Assert.Equal(2, countingLock.CompanyLockCalls);
+
+        // Second pass must not revisit either row once BytesDeletedAt and FieldsWipedAt are set.
+        await retention.PurgeAsync(now.AddMinutes(5), CancellationToken.None);
+        Assert.Equal(2, countingLock.CompanyLockCalls);
+    }
+
+    private sealed class CountingAdmissionLock(ApiDbContext db) : IDocumentCaptureAdmissionLock
+    {
+        private readonly DocumentCaptureAdmissionLock _inner = new(db);
+        public int CompanyLockCalls { get; private set; }
+
+        public Task<IDbContextTransaction> AcquireCompanyAsync(int companyId, CancellationToken cancellationToken)
+        {
+            CompanyLockCalls++;
+            return _inner.AcquireCompanyAsync(companyId, cancellationToken);
+        }
+
+        public Task<IDbContextTransaction> AcquirePurgeCompanyAsync(int companyId, CancellationToken cancellationToken) =>
+            _inner.AcquirePurgeCompanyAsync(companyId, cancellationToken);
+
+        public Task<IAsyncDisposable?> TryAcquirePurgeWorkerSingletonAsync(CancellationToken cancellationToken) =>
+            _inner.TryAcquirePurgeWorkerSingletonAsync(cancellationToken);
+    }
+
     private static CaptureEntity Capture(int companyId, string publicId, string status, DateTime expiresAt, DateTime? acceptedAt = null) => new()
     {
         CompanyId = companyId,

@@ -151,6 +151,8 @@ public sealed class DocumentCaptureService(
                     existing.Status = "extracting";
                     existing.ExtractingStartedAt = now;
                     existing.LeaseExpiresAt = now.AddSeconds(config.ExtractionLeaseSeconds);
+                    existing.ExpiresAt = now.AddHours(config.AbandonedRetentionHours);
+                    existing.FieldsWipedAt = null;
                     existing.ErrorCode = null;
                     generation = existing.ExtractionGeneration;
                     captureId = existing.Id;
@@ -211,7 +213,7 @@ public sealed class DocumentCaptureService(
                         LeaseExpiresAt = now.AddSeconds(config.ExtractionLeaseSeconds),
                         CreatedBy = actorId,
                         CreatedAt = now,
-                        ExpiresAt = now.AddDays(7),
+                        ExpiresAt = now.AddHours(config.AbandonedRetentionHours),
                         Blob = new DocumentCaptureBlob { CompanyId = companyId, DocumentBytes = media.Bytes },
                         Attempts =
                         [
@@ -565,14 +567,20 @@ public sealed class DocumentCaptureService(
         if (capture.Status is "accepted" or "extracting")
             throw new DocumentCaptureServiceException(409, "DOCUMENT_STATE_CONFLICT");
         var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var emptyFields = DocumentCaptureFieldSchemas.EmptyFieldsJsonForKind(capture.Kind);
         var updated = await db.DocumentCaptures.Where(c => c.CompanyId == companyId && c.Id == captureId && c.Status != "accepted" && c.Status != "extracting")
             .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.Status, "rejected")
-                .SetProperty(c => c.RejectedBy, actorId).SetProperty(c => c.RejectedAt, now), cancellationToken).ConfigureAwait(false);
+                .SetProperty(c => c.RejectedBy, actorId)
+                .SetProperty(c => c.RejectedAt, now)
+                .SetProperty(c => c.BytesDeletedAt, now)
+                .SetProperty(c => c.FieldsWipedAt, now)
+                .SetProperty(c => c.FieldsJson, emptyFields)
+                .SetProperty(c => c.RawText, (string?)null)
+                .SetProperty(c => c.WarningsJson, (string?)null), cancellationToken).ConfigureAwait(false);
         if (updated != 1)
             throw new DocumentCaptureServiceException(409, "DOCUMENT_STATE_CONFLICT");
-        if (capture.Kind is "bank" or "assistant-attachment")
-            await db.DocumentCaptureBlobs.Where(b => b.CompanyId == companyId && b.CaptureId == captureId)
-                .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        await db.DocumentCaptureBlobs.Where(b => b.CompanyId == companyId && b.CaptureId == captureId)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         await AuditTransitionAsync("document.capture.rejected", "success", companyId, capture.PublicId, capture.Kind,
             "rejected", capture.ExtractionGeneration, actorId).ConfigureAwait(false);
@@ -675,7 +683,7 @@ public sealed class DocumentCaptureService(
                         : ex is DocumentCaptureServiceException serviceException
                             ? serviceException.ErrorCode : "DOCUMENT_UNREADABLE")
                     .SetProperty(c => c.LeaseExpiresAt, (DateTime?)null)
-                    .SetProperty(c => c.ExpiresAt, now.AddDays(7)), CancellationToken.None).ConfigureAwait(false);
+                    .SetProperty(c => c.ExpiresAt, now.AddHours(options.Value.AbandonedRetentionHours)), CancellationToken.None).ConfigureAwait(false);
             if (updated == 1)
             {
                 await finalization.CommitAsync(CancellationToken.None).ConfigureAwait(false);

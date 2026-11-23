@@ -68,7 +68,8 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
         {
             var abandoned = await db.DocumentCaptures.IgnoreQueryFilters().AsNoTracking()
                 .Where(capture => capture.ExpiresAt <= utcNow && capture.AcceptedAt == null && capture.RejectedAt == null
-                    && capture.BytesDeletedAt == null && !stalledAbandonedCaptures.Contains(capture.Id))
+                    && (capture.BytesDeletedAt == null || capture.FieldsWipedAt == null)
+                    && !stalledAbandonedCaptures.Contains(capture.Id))
                 .OrderBy(capture => capture.ExpiresAt)
                 .Select(capture => new { capture.CompanyId, capture.Id })
                 .Take(BatchSize)
@@ -82,7 +83,7 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
                     break;
                 try
                 {
-                    if (await PurgeAbandonedBytesAsync(item.CompanyId, item.Id, utcNow, cancellationToken).ConfigureAwait(false))
+                    if (await PurgeAbandonedContentAsync(item.CompanyId, item.Id, utcNow, cancellationToken).ConfigureAwait(false))
                         madeProgress = true;
                     else
                         stalledAbandonedCaptures.Add(item.Id);
@@ -94,6 +95,41 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
                 }
             }
             if (!madeProgress && abandoned.All(item => stalledAbandonedCaptures.Contains(item.Id)))
+                break;
+        }
+
+        var stalledRejectedCaptures = new HashSet<int>();
+        while (WithinPassBudget(passStarted))
+        {
+            var rejectedResidue = await db.DocumentCaptures.IgnoreQueryFilters().AsNoTracking()
+                .Where(capture => capture.AcceptedAt == null && capture.RejectedAt != null
+                    && (capture.BytesDeletedAt == null || capture.FieldsWipedAt == null)
+                    && !stalledRejectedCaptures.Contains(capture.Id))
+                .OrderBy(capture => capture.RejectedAt)
+                .Select(capture => new { capture.CompanyId, capture.Id })
+                .Take(BatchSize)
+                .ToListAsync(cancellationToken).ConfigureAwait(false);
+            if (rejectedResidue.Count == 0)
+                break;
+            var madeProgress = false;
+            foreach (var item in rejectedResidue)
+            {
+                if (!WithinPassBudget(passStarted))
+                    break;
+                try
+                {
+                    if (await PurgeRejectedResidueAsync(item.CompanyId, item.Id, utcNow, cancellationToken).ConfigureAwait(false))
+                        madeProgress = true;
+                    else
+                        stalledRejectedCaptures.Add(item.Id);
+                }
+                catch (DocumentCaptureAdmissionBusyException)
+                {
+                    stalledRejectedCaptures.Add(item.Id);
+                    busyItems++;
+                }
+            }
+            if (!madeProgress && rejectedResidue.All(item => stalledRejectedCaptures.Contains(item.Id)))
                 break;
         }
 
@@ -165,13 +201,13 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
         || await db.DocumentCaptureAttempts.IgnoreQueryFilters().AnyAsync(attempt => attempt.CompanyId == companyId, cancellationToken).ConfigureAwait(false)
         || await db.DocumentCaptureBlobs.IgnoreQueryFilters().AnyAsync(blob => blob.CompanyId == companyId, cancellationToken).ConfigureAwait(false);
 
-    private async Task<bool> PurgeAbandonedBytesAsync(int companyId, int captureId, DateTime utcNow, CancellationToken cancellationToken)
+    private async Task<bool> PurgeAbandonedContentAsync(int companyId, int captureId, DateTime utcNow, CancellationToken cancellationToken)
     {
         await using var transaction = await admissionLock.AcquireCompanyAsync(companyId, cancellationToken).ConfigureAwait(false);
         var capture = await db.DocumentCaptures.IgnoreQueryFilters()
             .SingleOrDefaultAsync(item => item.CompanyId == companyId && item.Id == captureId
                 && item.ExpiresAt <= utcNow && item.AcceptedAt == null && item.RejectedAt == null
-                && item.BytesDeletedAt == null
+                && (item.BytesDeletedAt == null || item.FieldsWipedAt == null)
                 && (item.Status != "extracting" || item.LeaseExpiresAt == null || item.LeaseExpiresAt <= utcNow)
                 && db.Companies.IgnoreQueryFilters().Any(company => company.Id == companyId && company.DeletedAt == null),
                 cancellationToken).ConfigureAwait(false);
@@ -181,14 +217,45 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
             return false;
         }
 
-        await db.DocumentCaptureBlobs.IgnoreQueryFilters()
-            .Where(blob => blob.CompanyId == companyId && blob.CaptureId == captureId)
-            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
-        capture.BytesDeletedAt = utcNow;
-        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await WipeCaptureContentAsync(capture, companyId, captureId, utcNow, cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         db.ChangeTracker.Clear();
         return true;
+    }
+
+    private async Task<bool> PurgeRejectedResidueAsync(int companyId, int captureId, DateTime utcNow, CancellationToken cancellationToken)
+    {
+        await using var transaction = await admissionLock.AcquireCompanyAsync(companyId, cancellationToken).ConfigureAwait(false);
+        var capture = await db.DocumentCaptures.IgnoreQueryFilters()
+            .SingleOrDefaultAsync(item => item.CompanyId == companyId && item.Id == captureId
+                && item.AcceptedAt == null && item.RejectedAt != null
+                && (item.BytesDeletedAt == null || item.FieldsWipedAt == null)
+                && db.Companies.IgnoreQueryFilters().Any(company => company.Id == companyId && company.DeletedAt == null),
+                cancellationToken).ConfigureAwait(false);
+        if (capture is null)
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            return false;
+        }
+
+        await WipeCaptureContentAsync(capture, companyId, captureId, utcNow, cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        db.ChangeTracker.Clear();
+        return true;
+    }
+
+    private async Task WipeCaptureContentAsync(Core.Domain.DocumentCapture capture, int companyId, int captureId,
+        DateTime utcNow, CancellationToken cancellationToken)
+    {
+        await db.DocumentCaptureBlobs.IgnoreQueryFilters()
+            .Where(blob => blob.CompanyId == companyId && blob.CaptureId == captureId)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        capture.BytesDeletedAt ??= utcNow;
+        capture.FieldsWipedAt = utcNow;
+        capture.FieldsJson = DocumentCaptureFieldSchemas.EmptyFieldsJsonForKind(capture.Kind);
+        capture.RawText = null;
+        capture.WarningsJson = null;
+        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<int> PurgeOldAttemptsAsync(int companyId, DateTime cutoff, CancellationToken cancellationToken)
