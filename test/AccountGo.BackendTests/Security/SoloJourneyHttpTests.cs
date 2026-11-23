@@ -830,6 +830,15 @@ namespace AccountGo.BackendTests.Security
             Assert.True(await PendingSignupContinuationFlag(token, slug),
                 "an uninitialized signup workspace reports pendingSignupContinuation=true for its owner");
 
+            const string fullAccessPath = "/api/organizations/current/owner-access-setup/full-access";
+            using var status = await SendScoped(HttpMethod.Get, fullAccessPath, token, slug, null);
+            Assert.Equal(HttpStatusCode.OK, status.StatusCode);
+            using var statusBody = JsonDocument.Parse(await status.Content.ReadAsStringAsync());
+            Assert.True(statusBody.RootElement.GetProperty("finishSetup").GetBoolean());
+            Assert.False(statusBody.RootElement.GetProperty("eligible").GetBoolean());
+            using var grant = await SendScoped(HttpMethod.Post, fullAccessPath, token, slug, null);
+            Assert.Equal(HttpStatusCode.Forbidden, grant.StatusCode);
+
             Assert.Equal(HttpStatusCode.OK, (await InitializeCurrent(token, slug, "Business", "JustMe")).StatusCode);
 
             // After initialization: the workspace is SoloActive and the capability flips to false — the same

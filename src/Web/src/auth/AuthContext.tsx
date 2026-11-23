@@ -427,7 +427,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           { userWrite }
         );
       } catch (networkErr) {
-        if (requestPath.startsWith('/api/')) {
+        if (!fetchInit.signal?.aborted && requestPath.startsWith('/api/')) {
           reportNetworkFailure({ method, userWrite });
         }
         throw networkErr;
@@ -471,7 +471,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               { userWrite }
             );
           } catch (retryNetworkErr) {
-            if (requestPath.startsWith('/api/')) {
+            if (!fetchInit.signal?.aborted && requestPath.startsWith('/api/')) {
               reportNetworkFailure({ method, userWrite });
             }
             throw retryNetworkErr;

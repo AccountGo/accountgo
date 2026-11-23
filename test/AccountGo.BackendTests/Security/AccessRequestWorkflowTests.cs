@@ -4,6 +4,7 @@ using System.Text.Json;
 using Api.Data;
 using Core.Authorization;
 using Core.Domain;
+using Core.Domain.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -21,6 +22,104 @@ namespace AccountGo.BackendTests.Security
 
         private string RolePub(int id) => AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<Core.Domain.Security.SecurityRole>(_fixture.Factory.Services, id);
         private string MemPub(int id) => AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<CompanyMember>(_fixture.Factory.Services, id);
+
+        private const string FullAccessSetupPath = "/api/organizations/current/owner-access-setup/full-access";
+
+        [Fact]
+        public async Task FullAccessSetup_GrantsEligibleOwnerAccessAndHidesAfterward()
+        {
+            var slug = "owner-full-access-" + Guid.NewGuid().ToString("N")[..6];
+            var owner = await _fixture.CreateUser($"owner-{slug}@example.com");
+            var companyId = await _fixture.CreateWorkspaceWithZeroFunctionalRoles(owner.Token, "Owner access", slug);
+
+            var status = await _fixture.Send(HttpMethod.Get, FullAccessSetupPath, token: owner.Token, org: slug);
+            Assert.Equal(HttpStatusCode.OK, status.StatusCode);
+            Assert.True((await AccessControlConformanceTests.Fixture.Json(status)).GetProperty("eligible").GetBoolean());
+
+            var grant = await _fixture.Send(HttpMethod.Post, FullAccessSetupPath, token: owner.Token, org: slug);
+            Assert.Equal(HttpStatusCode.OK, grant.StatusCode);
+            var retry = await _fixture.Send(HttpMethod.Post, FullAccessSetupPath, token: owner.Token, org: slug);
+            Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+
+            status = await _fixture.Send(HttpMethod.Get, FullAccessSetupPath, token: owner.Token, org: slug);
+            Assert.False((await AccessControlConformanceTests.Fixture.Json(status)).GetProperty("eligible").GetBoolean());
+            var accounts = await _fixture.Send(HttpMethod.Get, "/api/Financials/Accounts", token: owner.Token, org: slug);
+            Assert.Equal(HttpStatusCode.OK, accounts.StatusCode);
+
+            using var scope = _fixture.Factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            Assert.Single(db.AuditLogs.IgnoreQueryFilters().Where(a => a.CompanyId == companyId && a.TableName == "__OwnerAccessSetup"));
+            var policy = db.WorkspaceOperatingSettings.IgnoreQueryFilters().Single(s => s.CompanyId == companyId);
+            Assert.Null(policy.InitializedAtUtc);
+        }
+
+        [Fact]
+        public async Task FullAccessSetup_OnlyOffersMissingJournalPostingWhenFinancialsIsEnabled()
+        {
+            var slug = "owner-missing-post-" + Guid.NewGuid().ToString("N")[..6];
+            var owner = await _fixture.CreateUser($"owner-{slug}@example.com");
+            var companyId = await _fixture.CreateWorkspaceWithZeroFunctionalRoles(owner.Token, "Owner missing posting", slug);
+            using (var scope = _fixture.Factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                var fullRole = db.SecurityRoles.Single(r => r.Name == WorkspaceAccessProfileKeys.FullWorkspaceAccessV1);
+                var draftRole = new SecurityRole { Name = slug };
+                db.SecurityRoles.Add(draftRole);
+                await db.SaveChangesAsync();
+
+                var permissionIds = await db.SecurityRolePermissions
+                    .Where(p => p.SecurityRoleId == fullRole.Id && p.SecurityPermission.Name != SystemPermissions.FinancialsJournalPost)
+                    .Select(p => p.SecurityPermissionId)
+                    .ToListAsync();
+                db.SecurityRolePermissions.AddRange(permissionIds.Select(id =>
+                    new SecurityRolePermission { SecurityRoleId = draftRole.Id, SecurityPermissionId = id }));
+                await db.SaveChangesAsync();
+            }
+            await _fixture.AssignFunctionalRolesDirectAsync(companyId, owner.Id, new[] { slug });
+
+            using var enabled = await _fixture.Send(HttpMethod.Get, FullAccessSetupPath, token: owner.Token, org: slug);
+            Assert.Equal(HttpStatusCode.OK, enabled.StatusCode);
+            Assert.True((await AccessControlConformanceTests.Fixture.Json(enabled)).GetProperty("eligible").GetBoolean());
+
+            using (var scope = _fixture.Factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+                var workspace = await db.Companies.SingleAsync(c => c.Id == companyId);
+                workspace.DisabledModulesJson = JsonSerializer.Serialize(new[] { "financials" });
+                await db.SaveChangesAsync();
+            }
+
+            using var disabled = await _fixture.Send(HttpMethod.Get, FullAccessSetupPath, token: owner.Token, org: slug);
+            Assert.Equal(HttpStatusCode.OK, disabled.StatusCode);
+            Assert.False((await AccessControlConformanceTests.Fixture.Json(disabled)).GetProperty("eligible").GetBoolean());
+            using var grant = await _fixture.Send(HttpMethod.Post, FullAccessSetupPath, token: owner.Token, org: slug);
+            Assert.Equal(HttpStatusCode.Forbidden, grant.StatusCode);
+        }
+
+        [Fact]
+        public async Task FullAccessSetup_RejectsGrantAfterAnotherMemberJoins()
+        {
+            var slug = "owner-full-team-" + Guid.NewGuid().ToString("N")[..6];
+            var owner = await _fixture.CreateUser($"owner-{slug}@example.com");
+            var member = await _fixture.CreateUser($"member-{slug}@example.com");
+            var companyId = await _fixture.CreateWorkspaceWithZeroFunctionalRoles(owner.Token, "Owner team", slug);
+            var status = await _fixture.Send(HttpMethod.Get, FullAccessSetupPath, token: owner.Token, org: slug);
+            Assert.Equal(HttpStatusCode.OK, status.StatusCode);
+            Assert.True((await AccessControlConformanceTests.Fixture.Json(status)).GetProperty("eligible").GetBoolean());
+
+            await _fixture.AddMemberDirectAsync(companyId, member.Id, CompanyMemberRole.Member, new[] { "Accountant" });
+
+            status = await _fixture.Send(HttpMethod.Get, FullAccessSetupPath, token: owner.Token, org: slug);
+            Assert.False((await AccessControlConformanceTests.Fixture.Json(status)).GetProperty("eligible").GetBoolean());
+            var grant = await _fixture.Send(HttpMethod.Post, FullAccessSetupPath, token: owner.Token, org: slug);
+            Assert.Equal(HttpStatusCode.Forbidden, grant.StatusCode);
+
+            using var scope = _fixture.Factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            var savedOwner = db.CompanyMembers.IgnoreQueryFilters().Include(m => m.SecurityRoles)
+                .Single(m => m.CompanyId == companyId && m.UserId == owner.Id);
+            Assert.Empty(savedOwner.SecurityRoles);
+        }
 
         [Fact]
         public async Task OwnerSetup_LegacySoleOwner_WithoutOrigin_ReturnsForbidden()
@@ -180,6 +279,12 @@ namespace AccountGo.BackendTests.Security
                 });
                 await db.SaveChangesAsync();
             }
+
+            var status = await _fixture.Send(HttpMethod.Get, FullAccessSetupPath, token: owner.Token, org: slug);
+            Assert.Equal(HttpStatusCode.OK, status.StatusCode);
+            Assert.False((await AccessControlConformanceTests.Fixture.Json(status)).GetProperty("eligible").GetBoolean());
+            var grant = await _fixture.Send(HttpMethod.Post, FullAccessSetupPath, token: owner.Token, org: slug);
+            Assert.Equal(HttpStatusCode.Forbidden, grant.StatusCode);
 
             var response = await _fixture.Send(HttpMethod.Post, "/api/organizations/current/owner-access-setup",
                 new { securityRoleIds = new[] { RolePub(roleId) } }, token: owner.Token, org: slug);

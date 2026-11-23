@@ -21,6 +21,8 @@ import { TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { OnboardingChecklist } from '../components/OnboardingChecklist';
+import { OwnerFinancialAccessBanner } from '../components/OwnerFinancialAccessBanner';
+import { FULL_WORKSPACE_ACCESS_ROLE_NAME } from '../lib/accessPresets';
 import { BankCloseStatusCard } from '../components/BankCloseStatusCard';
 import { MoneyInBankBreakdown } from '../components/MoneyInBankBreakdown';
 import { PersonalFinanceHealthCard } from '../components/PersonalFinanceHealthCard';
@@ -90,7 +92,7 @@ interface YearEndYearRow {
 }
 
 export const Dashboard: React.FC = () => {
-  const { currentOrg, user, hasModule, hasPermission } = useOutletContext<TenantContextType>();
+  const { currentOrg, user, hasModule, hasPermission, updateCurrentOrg } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
 
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
@@ -277,6 +279,18 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {currentOrg.role === 'Owner' && currentOrg.operatingPolicy?.ownAccessProfileKey !== FULL_WORKSPACE_ACCESS_ROLE_NAME && (
+        <OwnerFinancialAccessBanner
+          key={currentOrg.slug}
+          slug={currentOrg.slug}
+          onAccessGranted={(permissions) => {
+            if (workspaceSlugRef.current !== currentOrg.slug) return;
+            updateCurrentOrg({ permissions });
+            setReloadToken((n) => n + 1);
+          }}
+        />
+      )}
 
       <OnboardingChecklist
         orgSlug={currentOrg.slug}

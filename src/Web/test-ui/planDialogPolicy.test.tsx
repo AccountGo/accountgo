@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, renderHook } from '@testing-library/react';
+import { cleanup, renderHook, waitFor } from '@testing-library/react';
 import { AuthProvider, useAuth } from '../src/auth/AuthContext';
+import { getServiceStatus, resetServiceStatusForTesting } from '../src/lib/serviceStatus';
 import { ENTITLEMENT_DENIED_EVENT, withSuppressedEntitlementDenial, EntitlementProblem } from '../src/lib/entitlementEvents';
 
 describe('authFetch planDialog policy', () => {
@@ -142,4 +143,38 @@ describe('authFetch planDialog policy', () => {
     await result.current.authFetch('/api/some-get', undefined, true);
     expect(dispatchedEvents).toHaveLength(0);
   });
+});
+
+it('does not count canceled workspace requests against service health', async () => {
+  resetServiceStatusForTesting();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (input === '/api/auth/refresh') return new Response(null, { status: 401 });
+    init?.signal?.throwIfAborted();
+    throw new TypeError('Network unavailable');
+  });
+
+  try {
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+    });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    const canceled = new AbortController();
+    canceled.abort();
+
+    await expect(result.current.authFetch('/api/organizations/current/owner-access-setup/full-access', {
+      method: 'POST',
+      signal: canceled.signal,
+    })).rejects.toMatchObject({ name: 'AbortError' });
+
+    await expect(result.current.authFetch('/api/dashboard/summary')).rejects.toThrow('Network unavailable');
+    expect(getServiceStatus().state).toBe('ok');
+
+    await expect(result.current.authFetch('/api/dashboard/summary')).rejects.toThrow('Network unavailable');
+    expect(getServiceStatus()).toMatchObject({ state: 'unavailable', writeFailed: false });
+  } finally {
+    cleanup();
+    globalThis.fetch = originalFetch;
+    resetServiceStatusForTesting();
+  }
 });
