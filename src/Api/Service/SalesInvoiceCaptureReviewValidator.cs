@@ -26,7 +26,11 @@ public static class SalesInvoiceCaptureReviewValidator
         TargetType: "invoice",
         InvalidKindDetail: "This document capture kind cannot be reviewed for a sales invoice.",
         StateConflictDetail: "Accept the captured fields before issuing or attaching them to a sales invoice.",
-        DiscrepancyDetail: "The invoice total differs from one or more captured source document totals. Correct the invoice or explicitly acknowledge each difference before issuing.");
+        DiscrepancyDetail: "The invoice total differs from one or more captured source document totals. Correct the invoice or explicitly acknowledge each difference before issuing.",
+        RejectTaxOnlyDifference: true,
+        AllowTaxOnlyDifferenceWhenNoTaxRegime: true,
+        TargetNoun: "invoice",
+        TaxNotAppliedHint: "Choose a tax rate for the lines.");
 
     public static IActionResult? ValidateForDraft(
         ApiDbContext db,

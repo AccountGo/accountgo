@@ -30,17 +30,22 @@ import { useOptionalCapabilities } from '../lib/entitlements';
 import { DocumentCapturePanel } from '../components/document-capture/DocumentCapturePanel';
 import { PartyMatchPrompt } from '../components/document-capture/PartyMatchPrompt';
 import {
+  CaptureTaxRegime,
+  CaptureTaxTreatment,
   computeCaptureDiscrepancy,
   describeCaptureError,
+  describeCaptureTaxTreatment,
   DocumentCaptureCapabilities,
   DocumentCaptureView,
   evaluateFinancialApplyGates,
   fetchPartyMatchCandidates,
   formatSignedCurrencyDifference,
+  isTaxOnlyDifference,
   isValidIsoDate,
   MAX_SALES_REFERENCE_NO_LENGTH,
   parseStrictDecimal,
   PartyMatchCandidate,
+  planCaptureTax,
   resolveAutoPreselectCandidate,
   SalesCaptureFields,
 } from '../components/document-capture/fields';
@@ -193,6 +198,9 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const [customerMatchDismissed, setCustomerMatchDismissed] = useState(false);
   const [pendingDueDate, setPendingDueDate] = useState<string | null>(null);
   const [pendingLineMerge, setPendingLineMerge] = useState<FormLineItem[] | null>(null);
+  // The workspace's tax regime, and how each scanned document's tax was applied (output tax on a rate, or not at all).
+  const [taxRegime, setTaxRegime] = useState<CaptureTaxRegime | null>(null);
+  const [captureTaxTreatments, setCaptureTaxTreatments] = useState<Record<string, CaptureTaxTreatment>>({});
   const [ackSnapshots, setAckSnapshots] = useState<
     Record<string, { sourceGrandTotal: number | null; formTotal: number }>
   >({});
@@ -240,13 +248,20 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     setIsLoadingRefs(true);
     try {
       const canInventory = hasModule('inventory') && hasPermission('inventory.items.view');
-      const [custRes, termsRes, itemsRes, taxesRes, accountsRes] = await Promise.all([
+      const [custRes, termsRes, itemsRes, taxesRes, accountsRes, policyRes] = await Promise.all([
         authFetch('/api/Sales/Customers'),
         authFetch('/api/Common/PaymentTerms'),
         canInventory ? authFetch('/api/Common/Items') : Promise.resolve(null),
         authFetch('/api/Tax/Taxes'),
         authFetch('/api/Sales/SalesAccounts'),
+        authFetch('/api/organizations/current/accounting-policy').catch(() => null),
       ]);
+
+      if (policyRes?.ok) {
+        const policy = await policyRes.json().catch(() => null);
+        const regime = policy?.taxRegime;
+        setTaxRegime(regime === 'None' || regime === 'SalesTax' || regime === 'VatGst' ? regime : null);
+      }
 
       if (custRes.ok) {
         const custList = await custRes.json();
@@ -724,17 +739,34 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   );
 
   const applyCapturedMonetaryLines = useCallback(
-    (fields: SalesCaptureFields) => {
+    (fields: SalesCaptureFields, captureId: string) => {
       const mapped = mapCapturedLines(fields);
       if (mapped.length === 0) return;
+
+      // Rules T-09 and T-10 (sales side): the document's tax is output tax on a matching rate; a workspace without tax is never grossed up.
+      const plan = planCaptureTax(
+        taxRegime,
+        fields.sourceTotals,
+        fields.lines ?? [],
+        mapped.map((l) => ({ quantity: l.quantity, amount: l.amount === '' ? null : Number(l.amount), discount: l.discount })),
+        taxes,
+        'sales'
+      );
+      const withTax = mapped.map((l, i) => ({
+        ...l,
+        amount: plan.unitAmounts ? plan.unitAmounts[i] : l.amount,
+        taxId: plan.taxId,
+      }));
+      setCaptureTaxTreatments((prev) => ({ ...prev, [captureId]: plan.treatment }));
+
       if (hasPopulatedLines) {
-        setPendingLineMerge(mapped);
+        setPendingLineMerge(withTax);
       } else {
-        setLines(mapped);
+        setLines(withTax);
         setPendingLineMerge(null);
       }
     },
-    [hasPopulatedLines, mapCapturedLines]
+    [hasPopulatedLines, mapCapturedLines, taxRegime, taxes]
   );
 
   const applyConfirmedSalesCapture = useCallback(
@@ -785,7 +817,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       }
 
       if (gates.canApplyMonetary) {
-        applyCapturedMonetaryLines(fields);
+        applyCapturedMonetaryLines(fields, canonical.id);
       }
     },
     [ambiguousCurrencyConfirmed, applyCapturedMonetaryLines, currentOrg.currency, customers, paymentTermId, selectedCustomerId]
@@ -803,6 +835,11 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     setPendingDueDate(null);
     setPendingLineMerge(null);
     setPendingLink(null);
+    setCaptureTaxTreatments((prev) => {
+      const next = { ...prev };
+      delete next[canonical.id];
+      return next;
+    });
     setAckSnapshots((prev) => {
       const next = { ...prev };
       delete next[canonical.id];
@@ -872,6 +909,16 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       setErrorBanner('The invoice total differs from one or more captured source totals. Correct the lines or check each reconciliation acknowledgement before issuing.');
       return;
     }
+    if (!asDraft && taxRegime !== 'None') {
+      const taxMissing = reviewedCaptures.find((c) => {
+        const f = ((c.acceptedFields ?? c.fields) as SalesCaptureFields | null) ?? null;
+        return isTaxOnlyDifference(f?.sourceTotals, getDiscrepancyForCapture(c).difference);
+      });
+      if (taxMissing) {
+        setErrorBanner("The document's tax isn't on this invoice. Choose a tax rate for the lines before issuing.");
+        return;
+      }
+    }
     const archived = firstArchivedTax(taxes, validLines.map((line) => line.taxId));
     if (archived) {
       setErrorBanner(archivedTaxMessage(archived.taxName));
@@ -933,6 +980,10 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => null);
+        if (res.status === 400 && errorData?.code === 'CAPTURE_TAX_NOT_APPLIED') {
+          setErrorBanner(errorData?.detail || "The document's tax isn't on this invoice. Choose a tax rate for the lines before issuing.");
+          return;
+        }
         if (res.status === 409 && errorData?.code === 'DOCUMENT_REVIEW_REQUIRED') {
           const nextOverrides: Record<string, { sourceGrandTotal: number; formTotal: number; difference: number }> = {};
           if (Array.isArray(errorData.discrepancies)) {
@@ -1291,7 +1342,7 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                     type="button"
                     onClick={() => {
                       setAmbiguousCurrencyConfirmed(true);
-                      applyCapturedMonetaryLines(capFields);
+                      applyCapturedMonetaryLines(capFields, reviewCap.id);
                     }}
                     className="mt-1 px-3 py-1.5 font-semibold rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-main)]"
                   >
@@ -1301,7 +1352,47 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
               </div>
             )}
 
-            {capGates.priceBasis === 'inclusive' && (
+            {(() => {
+              const treatment = captureTaxTreatments[reviewCap.id];
+              const summary = treatment ? describeCaptureTaxTreatment(treatment, 'sales') : null;
+              if (!treatment || !summary) return null;
+              const needsAttention = treatment.kind === 'needs-rate' || treatment.kind === 'unresolved' || treatment.kind === 'workspace-untaxed';
+              return (
+                <div
+                  aria-label={`Tax treatment ${reviewCap.id}`}
+                  className={`rounded-xl border p-3 space-y-1 ${
+                    needsAttention
+                      ? 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300'
+                      : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
+                  }`}
+                >
+                  <p className="font-semibold">{summary}</p>
+                  {treatment.kind === 'tax-rate' && (
+                    <p>Tax rate from scan: {treatment.tax.taxName} {treatment.tax.rate}%. Change it on any line if the document says otherwise.</p>
+                  )}
+                  {treatment.kind === 'needs-rate' && (
+                    <p>
+                      This document charges {treatment.taxTotal.toFixed(2)} tax. Choose a tax rate
+                      {hasPermission('admin.taxes.manage') && (
+                        <>
+                          {' '}
+                          <Link to={`/org/${orgSlug}/settings?tab=taxes`} className="font-semibold underline">Manage taxes</Link>
+                        </>
+                      )}
+                      .
+                    </p>
+                  )}
+                  {treatment.kind === 'unresolved' && <p>The tax couldn't be applied automatically. Choose a tax rate for the lines.</p>}
+                  {treatment.kind === 'workspace-untaxed' && (
+                    <p>
+                      This document charges {treatment.taxTotal.toFixed(2)} tax but your workspace isn't set up for tax. Either set up tax in Settings, or acknowledge the difference if the document is wrong.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+
+            {capGates.priceBasis === 'inclusive' && !['tax-rate'].includes(captureTaxTreatments[reviewCap.id]?.kind ?? '') && (
               <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-amber-800 dark:text-amber-300">
                 Source amounts include tax. Adjust unit prices to tax-exclusive amounts before selecting a tax rate so tax is not added a second time.
               </div>
@@ -1342,7 +1433,13 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
               </div>
             </div>
 
-            {capDisc.hasDiscrepancy && (
+            {capDisc.hasDiscrepancy && taxRegime !== 'None' && isTaxOnlyDifference(capFields.sourceTotals, capDisc.difference) && (
+              <div role="alert" className="rounded-xl border border-rose-500/25 bg-rose-500/10 p-3 text-rose-700 dark:text-rose-300 font-semibold">
+                Tax of {capFields.sourceTotals?.taxTotal} on the document isn't on this invoice. Choose a tax rate for the lines.
+              </div>
+            )}
+
+            {capDisc.hasDiscrepancy && (taxRegime === 'None' || !isTaxOnlyDifference(capFields.sourceTotals, capDisc.difference)) && (
               <label className="flex items-start gap-2.5 rounded-xl border border-rose-500/25 bg-rose-500/10 p-3 text-rose-700 dark:text-rose-300 cursor-pointer">
                 <input
                   type="checkbox"

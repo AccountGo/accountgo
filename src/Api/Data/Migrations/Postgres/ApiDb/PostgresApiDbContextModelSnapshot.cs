@@ -1030,6 +1030,10 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
 
+                    b.Property<string>("TaxTreatment")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CompanyId", "CaptureId")

@@ -2133,6 +2133,7 @@ namespace Api.Controllers
                 var stockWarnings = _salesService.GetSalesInvoiceStockWarnings(salesInvoice);
                 CaptureIfIssued(salesInvoice);
                 _salesService.SaveSalesInvoice(salesInvoice, salesOrder!);
+                Api.Service.CaptureTaxTreatment.RefreshForTarget(_db, _tenantContext, "invoice", salesInvoice.Id);
                 IReadOnlyList<Api.Service.AcknowledgedCaptureDiscrepancy> acknowledgedDiscrepancies = Array.Empty<Api.Service.AcknowledgedCaptureDiscrepancy>();
                 if (issuing)
                 {

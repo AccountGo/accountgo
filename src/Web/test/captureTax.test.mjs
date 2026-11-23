@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   convertInclusiveLinesToNet,
+  describeLinkedTaxTreatment,
   describeCaptureTaxTreatment,
   isTaxOnlyDifference,
   matchCaptureTaxRate,
@@ -221,4 +222,37 @@ test('isTaxOnlyDifference is true only when the bill is short by the document ta
   assert.equal(isTaxOnlyDifference(totals, 33.62), false);
   assert.equal(isTaxOnlyDifference(totals, null), false);
   assert.equal(isTaxOnlyDifference({ taxTotal: '0.00' }, 0), false);
+});
+
+test('sales side: VatGst and SalesTax use a matching rate as output tax, None is never grossed up', () => {
+  const totals = { subtotal: '407.47', taxTotal: '33.62', grandTotal: '441.09', priceBasis: 'exclusive' };
+  const lines = [
+    { quantity: 1, amount: 244.48, discount: 0 },
+    { quantity: 1, amount: 162.99, discount: 0 },
+  ];
+  const taxes = [tax('c', 8.25)];
+  for (const regime of ['VatGst', 'SalesTax']) {
+    const p = planCaptureTax(regime, totals, [], lines, taxes, 'sales');
+    assert.equal(p.treatment.kind, 'tax-rate');
+    assert.equal(p.taxId, 'c');
+    assert.equal(p.unitAmounts, null);
+    assert.match(describeCaptureTaxTreatment(p.treatment, 'sales'), /output tax/);
+  }
+  const none = planCaptureTax('None', totals, [], lines, taxes, 'sales');
+  assert.equal(none.treatment.kind, 'workspace-untaxed');
+  assert.equal(none.taxId, '');
+  assert.equal(none.unitAmounts, null);
+  assert.equal(planCaptureTax('SalesTax', totals, [], lines, [], 'sales').treatment.kind, 'needs-rate');
+  assert.equal(planCaptureTax(null, totals, [], lines, taxes, 'sales').treatment.kind, 'unresolved');
+});
+
+test('describeLinkedTaxTreatment words the persisted treatment without document text', () => {
+  const label = (id) => (id === 'tax_a' ? 'VAT 8.25%' : null);
+  assert.equal(describeLinkedTaxTreatment('tax-rate:tax_a', 'purchase', label), 'Tax from scan: input tax VAT 8.25%');
+  assert.equal(describeLinkedTaxTreatment('tax-rate:tax_a', 'sales', label), 'Tax from scan: output tax VAT 8.25%');
+  assert.equal(describeLinkedTaxTreatment('tax-rate:mixed', 'sales', label), 'Tax from scan: output tax at mixed rates');
+  assert.equal(describeLinkedTaxTreatment('in-cost', 'purchase', label), 'Tax from scan: included in line costs');
+  assert.equal(describeLinkedTaxTreatment('acknowledged', 'sales', label), 'Tax from scan: not applied (acknowledged)');
+  assert.equal(describeLinkedTaxTreatment('none', 'sales', label), null);
+  assert.equal(describeLinkedTaxTreatment(null, 'sales', label), null);
 });

@@ -140,6 +140,8 @@ export interface DocumentCaptureLinkView {
   targetType: 'bill' | 'invoice' | 'bank' | string;
   targetId: string;
   linkedAt: string;
+  /** How the scanned tax was treated, derived by the server (for example `tax-rate:tax_…`, `in-cost`, `acknowledged`, `none`). */
+  taxTreatment?: string | null;
 }
 
 export interface DocumentCaptureView {
@@ -1375,6 +1377,8 @@ export type CaptureTaxTreatment =
   | { kind: 'added-to-cost'; taxTotal: number; unregistered: boolean }
   | { kind: 'needs-rate'; taxTotal: number; ambiguous: boolean }
   | { kind: 'unresolved'; taxTotal: number }
+  /** A sales document whose workspace isn't set up for tax: lines stay untaxed, revenue is never grossed up. */
+  | { kind: 'workspace-untaxed'; taxTotal: number }
   | { kind: 'none' };
 
 export interface CaptureTaxPlan {
@@ -1388,20 +1392,27 @@ export interface CaptureTaxPlan {
 /**
  * Decides how a scanned bill's tax is applied for the workspace's tax regime (rules T-09 and T-10).
  * `regime` is null when the workspace policy couldn't be read: the tax is then left alone and the reconciliation gate holds approval.
+ * `side` is 'purchase' for bills (sales tax and no-tax workspaces add the tax to cost) and 'sales' for sales invoices, where the
+ * tax is output tax: VAT/GST and sales tax workspaces use a matching rate, and a workspace without tax is never grossed up.
  */
 export function planCaptureTax<T extends CaptureTaxCandidate>(
   regime: CaptureTaxRegime | null,
   sourceTotals: CaptureSourceTotals | null | undefined,
   scannedLines: ReadonlyArray<{ taxHint?: string | null }>,
   lines: readonly CaptureTaxLine[],
-  taxes: readonly T[]
+  taxes: readonly T[],
+  side: 'purchase' | 'sales' = 'purchase'
 ): CaptureTaxPlan {
   const taxTotal = parseStrictDecimal(sourceTotals?.taxTotal ?? null).numeric;
   const none: CaptureTaxPlan = { treatment: { kind: 'none' }, unitAmounts: null, taxId: '' };
   if (taxTotal === null || !(taxTotal > 0)) return none;
   if (regime === null) return { treatment: { kind: 'unresolved', taxTotal }, unitAmounts: null, taxId: '' };
 
-  if (regime === 'VatGst') {
+  if (side === 'sales' && regime === 'None') {
+    return { treatment: { kind: 'workspace-untaxed', taxTotal }, unitAmounts: null, taxId: '' };
+  }
+
+  if (regime === 'VatGst' || (side === 'sales' && regime === 'SalesTax')) {
     const match = matchCaptureTaxRate(sourceTotals, scannedLines, taxes);
     if (match.kind === 'single') {
       const grand = parseStrictDecimal(sourceTotals?.grandTotal ?? null).numeric;
@@ -1447,10 +1458,13 @@ export function isTaxOnlyDifference(
 }
 
 /** One line for the review panel saying where the document's tax went. */
-export function describeCaptureTaxTreatment(treatment: CaptureTaxTreatment): string | null {
+export function describeCaptureTaxTreatment(treatment: CaptureTaxTreatment, side: 'purchase' | 'sales' = 'purchase'): string | null {
   switch (treatment.kind) {
     case 'tax-rate': {
-      const base = `Tax ${treatment.taxTotal.toFixed(2)} → input tax ${treatment.tax.taxName} ${treatment.tax.rate}% (recoverable)`;
+      const base =
+        side === 'sales'
+          ? `Tax ${treatment.taxTotal.toFixed(2)} → output tax ${treatment.tax.taxName} ${treatment.tax.rate}%`
+          : `Tax ${treatment.taxTotal.toFixed(2)} → input tax ${treatment.tax.taxName} ${treatment.tax.rate}% (recoverable)`;
       return treatment.roundingDifference === 0
         ? base
         : `${base}. Tax on the bill differs from the document by ${Math.abs(treatment.roundingDifference).toFixed(2)} (rounding)`;
@@ -1459,8 +1473,30 @@ export function describeCaptureTaxTreatment(treatment: CaptureTaxTreatment): str
       return `Tax ${treatment.taxTotal.toFixed(2)} → added to line costs (not recoverable)`;
     case 'needs-rate':
     case 'unresolved':
-      return `Tax ${treatment.taxTotal.toFixed(2)} → not on this bill yet`;
+      return `Tax ${treatment.taxTotal.toFixed(2)} → not on this ${side === 'sales' ? 'invoice' : 'bill'} yet`;
+    case 'workspace-untaxed':
+      return `Tax ${treatment.taxTotal.toFixed(2)} → not applied (workspace isn't set up for tax)`;
     default:
       return null;
   }
+}
+
+/**
+ * One line for a linked capture on a bill or invoice, from the server's persisted tax treatment. `taxName` resolves a
+ * `tax-rate:<id>` value to its label from the document's own lines. Metadata only, never document text.
+ */
+export function describeLinkedTaxTreatment(
+  treatment: string | null | undefined,
+  side: 'purchase' | 'sales',
+  taxLabel: (taxPublicId: string) => string | null
+): string | null {
+  if (!treatment || treatment === 'none') return null;
+  if (treatment === 'in-cost') return 'Tax from scan: included in line costs';
+  if (treatment === 'acknowledged') return 'Tax from scan: not applied (acknowledged)';
+  if (treatment === 'tax-rate:mixed') return `Tax from scan: ${side === 'sales' ? 'output' : 'input'} tax at mixed rates`;
+  if (treatment.startsWith('tax-rate:')) {
+    const label = taxLabel(treatment.slice('tax-rate:'.length));
+    return `Tax from scan: ${side === 'sales' ? 'output' : 'input'} tax${label ? ` ${label}` : ''}`;
+  }
+  return null;
 }
