@@ -596,8 +596,15 @@ public sealed class DocumentCapturePdfValidatorTests
             {
                 while (!process.HasExited)
                 {
-                    process.Refresh();
-                    peakWorkingSet = Math.Max(peakWorkingSet, process.WorkingSet64);
+                    try
+                    {
+                        process.Refresh();
+                        peakWorkingSet = Math.Max(peakWorkingSet, process.WorkingSet64);
+                    }
+                    catch (InvalidOperationException) when (process.HasExited)
+                    {
+                        break;
+                    }
                     await Task.Delay(TimeSpan.FromMilliseconds(1), deadline.Token);
                 }
                 await process.WaitForExitAsync(deadline.Token);
