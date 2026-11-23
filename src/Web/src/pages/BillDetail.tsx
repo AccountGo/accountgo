@@ -18,6 +18,7 @@ import {
   computeCaptureDiscrepancy,
   DocumentCaptureView,
   formatSignedCurrencyDifference,
+  isTaxOnlyDifference,
   VendorCaptureFields,
 } from '../components/document-capture/fields';
 import { RecordHistoryButton, RecordHistoryPanel, useRecordHistory } from '../components/RecordHistoryPanel';
@@ -586,6 +587,13 @@ export const BillDetail: React.FC = () => {
         return (
           <section aria-label="Reconciliation acknowledgement" className="rounded-xl border border-rose-500/25 bg-rose-500/10 p-4 text-xs text-rose-700 dark:text-rose-300 space-y-2.5">
             {discrepantCaptures.map(({ capture, fields, disc }) => {
+              if (isTaxOnlyDifference(fields.sourceTotals, disc.difference)) {
+                return (
+                  <p key={capture.id} role="alert" className="font-semibold">
+                    Tax of {fields.sourceTotals?.taxTotal} on the linked source document ({capture.id}) isn't on this bill. Edit the bill to choose a tax rate or include the tax in the line costs.
+                  </p>
+                );
+              }
               const snap = detailAckSnapshots[capture.id];
               const checked = Boolean(
                 snap &&

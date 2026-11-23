@@ -1031,6 +1031,10 @@ namespace Api.Data.Migrations.ApiDb
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
 
+                    b.Property<string>("TaxTreatment")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CompanyId", "CaptureId")

@@ -7,9 +7,11 @@ import { useAuth } from '../auth/AuthContext';
 import {
   DocumentCaptureKind,
   DocumentCaptureView,
+  describeLinkedTaxTreatment,
   KIND_LABELS,
   VendorCaptureFields,
 } from './document-capture/fields';
+import { useTaxLabels } from './document-capture/useTaxLabels';
 
 export interface BillCaptureEvidenceProps {
   billId: string;
@@ -27,6 +29,7 @@ export const BillCaptureEvidence: React.FC<BillCaptureEvidenceProps> = ({
 }) => {
   const { authFetch } = useAuth();
   const [captures, setCaptures] = useState<DocumentCaptureView[]>([]);
+  const taxLabel = useTaxLabels(authFetch, captures.some((c) => c.link?.taxTreatment?.startsWith('tax-rate:') && c.link.taxTreatment !== 'tax-rate:mixed'));
   const [loading, setLoading] = useState(true);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
@@ -268,6 +271,11 @@ export const BillCaptureEvidence: React.FC<BillCaptureEvidenceProps> = ({
                   </div>
                 )}
               </dl>
+
+              {(() => {
+                const taxLine = describeLinkedTaxTreatment(cap.link?.taxTreatment, 'purchase', taxLabel);
+                return taxLine ? <p className="pt-2 border-t border-[var(--border-subtle)] text-[11px] text-[var(--text-secondary)]">{taxLine}</p> : null;
+              })()}
 
               {/* Provenance & hashes */}
               <dl className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-1.5 pt-2 border-t border-[var(--border-subtle)] text-[11px]">

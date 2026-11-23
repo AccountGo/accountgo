@@ -42,6 +42,31 @@ public sealed class DocumentCaptureSqliteSchemaTests
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'IX_DocumentCaptures_CompanyId_Status_ExpiresAt';"));
         Assert.All(new[] { "DocumentCaptures", "DocumentCaptureBlobs", "DocumentCaptureAttempts", "DocumentCaptureLinks" }, table =>
             Assert.DoesNotContain(table, SqliteSchemaUpgrader.TenantTables));
+        Assert.Equal(1, ScalarInt(connection,
+            "SELECT COUNT(*) FROM pragma_table_info('DocumentCaptureLinks') WHERE name = 'TaxTreatment' AND \"notnull\" = 0;"));
+    }
+
+    [Fact]
+    public void Upgrade_AddsTheNullableTaxTreatmentColumnToExistingCaptureLinksAndKeepsTheirRows()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+
+        using (var db = new ApiDbContext(new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(connection).Options))
+        {
+            db.Database.EnsureCreated();
+        }
+
+        // A database from before the column existed: a links table without it, holding one row.
+        Execute(connection, "PRAGMA foreign_keys = OFF; ALTER TABLE \"DocumentCaptureLinks\" DROP COLUMN \"TaxTreatment\";");
+        Execute(connection, "INSERT INTO \"DocumentCaptureLinks\" (\"CompanyId\", \"CaptureId\", \"TargetType\", \"TargetId\", \"LinkedBy\", \"LinkedAt\") VALUES (1, 1, 'bill', 1, 'tester', '2026-11-20T00:00:00');");
+        Assert.Equal(0, ScalarInt(connection, "SELECT COUNT(*) FROM pragma_table_info('DocumentCaptureLinks') WHERE name = 'TaxTreatment';"));
+
+        SqliteSchemaUpgrader.Upgrade(connection);
+        SqliteSchemaUpgrader.Upgrade(connection);
+
+        Assert.Equal(1, ScalarInt(connection, "SELECT COUNT(*) FROM pragma_table_info('DocumentCaptureLinks') WHERE name = 'TaxTreatment';"));
+        Assert.Equal(1, ScalarInt(connection, "SELECT COUNT(*) FROM \"DocumentCaptureLinks\" WHERE \"TaxTreatment\" IS NULL;"));
     }
 
     private static void Execute(SqliteConnection connection, string sql)

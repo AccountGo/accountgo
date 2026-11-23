@@ -36,7 +36,10 @@ public sealed record CaptureReviewTargetPolicy(
     string InvalidKindDetail,
     string StateConflictDetail,
     string DiscrepancyDetail,
-    bool RejectTaxOnlyDifference = false);
+    bool RejectTaxOnlyDifference = false,
+    string TargetNoun = "bill",
+    string TaxNotAppliedHint = "Choose a tax rate or include it in the line costs.",
+    bool AllowTaxOnlyDifferenceWhenNoTaxRegime = false);
 
 /// <summary>
 /// Shared read-only reconciliation and audit helper consulted by existing financial document writers
@@ -135,6 +138,15 @@ public static class CaptureReviewReconciler
             }
         }
 
+        // Whether a tax-only difference can't be acknowledged. Decided here from the workspace's tax regime, never from the client:
+        // a workspace that doesn't charge tax may acknowledge a document's tax it didn't apply (sales invoices only).
+        var rejectTaxOnlyDifference = policy.RejectTaxOnlyDifference
+            && !(policy.AllowTaxOnlyDifferenceWhenNoTaxRegime
+                && db.CompanySettings.AsNoTracking()
+                    .Where(setting => setting.CompanyId == companyId)
+                    .Select(setting => (TaxRegime?)setting.TaxRegime)
+                    .FirstOrDefault() is null or TaxRegime.None);
+
         var unacknowledged = new List<object>();
         AcknowledgedCaptureDiscrepancy? firstMissing = null;
         var acknowledged = new List<AcknowledgedCaptureDiscrepancy>();
@@ -160,7 +172,7 @@ public static class CaptureReviewReconciler
 
             // A tax the document charges but the target doesn't carry can't be acknowledged away: it needs a tax rate or the tax in the costs.
             if (acknowledgedForCurrentValues
-                && policy.RejectTaxOnlyDifference
+                && rejectTaxOnlyDifference
                 && ExtractCanonicalSourceTaxTotal(capture.AcceptedFieldsJson) is { } sourceTax
                 && sourceTax > 0
                 && Math.Abs(-difference - sourceTax) <= 0.01m)
@@ -169,7 +181,7 @@ public static class CaptureReviewReconciler
                 {
                     Status = StatusCodes.Status400BadRequest,
                     Title = "CAPTURE_TAX_NOT_APPLIED",
-                    Detail = $"Tax of {sourceTax:0.00} on the document isn't on this bill. Choose a tax rate or include it in the line costs.",
+                    Detail = $"Tax of {sourceTax:0.00} on the document isn't on this {policy.TargetNoun}. {policy.TaxNotAppliedHint}",
                 };
                 problem.Extensions["code"] = "CAPTURE_TAX_NOT_APPLIED";
                 problem.Extensions["captureId"] = capture.PublicId;

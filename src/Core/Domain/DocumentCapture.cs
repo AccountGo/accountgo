@@ -77,5 +77,7 @@ public sealed class DocumentCaptureLink : BaseEntity, ICompanyOwned
     public int TargetId { get; set; }
     public string LinkedBy { get; set; } = string.Empty;
     public DateTime LinkedAt { get; set; }
+    /// <summary>How the document's tax was treated on the linked bill or invoice. Derived by the server, never client-supplied. Null when not derived.</summary>
+    public string? TaxTreatment { get; set; }
     public DocumentCapture Capture { get; set; } = null!;
 }

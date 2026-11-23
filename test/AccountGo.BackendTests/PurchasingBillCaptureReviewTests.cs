@@ -332,6 +332,119 @@ public sealed class PurchasingBillCaptureReviewTests : MultiTenancyPhase3TestBas
         Assert.Empty(ReadDiscrepancyAuditMetadata());
     }
 
+    private string? LinkTaxTreatment(int captureId, int? companyId = null)
+    {
+        string? value = null;
+        WithDb(db => value = db.DocumentCaptureLinks.IgnoreQueryFilters().AsNoTracking()
+            .Single(l => l.CompanyId == (companyId ?? _companyId) && l.CaptureId == captureId).TaxTreatment);
+        return value;
+    }
+
+    [Fact]
+    [Trait("Rule", "T-10")]
+    public async Task SaveBill_ResaveOfLinkedBill_PersistsTheServerDerivedTaxTreatment_IgnoringTenantOthers()
+    {
+        int vat = 0, other = 0;
+        string vatPublicId = string.Empty;
+        WithDb(db =>
+        {
+            var tax = new Tax { TaxCode = "VAT825", TaxName = "VAT 8.25%", Rate = 8.25m, IsActive = true, PurchasingAccountId = AccountIdIn(db, "20300") };
+            var tax2 = new Tax { TaxCode = "VAT5", TaxName = "VAT 5%", Rate = 5m, IsActive = true, PurchasingAccountId = AccountIdIn(db, "20300") };
+            db.Taxes.AddRange(tax, tax2);
+            db.SaveChanges();
+            vat = tax.Id;
+            other = tax2.Id;
+            vatPublicId = tax.PublicId;
+        });
+        var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Treatment Supplier" });
+        var (captureId, _) = SeedCapture(acceptedFieldsJson: ScannedTaxBillFields);
+
+        // Another workspace's link to a bill with the same numeric id must never be touched.
+        int otherCompanyId = 0;
+        WithDb(db =>
+        {
+            var otherCo = new Company { Name = "Isolated Co", CompanyCode = "ISO", Slug = $"iso-{Guid.NewGuid():N}"[..12] };
+            db.Companies.Add(otherCo);
+            db.SaveChanges();
+            otherCompanyId = otherCo.Id;
+        });
+        var (otherCaptureId, _) = SeedCapture(acceptedFieldsJson: ScannedTaxBillFields, companyIdOverride: otherCompanyId);
+
+        var bill = NewBill(vendor.Id, ("Paper", 1m, 244.48m, null), ("Toner", 1m, 162.99m, null));
+        bill.Status = "Draft";
+        var draft = await SaveBillOk(bill);
+        SeedCaptureLink(captureId, draft.Id);
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var otherDb = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Impersonate(otherCompanyId, "iso", CompanyMemberRole.Owner))
+            {
+                otherDb.DocumentCaptureLinks.Add(new DocumentCaptureLink
+                {
+                    CompanyId = otherCompanyId,
+                    CaptureId = otherCaptureId,
+                    TargetType = "bill",
+                    TargetId = draft.Id,
+                    LinkedBy = "tester",
+                    LinkedAt = DateTime.UtcNow,
+                });
+                otherDb.SaveChanges();
+            }
+        }
+        Assert.Null(LinkTaxTreatment(captureId));
+
+        // Short of the document and no line tax: nothing derivable yet.
+        draft.Lines[0].Amount = 244.48m;
+        var resaved = await SaveBillOk(draft);
+        Assert.Null(LinkTaxTreatment(captureId));
+
+        // Tax rate on every line.
+        foreach (var line in resaved.Lines) line.TaxId = vat;
+        var withRate = await SaveBillOk(resaved);
+        Assert.Equal("tax-rate:" + vatPublicId, LinkTaxTreatment(captureId));
+
+        // Mixed rates.
+        withRate.Lines[1].TaxId = other;
+        var mixed = await SaveBillOk(withRate);
+        Assert.Equal("tax-rate:mixed", LinkTaxTreatment(captureId));
+
+        // Tax spread into the line costs, total equals the document.
+        foreach (var line in mixed.Lines) line.TaxId = null;
+        mixed.Lines[0].Amount = 264.65m;
+        mixed.Lines[1].Amount = 176.44m;
+        await SaveBillOk(mixed);
+        Assert.Equal("in-cost", LinkTaxTreatment(captureId));
+
+        Assert.Null(LinkTaxTreatment(otherCaptureId, otherCompanyId));
+    }
+
+    [Fact]
+    [Trait("Rule", "T-10")]
+    [Trait("Rule", "T-12")]
+    public async Task LinkCapture_ToSavedBill_DerivesTheTaxTreatmentOnTheServer_AndServesItWithTheLinkedCapture()
+    {
+        var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Linked Treatment Supplier" });
+        var (captureId, capturePublicId) = SeedCapture(acceptedFieldsJson: ScannedTaxBillFields);
+
+        var bill = NewBill(vendor.Id, ("Paper", 1m, 264.65m, null), ("Toner", 1m, 176.44m, null));
+        bill.Status = "Draft";
+        var saved = await SaveBillOk(bill);
+        var billPublicId = PubId<PurchaseInvoiceHeader>(saved.Id);
+
+        // The client can send whatever it likes: the treatment is derived from the saved bill.
+        var link = await Send(HttpMethod.Post, $"/api/document-captures/{capturePublicId}/links",
+            new { targetType = "bill", targetId = billPublicId, taxTreatment = "tax-rate:forged" });
+        Assert.True(link.IsSuccessStatusCode, await link.Content.ReadAsStringAsync());
+        using (var doc = JsonDocument.Parse(await link.Content.ReadAsStringAsync()))
+            Assert.Equal("in-cost", doc.RootElement.GetProperty("link").GetProperty("taxTreatment").GetString());
+        Assert.Equal("in-cost", LinkTaxTreatment(captureId));
+
+        var linked = await Send(HttpMethod.Get, $"/api/document-captures/linked/bill/{billPublicId}");
+        Assert.True(linked.IsSuccessStatusCode, await linked.Content.ReadAsStringAsync());
+        using var linkedDoc = JsonDocument.Parse(await linked.Content.ReadAsStringAsync());
+        Assert.Equal("in-cost", linkedDoc.RootElement[0].GetProperty("link").GetProperty("taxTreatment").GetString());
+    }
+
     [Fact]
     [Trait("Rule", "T-11")]
     public async Task SaveBill_Approve_RefusesAcknowledgingTheDocumentsMissingTax_With400CaptureTaxNotApplied()

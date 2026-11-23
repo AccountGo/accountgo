@@ -1005,6 +1005,7 @@ namespace Api.Controllers
                     bill.PurchaseInvoiceLines.Remove(removed);
 
                 _purchasingService.SaveBill(bill);
+                Api.Service.CaptureTaxTreatment.RefreshForTarget(_db, _tenantContext, "bill", bill.Id);
                 IReadOnlyList<Api.Service.AcknowledgedCaptureDiscrepancy> acknowledgedDiscrepancies = Array.Empty<Api.Service.AcknowledgedCaptureDiscrepancy>();
                 if (approving)
                 {
