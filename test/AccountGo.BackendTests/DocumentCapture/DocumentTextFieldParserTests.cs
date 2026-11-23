@@ -892,10 +892,10 @@ public sealed class DocumentTextFieldParserTests
         var root = ParseAndValidate("purchase-invoice", lines, out _);
         Assert.Equal("Jane Example", root.GetProperty("vendorName").GetString());
 
-        // Earliest clean letters-only line beats later non-legal-suffix line even with larger height
+        // Earliest clean letters-only line beats later equal-height non-legal-suffix line
         var earliestClean = ParseAndValidate("purchase-invoice", [
             Line("Jane Example", y0: 0, y1: 14),
-            Line("Sample Services Division", y0: 20, y1: 44),
+            Line("Sample Services Division", y0: 20, y1: 34),
             Line("Total: USD 500.00", y0: 60, y1: 74),
         ], out _);
         Assert.Equal("Jane Example", earliestClean.GetProperty("vendorName").GetString());
@@ -903,10 +903,58 @@ public sealed class DocumentTextFieldParserTests
         // Later line with a legal suffix still beats an earlier plain line
         var laterLegal = ParseAndValidate("purchase-invoice", [
             Line("Billing Department", y0: 0, y1: 14),
-            Line("Northwind Consulting LLC", y0: 20, y1: 44),
+            Line("Northwind Consulting LLC", y0: 20, y1: 34),
             Line("Total: USD 500.00", y0: 60, y1: 74),
         ], out _);
         Assert.Equal("Northwind Consulting LLC", laterLegal.GetProperty("vendorName").GetString());
+    }
+
+    // --- E6: country line after address block and lines after BILLED TO never become vendor ---
+
+    [Theory]
+    [InlineData("purchase-invoice")]
+    [InlineData("expense-receipt")]
+    public void Parse_Vendor_E6_IgnoresCountryLineAfterAddressAndLinesAfterBilledTo(string kind)
+    {
+        var lines = new[]
+        {
+            Line("Jane Example", y0: 0, y1: 14),
+            Line("INVOICE", y0: 16, y1: 30),
+            Line("Unit 1200 North Tower, Example Residences Sample Avenue Townsville", y0: 32, y1: 46),
+            Line("#7", y0: 48, y1: 62),
+            Line("45 Sample St. Ext. Some Area, Example City", y0: 64, y1: 78),
+            Line("Townsville, Metro Region 1600", y0: 80, y1: 94),
+            Line("Examplestan", y0: 96, y1: 110),
+            Line("jane.example@example.test", y0: 112, y1: 126),
+            Line("BILLED TO", y0: 130, y1: 144),
+            Line("Blue Harbor Retail LLC", y0: 146, y1: 170),
+            Line("Total: USD 500.00", y0: 180, y1: 194),
+        };
+
+        var root = ParseAndValidate(kind, lines, out _);
+        Assert.Equal("Jane Example", root.GetProperty("vendorName").GetString());
+    }
+
+    [Fact]
+    public void Parse_SalesInvoice_E6_ExtractsCustomerFromBilledToBlock()
+    {
+        var lines = new[]
+        {
+            Line("Jane Example", y0: 0, y1: 14),
+            Line("INVOICE", y0: 16, y1: 30),
+            Line("Unit 1200 North Tower, Example Residences Sample Avenue Townsville", y0: 32, y1: 46),
+            Line("#7", y0: 48, y1: 62),
+            Line("45 Sample St. Ext. Some Area, Example City", y0: 64, y1: 78),
+            Line("Townsville, Metro Region 1600", y0: 80, y1: 94),
+            Line("Examplestan", y0: 96, y1: 110),
+            Line("jane.example@example.test", y0: 112, y1: 126),
+            Line("BILLED TO", y0: 130, y1: 144),
+            Line("Blue Harbor Retail LLC", y0: 146, y1: 170),
+            Line("Total: USD 500.00", y0: 180, y1: 194),
+        };
+
+        var root = ParseAndValidate("sales-invoice", lines, out _);
+        Assert.Equal("Blue Harbor Retail LLC", root.GetProperty("customerName").GetString());
     }
 
     // --- E3: strip leading row-number column from line item descriptions ---

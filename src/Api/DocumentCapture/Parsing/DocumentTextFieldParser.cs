@@ -103,6 +103,11 @@ public static class DocumentTextFieldParser
         @"^(?:bill(?:ed)?\s*to|sold\s*to|customer\s*name|client\s*name|customer|client)(?:\s*[:#\-]\s*(.*)|\s*)$",
         LinearI);
 
+    // E6: stop vendor scanning once recipient/customer section begins.
+    private static readonly Regex VendorBlockStopRegex = new(
+        @"^(?:bill(?:ed)?\s*to|ship\s*to|customer)\b",
+        LinearI);
+
     private static readonly Regex VendorPenaltyRegex = new(
         @"\b(?:receipt|tax\s*invoice|invoice|copy|cashier|tel|telephone|fax|phone|mobile|email|e-mail|www|http|date|subtotal|total|qty|description|item)\b|@|ใบกำกับภาษี|ใบเสร็จรับเงิน|เลขที่|วันที่",
         LinearI);
@@ -534,63 +539,73 @@ public static class DocumentTextFieldParser
         return null;
     }
 
+    // E2 + E6: for bill kinds, the issuer is the first qualifying line in the top block;
+    // a later line may replace it only for a legal suffix or clearly larger text height;
+    // single-word lines after an address line are address continuations (city/region/country) and never candidates;
+    // nothing at or after "BILLED TO" / "BILL TO" / "SHIP TO" / "CUSTOMER" is a candidate.
     private static string? ExtractVendorName(List<NormalizedLine> lines)
     {
-        var page1 = lines.Where(l => l.Page <= 1).Take(8).ToList();
-        var candidates = page1.Count > 0 ? page1 : lines.Take(8).ToList();
+        var page1 = lines.Where(l => l.Page <= 1).Take(12).ToList();
+        var candidates = page1.Count > 0 ? page1 : lines.Take(12).ToList();
         if (candidates.Count == 0)
             return null;
 
-        var maxHeight = candidates.Max(c => c.Height);
         string? bestText = null;
-        var bestScore = double.NegativeInfinity;
-        var foundEarliestCleanLettersOnly = false;
+        var bestHasLegalSuffix = false;
+        var bestHeight = 0f;
+        var seenAddressLine = false;
 
         for (var i = 0; i < candidates.Count; i++)
         {
             var c = candidates[i];
             var text = c.Text;
+
+            if (VendorBlockStopRegex.IsMatch(text))
+                break;
+
+            var isAddress = IsAddressLine(text);
+            if (isAddress)
+            {
+                seenAddressLine = true;
+                continue;
+            }
+
             if (!IsValidPartyCandidateShape(text))
                 continue;
 
             var letters = CountLetters(text);
             var digits = CountDigits(text);
-            var isPenalized = VendorPenaltyRegex.IsMatch(text);
-            var isAddress = IsAddressLine(text);
+            if (VendorPenaltyRegex.IsMatch(text) || (digits >= letters && digits > 0))
+                continue;
+
             var hasLegalSuffix = LegalSuffixRegex.IsMatch(text);
+            var isSingleWord = !text.Contains(' ', StringComparison.Ordinal);
 
-            double score = 10.0 - i * 1.2;
+            // E6: single-word lines after an address line are city/region/country continuations, never vendor names.
+            if (seenAddressLine && isSingleWord && !hasLegalSuffix)
+                continue;
 
-            if (isPenalized)
-                score -= 20.0;
-
-            if (digits >= letters && digits > 0)
-                score -= 15.0;
-
-            if (isAddress)
-                score -= 18.0;
-
-            if (hasLegalSuffix)
-                score += 16.0;
-
-            // E2: earliest clean, letters-only line in the top block beats later lines unless a later one has a legal suffix.
-            if (!foundEarliestCleanLettersOnly && !isPenalized && !isAddress && digits == 0)
+            if (bestText is null)
             {
-                foundEarliestCleanLettersOnly = true;
-                score += 7.0;
+                bestText = text;
+                bestHasLegalSuffix = hasLegalSuffix;
+                bestHeight = c.Height;
+                continue;
             }
 
-            if (maxHeight > 0.5f && Math.Abs(c.Height - maxHeight) <= 0.5f)
-                score += 6.0;
-
-            if (score > bestScore)
+            // A later qualifying line replaces the first issuer only for a legal suffix (when current lacks one)
+            // or clearly larger text height (when current lacks a legal suffix, or both have one).
+            var clearlyLargerHeight = c.Height >= bestHeight * 1.25f && (c.Height - bestHeight) >= 3.0f;
+            if ((hasLegalSuffix && !bestHasLegalSuffix)
+                || (clearlyLargerHeight && (!bestHasLegalSuffix || hasLegalSuffix)))
             {
-                bestScore = score;
                 bestText = text;
+                bestHasLegalSuffix = hasLegalSuffix;
+                bestHeight = c.Height;
             }
         }
 
-        return bestScore > 0.0 ? bestText : null;
+        return bestText;
     }
 
     // E2: catch standard street addresses, Unit/Suite/Floor/Tower prefix + number, and comma-separated multi-part lines with numbers.
