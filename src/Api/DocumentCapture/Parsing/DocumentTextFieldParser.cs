@@ -87,12 +87,32 @@ public static class DocumentTextFieldParser
         LinearI);
 
     private static readonly Regex InvoiceNumberRegex = new(
-        @"(?:invoice\s*(?:no\.?|number|#)|inv\.?\s*(?:no\.?|#)|receipt\s*(?:no\.?|number|#)|bill\s*(?:no\.?|number|#)|เลขที่)\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9\-_/\.]{1,60})",
+        @"(?:invoice\s*(?:no\.?|number|#)|inv\.?\s*(?:no\.?|#)|receipt\s*(?:no\.?|number|#)|bill\s*(?:no\.?|number|#)|เลขที่)\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9\-_/\.]{0,60})",
         LinearI);
 
     private static readonly Regex InvoiceNumberLabelOnlyRegex = new(
         @"^(?:invoice\s*(?:no\.?|number|#)|inv\.?\s*(?:no\.?|#)|receipt\s*(?:no\.?|number|#)|bill\s*(?:no\.?|number|#)|เลขที่)\s*[:#]?\s*$",
         LinearI);
+
+    // E8: bare top-block "#7" fallback when no labelled invoice number is present.
+    private static readonly Regex BareHashTokenRegex = new(
+        @"#\s?([A-Za-z0-9][A-Za-z0-9\-/]{0,30})",
+        LinearI);
+
+    private static readonly Regex AddressHashPrefixRegex = new(
+        @"\b(?:unit|suite|ste\.?|apt\.?|room|rm\.?|floor|fl\.?|no\.?|lot|blk\.?|block)\s*$",
+        LinearI);
+
+    private static readonly Regex TableHeaderRowRegex = new(
+        @"(?:^#\s+(?:description|item|service|product|qty|quantity)\b|\b(?:description|item)\b.*\b(?:qty|quantity|rate|price|amount)\b)",
+        LinearI);
+
+    // E7: standalone document-title tokens stripped before vendor scoring when columns merge (e.g. "Jane Example INVOICE").
+    private static readonly Regex DocumentTitleTokenRegex = new(
+        @"(?:\b(?:tax\s+invoice|official\s+receipt|invoice|receipt|bill|statement|quotation)\b|ใบกำกับภาษี|ใบเสร็จรับเงิน)",
+        LinearI);
+
+    private static readonly Regex MultiSpaceRegex = new(@"\s{2,}", Linear);
 
     // K12: anchored sales customer labels with separator/EOL; exclude "Customer Service" / "Customer ID" etc.
     private static readonly Regex BillToExclusionRegex = new(
@@ -570,16 +590,21 @@ public static class DocumentTextFieldParser
                 continue;
             }
 
-            if (!IsValidPartyCandidateShape(text))
+            // E7: strip standalone document-title tokens before scoring (e.g., "Jane Example INVOICE" -> "Jane Example").
+            // A line that is only a title becomes empty and stays disqualified.
+            var candidateText = DocumentTitleTokenRegex.Replace(text, " ");
+            candidateText = MultiSpaceRegex.Replace(candidateText, " ").Trim(' ', '-', ':', '|', '/');
+
+            if (!IsValidPartyCandidateShape(candidateText))
                 continue;
 
-            var letters = CountLetters(text);
-            var digits = CountDigits(text);
-            if (VendorPenaltyRegex.IsMatch(text) || (digits >= letters && digits > 0))
+            var letters = CountLetters(candidateText);
+            var digits = CountDigits(candidateText);
+            if (VendorPenaltyRegex.IsMatch(candidateText) || (digits >= letters && digits > 0))
                 continue;
 
-            var hasLegalSuffix = LegalSuffixRegex.IsMatch(text);
-            var isSingleWord = !text.Contains(' ', StringComparison.Ordinal);
+            var hasLegalSuffix = LegalSuffixRegex.IsMatch(candidateText);
+            var isSingleWord = !candidateText.Contains(' ', StringComparison.Ordinal);
 
             // E6: single-word lines after an address line are city/region/country continuations, never vendor names.
             if (seenAddressLine && isSingleWord && !hasLegalSuffix)
@@ -587,7 +612,7 @@ public static class DocumentTextFieldParser
 
             if (bestText is null)
             {
-                bestText = text;
+                bestText = candidateText;
                 bestHasLegalSuffix = hasLegalSuffix;
                 bestHeight = c.Height;
                 continue;
@@ -599,7 +624,7 @@ public static class DocumentTextFieldParser
             if ((hasLegalSuffix && !bestHasLegalSuffix)
                 || (clearlyLargerHeight && (!bestHasLegalSuffix || hasLegalSuffix)))
             {
-                bestText = text;
+                bestText = candidateText;
                 bestHasLegalSuffix = hasLegalSuffix;
                 bestHeight = c.Height;
             }
@@ -691,13 +716,54 @@ public static class DocumentTextFieldParser
         {
             var m = InvoiceNumberRegex.Match(lines[i]);
             if (m.Success)
-                return m.Groups[1].Value.Trim();
+            {
+                var val = m.Groups[1].Value.Trim();
+                if (val.Length >= 2 || DateAndAmountParser.ContainsDigit(val))
+                    return val;
+            }
 
             if (InvoiceNumberLabelOnlyRegex.IsMatch(lines[i]) && i + 1 < lines.Count)
             {
                 var next = lines[i + 1].Trim();
-                if (next.Length is >= 2 and <= 64 && !next.Contains(' ', StringComparison.Ordinal))
+                if (next.Length is >= 1 and <= 64
+                    && !next.Contains(' ', StringComparison.Ordinal)
+                    && (next.Length >= 2 || DateAndAmountParser.ContainsDigit(next)))
+                {
                     return next;
+                }
+            }
+        }
+
+        // E8: fallback to standalone "#<token>" (with at least one digit) in top 10 lines before recipient/table header.
+        var topLimit = Math.Min(lines.Count, 10);
+        for (var i = 0; i < topLimit; i++)
+        {
+            var line = lines[i];
+            if (VendorBlockStopRegex.IsMatch(line) || TableHeaderRowRegex.IsMatch(line))
+                break;
+
+            if (line.Length <= 300 && LineItemRowRegex.IsMatch(line))
+                continue;
+
+            foreach (Match m in BareHashTokenRegex.Matches(line))
+            {
+                // Equivalent to (?<!\S) without lookbehind (keeps NonBacktracking).
+                if (m.Index > 0 && !char.IsWhiteSpace(line[m.Index - 1]))
+                    continue;
+
+                var end = m.Index + m.Length;
+                if (end < line.Length && !char.IsWhiteSpace(line[end]) && line[end] is not (',' or ';' or ')'))
+                    continue;
+
+                var val = m.Groups[1].Value;
+                if (!DateAndAmountParser.ContainsDigit(val))
+                    continue;
+
+                var prefix = line[..m.Index].TrimEnd();
+                if (AddressHashPrefixRegex.IsMatch(prefix))
+                    continue;
+
+                return val;
             }
         }
 

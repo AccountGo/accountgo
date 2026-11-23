@@ -957,6 +957,77 @@ public sealed class DocumentTextFieldParserTests
         Assert.Equal("Blue Harbor Retail LLC", root.GetProperty("customerName").GetString());
     }
 
+    // --- E7 & E8: merged title on vendor line ("Jane Example INVOICE") and bare "#7" invoice number ---
+
+    [Fact]
+    public void Parse_E7_E8_TwoColumnInvoiceExtractsVendorStrippingTitleAndBareHashInvoiceNo()
+    {
+        var lines = new[]
+        {
+            Line("Jane Example INVOICE"),
+            Line("Unit 1200 North Tower, Example Residences Sample Avenue Townsville #7"),
+            Line("45 Sample St. Ext. Some Area, Example City"),
+            Line("Townsville, Metro Region 1600"),
+            Line("Examplestan"),
+            Line("jane.example@example.test"),
+            Line("BILLED TO Issue date Nov 15, 2026"),
+            Line("Globex Example Corp Due date Nov 28, 2026"),
+            Line("99 Demo Road, Sampleville"),
+            Line("# Description Qty Rate Amount"),
+            Line("1 Consulting services 1 $4,200.00 $4,200.00"),
+            Line("Subtotal $4,200.00"),
+            Line("Total $4,200.00"),
+            Line("Amount due $4,200.00"),
+        };
+
+        var root = ParseAndValidate("purchase-invoice", lines, out var warnings);
+        Assert.Equal("Jane Example", root.GetProperty("vendorName").GetString());
+        Assert.Equal("7", root.GetProperty("vendorInvoiceNo").GetString());
+        Assert.Equal("2026-11-15", root.GetProperty("date").GetString());
+        Assert.Equal("2026-11-28", root.GetProperty("dueDate").GetString());
+        Assert.Equal("4200.00", root.GetProperty("sourceTotals").GetProperty("grandTotal").GetString());
+        Assert.Contains("AMBIGUOUS_CURRENCY", warnings);
+
+        var parsedLines = root.GetProperty("lines").EnumerateArray().ToList();
+        Assert.Single(parsedLines);
+        Assert.Equal("Consulting services", parsedLines[0].GetProperty("description").GetString());
+    }
+
+    [Fact]
+    public void Parse_E8_AddressUnitHashIgnoredAndLabelledInvoiceNumberWins()
+    {
+        // Address "Unit #4, 10 Example Road" must not produce an invoice number
+        var unitHash = ParseAndValidate("purchase-invoice", [
+            Line("Jane Example"),
+            Line("Unit #4, 10 Example Road"),
+            Line("Total: EUR 50.00"),
+        ], out _);
+        Assert.False(unitHash.TryGetProperty("vendorInvoiceNo", out _));
+
+        // Inline forms "INVOICE #7" and "Invoice # INV-0042"
+        var inlineSingle = ParseAndValidate("purchase-invoice", [
+            Line("Jane Example"),
+            Line("INVOICE #7"),
+            Line("Total: EUR 50.00"),
+        ], out _);
+        Assert.Equal("7", inlineSingle.GetProperty("vendorInvoiceNo").GetString());
+
+        var inlineSpaced = ParseAndValidate("purchase-invoice", [
+            Line("Jane Example"),
+            Line("Invoice # INV-0042"),
+            Line("Total: EUR 50.00"),
+        ], out _);
+        Assert.Equal("INV-0042", inlineSpaced.GetProperty("vendorInvoiceNo").GetString());
+
+        // Labelled invoice number wins over an earlier bare "#7"
+        var labelledWins = ParseAndValidate("purchase-invoice", [
+            Line("Jane Example #7"),
+            Line("Invoice No.: INV-999"),
+            Line("Total: EUR 50.00"),
+        ], out _);
+        Assert.Equal("INV-999", labelledWins.GetProperty("vendorInvoiceNo").GetString());
+    }
+
     // --- E3: strip leading row-number column from line item descriptions ---
 
     [Fact]
