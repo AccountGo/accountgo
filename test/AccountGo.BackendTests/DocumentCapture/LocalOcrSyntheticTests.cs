@@ -54,6 +54,9 @@ public sealed class LocalOcrSyntheticTests(ITestOutputHelper output)
     }
 
     [LocalOcrFact]
+    [Trait("Rule", "V-01")]
+    [Trait("Rule", "D-01")]
+    [Trait("Rule", "T-03")]
     public async Task PdfTextLayerMatchesEverySyntheticInvoice()
     {
         using var extractor = CreateExtractor();
@@ -67,6 +70,9 @@ public sealed class LocalOcrSyntheticTests(ITestOutputHelper output)
     }
 
     [LocalOcrFact]
+    [Trait("Rule", "V-01")]
+    [Trait("Rule", "D-01")]
+    [Trait("Rule", "T-03")]
     public async Task EnglishImageOcrMeetsSyntheticFieldAccuracyFloor()
     {
         using var extractor = CreateExtractor();

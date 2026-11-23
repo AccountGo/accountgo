@@ -11,10 +11,11 @@ using System.Text.Json;
 using Api.DocumentCaptures;
 using Api.DocumentCaptures.Parsing;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests.DocumentCapture;
 
-public sealed class DocumentTextFieldParserTests
+public sealed class DocumentTextFieldParserTests(ITestOutputHelper output)
 {
     private static TextLine Line(string text, int page = 1, float y0 = 0, float y1 = 16) =>
         new(page, text, 0, y0, 400, y1, TextLineSource.Ocr);
@@ -44,6 +45,8 @@ public sealed class DocumentTextFieldParserTests
     [InlineData("Date: 15 Oct 26", "2026-10-15")]
     [InlineData("วันที่: 20/11/2569", "2026-11-20")]
     [InlineData("วันที่: 5 พฤศจิกายน 2569", "2026-11-05")]
+    [Trait("Rule", "D-01")]
+    [Trait("Rule", "D-02")]
     public void Parse_Dates_HandlesSupportedFormats(string line, string expectedIso)
     {
         var root = ParseAndValidate("purchase-invoice", [Line("Acme Ltd"), Line(line), Line("Total: EUR 10.00")], out _);
@@ -51,6 +54,8 @@ public sealed class DocumentTextFieldParserTests
     }
 
     [Fact]
+    [Trait("Rule", "D-03")]
+    [Trait("Rule", "D-04")]
     public void Parse_Date_PrefersLabelledDateOverEarlierDateAndParsesDueDateSeparately()
     {
         var lines = new[]
@@ -68,6 +73,7 @@ public sealed class DocumentTextFieldParserTests
     }
 
     [Fact]
+    [Trait("Rule", "D-02")]
     public void Parse_Date_IgnoresDateLikeAccountNumbers()
     {
         var lines = new[]
@@ -89,6 +95,7 @@ public sealed class DocumentTextFieldParserTests
     [InlineData("ยอดรวมทั้งสิ้น: ฿3,188.60", "3188.60")]
     [InlineData("Total: S$2,354.40", "2354.40")]
     [InlineData("Total: Rp 150,000.00", "150000.00")]
+    [Trait("Rule", "T-01")]
     public void Parse_Amounts_HandlesFormatsAndCurrencyPrefixes(string totalLine, string expectedTotal)
     {
         var root = ParseAndValidate("purchase-invoice", [Line("Acme Ltd"), Line(totalLine)], out _);
@@ -96,6 +103,10 @@ public sealed class DocumentTextFieldParserTests
     }
 
     [Fact]
+    [Trait("Rule", "T-01")]
+    [Trait("Rule", "T-03")]
+    [Trait("Rule", "T-04")]
+    [Trait("Rule", "T-05")]
     public void Parse_Totals_ExcludesSubtotalTaxCashChangeAndPhoneNumbers()
     {
         var lines = new[]
@@ -120,6 +131,7 @@ public sealed class DocumentTextFieldParserTests
     }
 
     [Fact]
+    [Trait("Rule", "T-08")]
     public void Parse_Totals_WarnsWhenSubtotalPlusTaxDiffersFromGrandTotal()
     {
         var lines = new[]
@@ -135,6 +147,7 @@ public sealed class DocumentTextFieldParserTests
     }
 
     [Fact]
+    [Trait("Rule", "C-01")]
     public void Parse_Currency_PrefersIsoCodeAndWarnsAmbiguousOnBareDollar()
     {
         var isoRoot = ParseAndValidate("purchase-invoice", [Line("Acme Ltd"), Line("Total: $50.00 CAD")], out var isoWarnings);
@@ -147,6 +160,9 @@ public sealed class DocumentTextFieldParserTests
     }
 
     [Fact]
+    [Trait("Rule", "V-03")]
+    [Trait("Rule", "V-04")]
+    [Trait("Rule", "V-05")]
     public void Parse_Vendor_PenalizesHeadersAndAddressesAndBoostsLegalSuffixAndHeight()
     {
         var lines = new[]
@@ -164,6 +180,9 @@ public sealed class DocumentTextFieldParserTests
     }
 
     [Fact]
+    [Trait("Rule", "V-06")]
+    [Trait("Rule", "N-01")]
+    [Trait("Rule", "P-01")]
     public void Parse_SalesInvoice_ExtractsCustomerFromBillToNotHeader()
     {
         var lines = new[]
@@ -185,6 +204,7 @@ public sealed class DocumentTextFieldParserTests
     }
 
     [Fact]
+    [Trait("Rule", "L-01")]
     public void Parse_Lines_ExtractsClearTableRowsAndOmitsUnverifiedRows()
     {
         var lines = new[]
@@ -207,6 +227,9 @@ public sealed class DocumentTextFieldParserTests
     }
 
     [Fact]
+    [Trait("Rule", "P-01")]
+    [Trait("Rule", "P-02")]
+    [Trait("Rule", "P-03")]
     public void Parse_PaymentHints_DetectsPaidUnpaidUnknownAndExplicitAmountPaid()
     {
         var paid = ParseAndValidate("expense-receipt", [
@@ -233,6 +256,12 @@ public sealed class DocumentTextFieldParserTests
     }
 
     [Fact]
+    [Trait("Rule", "B-01")]
+    [Trait("Rule", "B-02")]
+    [Trait("Rule", "B-03")]
+    [Trait("Rule", "B-04")]
+    [Trait("Rule", "B-05")]
+    [Trait("Rule", "B-06")]
     public void Parse_Bank_ValidatesChecksumsAndRequiresLabels()
     {
         var validLines = new[]
@@ -255,6 +284,11 @@ public sealed class DocumentTextFieldParserTests
     }
 
     [Fact]
+    [Trait("Rule", "B-01")]
+    [Trait("Rule", "B-02")]
+    [Trait("Rule", "B-03")]
+    [Trait("Rule", "B-04")]
+    [Trait("Rule", "B-05")]
     public void Parse_Bank_RejectsInvalidChecksumsAndUnlabelledNumbers()
     {
         var badLines = new[]
@@ -275,6 +309,7 @@ public sealed class DocumentTextFieldParserTests
     }
 
     [Fact]
+    [Trait("Rule", "A-01")]
     public void Parse_AssistantAttachment_ExtractsCappedLabelValuePairs()
     {
         var lines = Enumerable.Range(1, 70)
@@ -294,6 +329,8 @@ public sealed class DocumentTextFieldParserTests
     [InlineData("sales-invoice")]
     [InlineData("bank")]
     [InlineData("assistant-attachment")]
+    [Trait("Rule", "G-02")]
+    [Trait("Rule", "G-03")]
     public void Parse_HostileInputs_ReturnSchemaValidJsonWithin2000MsWarmed(string kind)
     {
         // Warm regexes and JIT once before timing (K1/R2).
@@ -330,6 +367,8 @@ public sealed class DocumentTextFieldParserTests
     // --- K2: paymentStatus strong cues, negations, and positive amount due precedence ---
 
     [Fact]
+    [Trait("Rule", "P-01")]
+    [Trait("Rule", "P-03")]
     public void Parse_PaymentHints_P2_SubjectToChangeAndAmountDueRemainsUnpaid()
     {
         var lines = new[]
@@ -346,6 +385,7 @@ public sealed class DocumentTextFieldParserTests
     }
 
     [Fact]
+    [Trait("Rule", "P-01")]
     public void Parse_PaymentHints_P3_NotPaidWithin30DaysDoesNotTriggerPaid()
     {
         var lines = new[]
@@ -360,6 +400,7 @@ public sealed class DocumentTextFieldParserTests
     }
 
     [Fact]
+    [Trait("Rule", "P-03")]
     public void Parse_PaymentHints_PositiveAmountDueWithExplicitAmountPaidIsPartial()
     {
         var lines = new[]
@@ -383,6 +424,7 @@ public sealed class DocumentTextFieldParserTests
     [InlineData("CASH 50.00")]
     [InlineData("CHANGE 7.50")]
     [InlineData("Balance Due: EUR 0.00")]
+    [Trait("Rule", "P-01")]
     public void Parse_PaymentHints_StrongPaidCuesSetPaid(string cueLine)
     {
         var root = ParseAndValidate("expense-receipt", [Line("Corner Cafe"), Line("Total: EUR 42.50"), Line(cueLine)], out _);
@@ -392,6 +434,8 @@ public sealed class DocumentTextFieldParserTests
     // --- K3: dueDate label strictness and next-line digit guard ---
 
     [Fact]
+    [Trait("Rule", "D-03")]
+    [Trait("Rule", "D-04")]
     public void Parse_Date_P1_AmountDueDoesNotTriggerDueDateOnNextLine()
     {
         var lines = new[]
@@ -407,6 +451,7 @@ public sealed class DocumentTextFieldParserTests
     }
 
     [Fact]
+    [Trait("Rule", "D-04")]
     public void Parse_Date_DueDateReadsNextLineOnlyWhenLabelLineHasNoDigits()
     {
         var withNextLine = ParseAndValidate("purchase-invoice", [
@@ -428,6 +473,7 @@ public sealed class DocumentTextFieldParserTests
     // --- K4: tax registration exclusion and next-line digit guard ---
 
     [Fact]
+    [Trait("Rule", "T-06")]
     public void Parse_Totals_P5_VatRegNoDoesNotLeakSubtotalIntoTaxTotal()
     {
         var lines = new[]
@@ -447,6 +493,7 @@ public sealed class DocumentTextFieldParserTests
     }
 
     [Fact]
+    [Trait("Rule", "T-04")]
     public void Parse_Totals_LabelLineWithDigitsDoesNotFallbackToNextLine()
     {
         var lines = new[]
@@ -466,6 +513,7 @@ public sealed class DocumentTextFieldParserTests
     // --- K5 & K6: priceBasis inclusive cues, inclusive-tax total line, and TOTAL_UNLABELED ---
 
     [Fact]
+    [Trait("Rule", "T-08")]
     public void Parse_Totals_P8_ServiceChargeIncludedDoesNotSetPriceBasisInclusive()
     {
         var lines = new[]
@@ -481,6 +529,8 @@ public sealed class DocumentTextFieldParserTests
     }
 
     [Fact]
+    [Trait("Rule", "T-03")]
+    [Trait("Rule", "T-08")]
     public void Parse_Totals_P4_TotalInclTaxWithAdditiveSubtotalAndTaxIsNotInclusiveOrUnlabeled()
     {
         var lines = new[]
@@ -502,6 +552,7 @@ public sealed class DocumentTextFieldParserTests
     }
 
     [Fact]
+    [Trait("Rule", "T-08")]
     public void Parse_Totals_TrueTaxInclusiveReceiptSetsPriceBasisInclusiveWithoutInconsistentWarning()
     {
         var lines = new[]
@@ -523,6 +574,7 @@ public sealed class DocumentTextFieldParserTests
     }
 
     [Fact]
+    [Trait("Rule", "T-07")]
     public void Parse_Totals_P9_UnlabeledLargestAmountFallbackEmitsTotalUnlabeledWarning()
     {
         var lines = new[]
@@ -539,6 +591,7 @@ public sealed class DocumentTextFieldParserTests
     // --- K7: tendered / paid / brought-forward lines excluded from grandTotal ---
 
     [Fact]
+    [Trait("Rule", "T-03")]
     public void Parse_Totals_ExcludesTotalPaidAndTenderedFromGrandTotal()
     {
         var lines = new[]
@@ -559,6 +612,7 @@ public sealed class DocumentTextFieldParserTests
     // --- K8: currency word boundaries and adjacency to amounts ---
 
     [Fact]
+    [Trait("Rule", "C-01")]
     public void Parse_Currency_P7_OrdinaryWordsEndingInRmDoNotTriggerMyr()
     {
         var lines = new[]
@@ -585,6 +639,7 @@ public sealed class DocumentTextFieldParserTests
     [InlineData("Account No: 12345678", "12345678")]
     [InlineData("Account #: 12345678", "12345678")]
     [InlineData("Account Number: 1234 5678 Branch Sukhumvit", "1234 5678")]
+    [Trait("Rule", "B-05")]
     public void Parse_Bank_K9_K10_AccountNumberVariantsAndBoundedCapture(string line, string expected)
     {
         var root = ParseAndValidate("bank", [Line(line)], out _);
@@ -596,6 +651,7 @@ public sealed class DocumentTextFieldParserTests
     [InlineData("Routing Number: 021000021")]
     [InlineData("Routing Transit Number: 021000021")]
     [InlineData("ABA: 021000021")]
+    [Trait("Rule", "B-04")]
     public void Parse_Bank_K9_RoutingNumberVariants(string line)
     {
         var root = ParseAndValidate("bank", [Line(line)], out _);
@@ -606,6 +662,7 @@ public sealed class DocumentTextFieldParserTests
     [InlineData("SWIFT Code: DEUTDEFF", "DEUTDEFF")]
     [InlineData("BIC Code: DEUTDEFFXXX", "DEUTDEFFXXX")]
     [InlineData("SWIFT / BIC: COBADEFFXXX", "COBADEFFXXX")]
+    [Trait("Rule", "B-03")]
     public void Parse_Bank_K9_SwiftAndBicCodeVariants(string line, string expected)
     {
         var root = ParseAndValidate("bank", [Line(line)], out _);
@@ -613,6 +670,8 @@ public sealed class DocumentTextFieldParserTests
     }
 
     [Fact]
+    [Trait("Rule", "B-02")]
+    [Trait("Rule", "B-03")]
     public void Parse_Bank_B5_IbanAndSwiftOnSameLineBothExtractCleanly()
     {
         var root = ParseAndValidate("bank", [Line("IBAN: GB82 WEST 1234 5698 7654 32 SWIFT: NWBKGB2L")], out _);
@@ -646,6 +705,7 @@ public sealed class DocumentTextFieldParserTests
     [InlineData("sales-invoice")]
     [InlineData("bank")]
     [InlineData("assistant-attachment")]
+    [Trait("Rule", "G-03")]
     public void Parse_K11_DeadlineExceededEmitsParseTruncatedAndReturnsSchemaValidJson(string kind)
     {
         var fakeTime = new AdvancingTimeProvider(TimeSpan.FromMilliseconds(300));
@@ -670,6 +730,7 @@ public sealed class DocumentTextFieldParserTests
     // --- K12: sales customer label anchoring and phone/ID rejection ---
 
     [Fact]
+    [Trait("Rule", "V-06")]
     public void Parse_SalesInvoice_S1_SkipsCustomerServiceAndCustomerIdLabels()
     {
         var lines = new[]
@@ -696,6 +757,7 @@ public sealed class DocumentTextFieldParserTests
     // --- K13: assistant attachment skips times and URLs ---
 
     [Fact]
+    [Trait("Rule", "A-01")]
     public void Parse_AssistantAttachment_A1_SkipsTimesAndUrls()
     {
         var lines = new[]
@@ -717,6 +779,7 @@ public sealed class DocumentTextFieldParserTests
     // --- L1: tendered amounts and amountPaid > grandTotal + 0.01 omit amountPaid ---
 
     [Fact]
+    [Trait("Rule", "P-02")]
     public void Parse_PaymentHints_L1_TenderedAmountExceedingGrandTotalOmitsAmountPaidAndKeepsPaid()
     {
         var lines = new[]
@@ -747,6 +810,7 @@ public sealed class DocumentTextFieldParserTests
     // --- M1: explicit amountPaid vs grandTotal determines paid vs partial ---
 
     [Fact]
+    [Trait("Rule", "P-03")]
     public void Parse_PaymentHints_M1_ExplicitAmountPaidDeterminesPaidOrPartialAgainstGrandTotal()
     {
         var fullyPaid = ParseAndValidate("purchase-invoice", [
@@ -771,6 +835,7 @@ public sealed class DocumentTextFieldParserTests
     // --- E1: emit lines only when sum reconciles to subtotal (or grandTotal when inclusive/no tax) ---
 
     [Fact]
+    [Trait("Rule", "L-04")]
     public void Parse_Lines_E1_OmitsSplicedOrPartialTablesAndEmitsCompleteReconciledTable()
     {
         // Spliced-row case (like skewed OCR producing one wrong row summing to 50.00 vs subtotal 100.00)
@@ -817,6 +882,7 @@ public sealed class DocumentTextFieldParserTests
     // --- E1b: spliced header row ("Date: 2026-11-20 2 $25.00 $50.00") rejected before sum check ---
 
     [Fact]
+    [Trait("Rule", "L-03")]
     public void Parse_Lines_E1b_RejectsSplicedHeaderRowWithLabelDateOrColonBeforeSumCheck()
     {
         var lines = new[]
@@ -841,6 +907,8 @@ public sealed class DocumentTextFieldParserTests
     // --- E5: item line containing "tax" must not become taxTotal or priceBasis inclusive ---
 
     [Fact]
+    [Trait("Rule", "T-02")]
+    [Trait("Rule", "T-06")]
     public void Parse_Totals_E5_ItemRowContainingTaxDoesNotSetTaxTotalOrInclusive()
     {
         var lines = new[]
@@ -865,6 +933,7 @@ public sealed class DocumentTextFieldParserTests
     [InlineData("Tax 10%: $10.00", "10.00")]
     [InlineData("VAT: 6.79", "6.79")]
     [InlineData("GST (9%) 1.20", "1.20")]
+    [Trait("Rule", "T-06")]
     public void Parse_Totals_E5_ValidTaxLabelLinesStillExtractTaxTotal(string taxLine, string expectedTax)
     {
         var root = ParseAndValidate("purchase-invoice", [
@@ -878,6 +947,8 @@ public sealed class DocumentTextFieldParserTests
     // --- E2: vendor address detection (Unit/Tower/comma+digit) and earliest clean letters-only line ---
 
     [Fact]
+    [Trait("Rule", "V-02")]
+    [Trait("Rule", "V-05")]
     public void Parse_Vendor_E2_SkipsUnitAndCommaNumberAddressLinesAndPrefersEarliestCleanIssuer()
     {
         var lines = new[]
@@ -915,6 +986,8 @@ public sealed class DocumentTextFieldParserTests
     [Theory]
     [InlineData("purchase-invoice")]
     [InlineData("expense-receipt")]
+    [Trait("Rule", "V-01")]
+    [Trait("Rule", "V-02")]
     public void Parse_Vendor_E6_IgnoresCountryLineAfterAddressAndLinesAfterBilledTo(string kind)
     {
         var lines = new[]
@@ -937,6 +1010,7 @@ public sealed class DocumentTextFieldParserTests
     }
 
     [Fact]
+    [Trait("Rule", "V-06")]
     public void Parse_SalesInvoice_E6_ExtractsCustomerFromBilledToBlock()
     {
         var lines = new[]
@@ -961,6 +1035,11 @@ public sealed class DocumentTextFieldParserTests
     // --- E7 & E8: merged title on vendor line ("Jane Example INVOICE") and bare "#7" invoice number ---
 
     [Fact]
+    [Trait("Rule", "V-03")]
+    [Trait("Rule", "V-07")]
+    [Trait("Rule", "N-02")]
+    [Trait("Rule", "C-01")]
+    [Trait("Rule", "L-02")]
     public void Parse_E7_E8_TwoColumnInvoiceExtractsVendorStrippingTitleAndBareHashInvoiceNo()
     {
         var lines = new[]
@@ -1000,6 +1079,8 @@ public sealed class DocumentTextFieldParserTests
     }
 
     [Fact]
+    [Trait("Rule", "N-01")]
+    [Trait("Rule", "N-02")]
     public void Parse_E8_AddressUnitHashIgnoredAndLabelledInvoiceNumberWins()
     {
         // Address "Unit #4, 10 Example Road" must not produce an invoice number
@@ -1037,6 +1118,9 @@ public sealed class DocumentTextFieldParserTests
     // --- E10: skewed item rows with inflated OCR box heights must never replace the top-block issuer ---
 
     [Fact]
+    [Trait("Rule", "V-01")]
+    [Trait("Rule", "V-02")]
+    [Trait("Rule", "V-05")]
     public void Parse_Vendor_E10_SkewedTallItemRowsDoNotReplaceTopBlockIssuer()
     {
         var s04 = new[]
@@ -1082,6 +1166,7 @@ public sealed class DocumentTextFieldParserTests
     // --- E3: strip leading row-number column from line item descriptions ---
 
     [Fact]
+    [Trait("Rule", "L-02")]
     public void Parse_Lines_E3_StripsLeadingRowIndexPrefixAndPreservesUnindexedDescriptions()
     {
         var indexed = ParseAndValidate("purchase-invoice", [
@@ -1112,6 +1197,7 @@ public sealed class DocumentTextFieldParserTests
     // --- E4: DocumentTextFieldParser.WarningCodes exposes every parser warning code ---
 
     [Fact]
+    [Trait("Rule", "W-01")]
     public void WarningCodes_E4_ListsEveryParserWarningCode()
     {
         Assert.Contains("AMBIGUOUS_CURRENCY", DocumentTextFieldParser.WarningCodes);
@@ -1124,6 +1210,7 @@ public sealed class DocumentTextFieldParserTests
     // --- L2: real tax-inclusive receipts recognised without TOTALS_INCONSISTENT ---
 
     [Fact]
+    [Trait("Rule", "T-08")]
     public void Parse_Totals_L2_VatRateIncludedLineRecognisedAsInclusiveWithoutWarning()
     {
         var lines = new[]
@@ -1155,6 +1242,7 @@ public sealed class DocumentTextFieldParserTests
     // --- L3: vendor and customer length (<= 120) and letter-ratio (>= 40%) bounds ---
 
     [Fact]
+    [Trait("Rule", "V-04")]
     public void Parse_Party_L3_RejectsOverlongAndLowLetterRatioCandidates()
     {
         var repeated = string.Concat(Enumerable.Repeat("a 1 1.00 ", 900))[..8_000];
@@ -1173,6 +1261,8 @@ public sealed class DocumentTextFieldParserTests
     }
 
     [Fact]
+    [Trait("Rule", "N-01")]
+    [Trait("Rule", "T-05")]
     public void Parse_SyntheticTruthCleanText_Scores18Of18OnVendorDateAndTotalWithNoTotalsInconsistent()
     {
         var truthPath = Path.GetFullPath(Path.Combine(
@@ -1226,8 +1316,21 @@ public sealed class DocumentTextFieldParserTests
                 && gt.GetString() == total) totalHits++;
         }
 
+        output.WriteLine($"Clean text vendor: {vendorHits}/{entries.Count} match.");
+        output.WriteLine($"Clean text date: {dateHits}/{entries.Count} match.");
+        output.WriteLine($"Clean text total: {totalHits}/{entries.Count} match.");
+
         Assert.Equal(18, vendorHits);
         Assert.Equal(18, dateHits);
         Assert.Equal(18, totalHits);
+    }
+
+    [Fact]
+    [Trait("Rule", "G-01")]
+    public void Parse_UnsupportedKind_ReturnsEmptyJsonWithNoWarnings()
+    {
+        var result = DocumentTextFieldParser.Parse("unsupported-kind", [Line("Acme Ltd"), Line("Total: EUR 10.00")]);
+        Assert.Equal("{}", result.FieldsJson);
+        Assert.Empty(result.Warnings);
     }
 }

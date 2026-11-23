@@ -7,6 +7,7 @@ namespace AccountGo.BackendTests.DocumentCapture;
 public sealed class DocumentCaptureMaskingTests
 {
     [Theory]
+    [Trait("Rule", "S-01")]
     [InlineData("routing 021000021", "routing ••••")]
     [InlineData("account 1234-5678-9012", "account ••••")]
     [InlineData("12345678", "••••")]
@@ -27,6 +28,7 @@ public sealed class DocumentCaptureMaskingTests
     }
 
     [Fact]
+    [Trait("Rule", "S-02")]
     public void AssistantFields_AreMaskedBeforeCanonicalStorage()
     {
         using var input = JsonDocument.Parse("""{"fields":[{"label":"Routing number","value":"021000021","confidence":0.9}]}""");
@@ -39,6 +41,7 @@ public sealed class DocumentCaptureMaskingTests
     }
 
     [Fact]
+    [Trait("Rule", "S-02")]
     public void AssistantLabels_AreMaskedAlongsideValues()
     {
         using var input = JsonDocument.Parse("""{"fields":[{"label":"021000021","value":"021000021"}]}""");
@@ -51,6 +54,7 @@ public sealed class DocumentCaptureMaskingTests
     }
 
     [Fact]
+    [Trait("Rule", "S-02")]
     public void RawText_IsBoundedAndMasked()
     {
         var result = DocumentCaptureMasking.MaskRawText("Routing: 021000021");
@@ -61,6 +65,7 @@ public sealed class DocumentCaptureMaskingTests
     }
 
     [Fact]
+    [Trait("Rule", "S-02")]
     public void FinancialFreeText_IsMaskedWithoutChangingStructuredNumbers()
     {
         const string fields = """{"notes":"Pay 021000021","sourceInvoiceNo":"INV-021000021","grandTotal":123456789,"lines":[{"description":"Account 1234-5678-9012","quantity":1}]}""";
@@ -73,6 +78,7 @@ public sealed class DocumentCaptureMaskingTests
     }
 
     [Fact]
+    [Trait("Rule", "W-01")]
     public void ProviderWarnings_AreReducedToStableCodes()
     {
         Assert.Equal("LOW_CONFIDENCE", DocumentCaptureWarningCodes.Sanitize("LOW_CONFIDENCE"));
@@ -81,6 +87,7 @@ public sealed class DocumentCaptureMaskingTests
     }
 
     [Fact]
+    [Trait("Rule", "W-01")]
     public void ParserWarningCodes_AreAllowedAndHaveUserFacingText()
     {
         var repoRoot = FindRepositoryRoot();

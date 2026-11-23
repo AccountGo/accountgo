@@ -138,6 +138,25 @@ public sealed class LocalOcrWorkerLimitsTests
         Assert.True((long)log.State["RunMs"]! >= 0);
     }
 
+    [Fact]
+    public async Task ExtractionReturnsModelAndRulesProviderVersionWithinLimit()
+    {
+        var json = JsonSerializer.SerializeToUtf8Bytes(
+            new CaptureWorkerResult([new TextLine(1, "Acme Ltd", 0, 0, 100, 20, TextLineSource.Ocr)], [1], [], []),
+            CaptureWorkerProtocol.Json);
+        var worker = new FakeWorker(json);
+        using var extractor = new LocalOcrDocumentFieldExtractor(Options.Create(new DocumentCaptureOptions()),
+            TimeProvider.System, new MetricsLogger(), _ => worker);
+        var resultTask = extractor.ExtractAsync(new DocumentExtractionRequest("purchase-invoice", 1, "image/png", Input, 1),
+            CancellationToken.None);
+        worker.Complete();
+        var result = await resultTask;
+
+        Assert.Equal("ocr-1+d5de5df3+20b69451+rules-1", result.ProviderVersion);
+        Assert.Equal(LocalOcrDocumentFieldExtractor.CurrentProviderVersion, result.ProviderVersion);
+        Assert.True(result.ProviderVersion.Length <= 100);
+    }
+
     private sealed class MetricsLogger : ILogger<LocalOcrDocumentFieldExtractor>
     {
         internal List<(string Text, Exception? Exception, Dictionary<string, object?> State)> Entries { get; } = [];
