@@ -76,6 +76,35 @@ public sealed class DocumentCaptureMaskingTests
     public void ProviderWarnings_AreReducedToStableCodes()
     {
         Assert.Equal("LOW_CONFIDENCE", DocumentCaptureWarningCodes.Sanitize("LOW_CONFIDENCE"));
+        Assert.Equal("AMBIGUOUS_CURRENCY", DocumentCaptureWarningCodes.Sanitize("AMBIGUOUS_CURRENCY"));
         Assert.Equal("REVIEW_REQUIRED", DocumentCaptureWarningCodes.Sanitize("Routing number 021000021"));
+    }
+
+    [Fact]
+    public void ParserWarningCodes_AreAllowedAndHaveUserFacingText()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var source = File.ReadAllText(Path.Combine(repoRoot, "src", "Web", "src", "components", "document-capture", "fields.ts"));
+        const string warningFunction = "export function describeCaptureWarning";
+        var warningStart = source.IndexOf(warningFunction, StringComparison.Ordinal);
+        Assert.True(warningStart >= 0, "describeCaptureWarning was not found in fields.ts.");
+        var warningEnd = source.IndexOf("export function ", warningStart + warningFunction.Length, StringComparison.Ordinal);
+        var warningText = warningEnd < 0 ? source[warningStart..] : source[warningStart..warningEnd];
+        Assert.DoesNotContain("case 'DOCUMENT_TOO_COMPLEX':", warningText, StringComparison.Ordinal);
+
+        foreach (var code in Api.DocumentCaptures.Parsing.DocumentTextFieldParser.WarningCodes)
+        {
+            Assert.Equal(code, DocumentCaptureWarningCodes.Sanitize(code));
+            Assert.NotEqual("REVIEW_REQUIRED", DocumentCaptureWarningCodes.Sanitize(code));
+            Assert.Contains($"case '{code}':", warningText, StringComparison.Ordinal);
+        }
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "AGENTS.md")))
+            directory = directory.Parent;
+        return directory?.FullName ?? throw new DirectoryNotFoundException("Repository root was not found.");
     }
 }

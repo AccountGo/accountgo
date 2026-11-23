@@ -107,6 +107,97 @@ public sealed class DocumentCaptureControllerHttpTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task LocalOcrQueueRejectsFifthWaiterBeforeReservingQuotaAndRetriesImmediately()
+    {
+        var json = JsonSerializer.SerializeToUtf8Bytes(new Api.DocumentCaptures.CaptureWorkerResult([], [1], [], []),
+            Api.DocumentCaptures.CaptureWorkerProtocol.Json);
+        var firstWorker = new LocalOcrWorkerLimitsTests.FakeWorker(json);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var workerCount = 0;
+        using var extractor = new Api.DocumentCaptures.LocalOcrDocumentFieldExtractor(
+            Microsoft.Extensions.Options.Options.Create(new Api.DocumentCaptures.DocumentCaptureOptions()),
+            TimeProvider.System,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<Api.DocumentCaptures.LocalOcrDocumentFieldExtractor>.Instance,
+            _ =>
+            {
+                if (Interlocked.Increment(ref workerCount) == 1)
+                {
+                    started.TrySetResult();
+                    return firstWorker;
+                }
+                var worker = new LocalOcrWorkerLimitsTests.FakeWorker(json);
+                worker.Complete();
+                return worker;
+            });
+        using var factory = _factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<Api.DocumentCaptures.IDocumentFieldExtractor>();
+            services.AddSingleton<Api.DocumentCaptures.IDocumentFieldExtractor>(extractor);
+        }));
+        using var client = factory.CreateClient();
+        using var watchdog = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+        using var seedResponse = await UploadAsync(6, _client);
+        Assert.Equal(HttpStatusCode.OK, seedResponse.StatusCode);
+        using var seedBody = JsonDocument.Parse(await seedResponse.Content.ReadAsStringAsync());
+        var expectedId = seedBody.RootElement.GetProperty("id").GetString();
+
+        var first = UploadAsync(0);
+        Task<HttpResponseMessage>[] queued = [];
+        try
+        {
+            await started.Task.WaitAsync(watchdog.Token);
+            queued = Enumerable.Range(1, 4).Select(number => UploadAsync(number)).ToArray();
+            while (extractor.WaitingCount < 4)
+                await Task.Delay(10, watchdog.Token);
+
+            Assert.Equal((2, 2), await CountRowsAsync());
+            foreach (var key in new[] { "ocr-queue-6", "ocr-queue-duplicate" })
+            {
+                using var replay = await UploadAsync(6, key: key).WaitAsync(TimeSpan.FromSeconds(3));
+                Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+                using var body = JsonDocument.Parse(await replay.Content.ReadAsStringAsync());
+                Assert.Equal(expectedId, body.RootElement.GetProperty("id").GetString());
+            }
+            Assert.Equal((2, 2), await CountRowsAsync());
+            using var rejected = await UploadAsync(5);
+            Assert.Equal(HttpStatusCode.TooManyRequests, rejected.StatusCode);
+            Assert.Equal("DOCUMENT_DECODE_BUSY", await ReadProblemCodeAsync(rejected));
+            Assert.Equal((2, 2), await CountRowsAsync());
+        }
+        finally
+        {
+            firstWorker.Complete();
+            foreach (var pending in queued.Prepend(first))
+            {
+                using var completed = await pending;
+                Assert.Equal(HttpStatusCode.OK, completed.StatusCode);
+            }
+        }
+
+        Assert.Equal((6, 6), await CountRowsAsync());
+        using var retry = await UploadAsync(5);
+        Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+        Assert.Equal((7, 7), await CountRowsAsync());
+
+        async Task<HttpResponseMessage> UploadAsync(int number, HttpClient? uploadClient = null, string? key = null)
+        {
+            using var request = NewRequest(HttpMethod.Post, "/api/document-captures");
+            request.Headers.Add("Idempotency-Key", key ?? $"ocr-queue-{number}");
+            request.Content = CreateUploadForm("purchase-invoice", CreatePng(0xFFCCDD00u + (uint)number), "image/png");
+            return await (uploadClient ?? client).SendAsync(request, watchdog.Token);
+        }
+
+        async Task<(int Attempts, int Captures)> CountRowsAsync()
+        {
+            using var scope = _factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            var attempts = await db.DocumentCaptureAttempts.IgnoreQueryFilters().CountAsync(row => row.CompanyId == _companyId);
+            var captures = await db.DocumentCaptures.IgnoreQueryFilters().CountAsync(row => row.CompanyId == _companyId);
+            return (attempts, captures);
+        }
+    }
+
+    [Fact]
     public async Task RoutesUsePublicIdsAndRoundTripRealJsonThroughMvc()
     {
         var acceptLimit = System.Reflection.CustomAttributeData.GetCustomAttributes(

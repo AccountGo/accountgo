@@ -4,6 +4,8 @@
 **/bin
 **/obj
 **/.wrangler
+.build
+.worktrees
 src/Web/dist
 # Local development databases; the container's data comes from D1.
 **/accountgo.db*

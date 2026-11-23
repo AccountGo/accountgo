@@ -7,16 +7,18 @@ COPY Directory.Build.props Directory.Build.targets ./
 
 # Copy project files for caching
 COPY src/Api/Api.csproj src/Api/
+COPY src/Api.CaptureWorker/Api.CaptureWorker.csproj src/Api.CaptureWorker/
 COPY src/Core/Core.csproj src/Core/
 COPY src/Dto/Dto.csproj src/Dto/
 COPY src/Services/Services.csproj src/Services/
 COPY src/src.ServiceDefaults/src.ServiceDefaults.csproj src/src.ServiceDefaults/
 
 # Restore dependencies
-RUN dotnet restore src/Api/Api.csproj
+RUN dotnet restore src/Api/Api.csproj && dotnet restore src/Api.CaptureWorker/Api.CaptureWorker.csproj
 
 # Copy source code
 COPY src/Api/ src/Api/
+COPY src/Api.CaptureWorker/ src/Api.CaptureWorker/
 COPY src/Core/ src/Core/
 COPY src/Dto/ src/Dto/
 COPY src/Services/ src/Services/
@@ -26,7 +28,8 @@ COPY src/src.ServiceDefaults/ src/src.ServiceDefaults/
 # fraction of a vCPU, where JIT-compiling the app at start-up takes minutes.
 ARG TARGETARCH
 RUN case "$TARGETARCH" in arm64) RID=linux-arm64 ;; *) RID=linux-x64 ;; esac \
-    && dotnet publish src/Api/Api.csproj -c Release -r $RID --self-contained false -p:PublishReadyToRun=true -o /app/out
+    && dotnet publish src/Api/Api.csproj -c Release -r "$RID" --self-contained false -p:PublishReadyToRun=true -o /app/out \
+    && dotnet publish src/Api.CaptureWorker/Api.CaptureWorker.csproj -c Release -r "$RID" --self-contained false -p:PublishReadyToRun=true -o /app/capture-worker
 
 # Determine BUILD_SHA (fallback to 'dev' if missing)
 RUN if [ -f src/Api/BUILD_SHA ]; then cp src/Api/BUILD_SHA /app/BUILD_SHA; else echo "dev" > /app/BUILD_SHA; fi
@@ -36,7 +39,9 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0
 
 WORKDIR /app
 COPY --from=build-env /app/out ./
+COPY --from=build-env /app/capture-worker ./capture-worker/
 COPY --from=build-env /app/BUILD_SHA /app/BUILD_SHA
+COPY LICENSE NOTICE ./
 
 ENV ASPNETCORE_URLS=http://+:8001
 ENV ASPNETCORE_ENVIRONMENT=Production

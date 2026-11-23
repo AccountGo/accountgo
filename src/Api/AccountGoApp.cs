@@ -244,6 +244,7 @@ public static class AccountGoApp
             builder.Configuration.GetSection(Api.Options.AuditRetentionOptions.SectionName));
         builder.Services.AddOptions<Api.DocumentCaptures.DocumentCaptureOptions>()
             .Bind(builder.Configuration.GetSection(Api.DocumentCaptures.DocumentCaptureOptions.SectionName))
+            .Configure(options => builder.Configuration.GetSection("DocumentCapture:Extractor").Bind(options.OcrWorker))
             .Validate(options =>
             {
                 Api.DocumentCaptures.DocumentCaptureOptions.Validate(options, builder.Environment);
@@ -252,11 +253,14 @@ public static class AccountGoApp
             .ValidateOnStart();
         builder.Services.AddSingleton<Api.DocumentCaptures.IDocumentFieldExtractor>(serviceProvider =>
         {
-            var options = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<Api.DocumentCaptures.DocumentCaptureOptions>>().Value;
-            return string.Equals(options.Extractor, "Fake", StringComparison.OrdinalIgnoreCase)
-                ? new Api.DocumentCaptures.FakeDocumentFieldExtractor(
-                    serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<Api.DocumentCaptures.DocumentCaptureOptions>>())
-                : new Api.DocumentCaptures.UnconfiguredDocumentFieldExtractor();
+            var options = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<Api.DocumentCaptures.DocumentCaptureOptions>>();
+            return options.Value.Extractor.ToLowerInvariant() switch
+            {
+                "fake" => new Api.DocumentCaptures.FakeDocumentFieldExtractor(options),
+                "local-ocr" => new Api.DocumentCaptures.LocalOcrDocumentFieldExtractor(options, serviceProvider.GetService<TimeProvider>(),
+                    serviceProvider.GetRequiredService<ILogger<Api.DocumentCaptures.LocalOcrDocumentFieldExtractor>>()),
+                _ => new Api.DocumentCaptures.UnconfiguredDocumentFieldExtractor()
+            };
         });
         builder.Services.AddScoped<Api.DocumentCaptures.DocumentCaptureAdmissionLock>();
         builder.Services.AddScoped<Api.DocumentCaptures.IDocumentCaptureAdmissionLock>(serviceProvider =>

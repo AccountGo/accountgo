@@ -11,6 +11,10 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ## [Unreleased]
 
+### Added
+
+- Self-hosted installations can opt in to reading uploaded documents locally and review the extracted details before saving.
+
 ### Fixed
 
 - Notices and banners now use readable colours in the dark theme when the device itself is in light mode.

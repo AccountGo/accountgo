@@ -1013,6 +1013,8 @@ export function describeCaptureError(
       return { code: normalized, message: 'The file exceeds the 8 MB limit (or the normalized image exceeds 1.5 MB). Choose a smaller file.', canRetryUpload: false, canCheckStatus: false, canRetryAccept: false };
     case 'DOCUMENT_UNSUPPORTED_TYPE':
       return { code: normalized, message: 'Unsupported file type, encrypted PDF, or PDF over 10 pages. Upload a JPEG, PNG, or unencrypted PDF (1–10 pages).', canRetryUpload: false, canCheckStatus: false, canRetryAccept: false };
+    case 'DOCUMENT_TOO_COMPLEX':
+      return { code: normalized, message: 'This document exceeds the reading limits. Split it into smaller files or enter the details manually.', canRetryUpload: false, canCheckStatus: false, canRetryAccept: false };
     case 'DOCUMENT_MALFORMED':
     case 'DOCUMENT_DIMENSIONS':
     case 'DOCUMENT_MEDIA_MISMATCH':
@@ -1023,6 +1025,7 @@ export function describeCaptureError(
     case 'DOCUMENT_PROVIDER_TIMEOUT':
       return { code: normalized, message: 'Extraction timed out. Check status first to see if it finished, or retry manually.', canRetryUpload: true, canCheckStatus: true, canRetryAccept: false };
     case 'DOCUMENT_PROVIDER_UNAVAILABLE':
+      return { code: normalized, message: 'The document reader is temporarily unavailable. Wait a moment and retry, or enter the details manually.', canRetryUpload: true, canCheckStatus: true, canRetryAccept: false };
     case 'DOCUMENT_CAPTURE_UNCONFIGURED':
     case 'DOCUMENT_CAPTURE_DISABLED':
       return { code: normalized, message: 'Document capture is currently unavailable for this workspace.', canRetryUpload: false, canCheckStatus: false, canRetryAccept: false };
@@ -1076,6 +1079,14 @@ export function describeCaptureError(
 
 export function describeCaptureWarning(code: string): string {
   switch (code) {
+    case 'OCR_PARTIAL_PAGES':
+      return 'Some scanned pages were skipped. Check the full document before accepting.';
+    case 'TOTALS_INCONSISTENT':
+      return 'The extracted subtotal and tax do not match the total. Check the amounts before accepting.';
+    case 'TOTAL_UNLABELED':
+      return 'The reader could not find a labeled total. Verify the suggested amount before accepting.';
+    case 'PARSE_TRUNCATED':
+      return 'The reader could not finish checking all fields. Review the full document and fill in any missing details.';
     case 'LOW_CONFIDENCE':
       return 'Some extracted fields have low confidence — review carefully before accepting.';
     case 'MULTIPLE_DOCUMENTS':

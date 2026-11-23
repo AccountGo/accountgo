@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../Api/DocumentCapture/Parsing/TextLine.cs" Link="Protocol/TextLine.cs" />
+    <Compile Include="../Api/DocumentCapture/CaptureWorkerProtocol.cs" Link="Protocol/CaptureWorkerProtocol.cs" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="[1.22.0]" />
+    <PackageReference Include="SkiaSharp" Version="$(AccountGoSkiaSharpVersion)" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="$(AccountGoSkiaSharpVersion)" />
+    <PackageReference Include="bblanchon.PDFium.Linux" Version="[159.0.8152]" />
+    <PackageReference Include="bblanchon.PDFium.macOS" Version="[159.0.8152]" />
+    <None Update="Models/**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="Notices/**" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

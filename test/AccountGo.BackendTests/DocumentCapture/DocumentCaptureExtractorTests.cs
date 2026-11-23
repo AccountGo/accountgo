@@ -14,7 +14,7 @@ public sealed class DocumentCaptureExtractorTests
         var options = new DocumentCaptureOptions();
 
         Assert.False(options.Enabled);
-        Assert.Equal("None", options.Extractor);
+        Assert.Equal(string.Empty, options.Extractor);
         Assert.Equal(20, options.MaxAttemptsPerHour);
         Assert.Equal(60, options.MaxAttemptsPerDay);
         Assert.Equal(4, options.ImageDecodeSlots);
@@ -73,6 +73,42 @@ public sealed class DocumentCaptureExtractorTests
             new DocumentCaptureOptions { Extractor = "Fake" }, new TestHostEnvironment { EnvironmentName = "Staging" }));
         DocumentCaptureOptions.Validate(new DocumentCaptureOptions { Extractor = "Fake" },
             new TestHostEnvironment { EnvironmentName = "Testing" });
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("fake")]
+    [InlineData("local-ocr")]
+    public void Options_AcceptDocumentedExtractorModes(string mode)
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var worker = Path.Combine(directory.FullName, "Api.CaptureWorker.dll");
+            File.WriteAllBytes(worker, []);
+            var models = Directory.CreateDirectory(Path.Combine(directory.FullName, "Models"));
+            foreach (var file in CaptureWorkerModels.Files)
+                File.WriteAllBytes(Path.Combine(models.FullName, file.File), []);
+            File.WriteAllBytes(Path.Combine(models.FullName, "SHA256SUMS"), []);
+            var options = new DocumentCaptureOptions { Extractor = mode };
+            options.OcrWorker.WorkerPath = worker;
+            DocumentCaptureOptions.Validate(options, new TestHostEnvironment());
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Options_LocalOcrRejectsMissingWorkerAndInvalidModes()
+    {
+        var options = new DocumentCaptureOptions { Extractor = "local-ocr" };
+        options.OcrWorker.WorkerPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString(), "Api.CaptureWorker.dll");
+        var missing = Assert.Throws<InvalidOperationException>(() => DocumentCaptureOptions.Validate(options, new TestHostEnvironment()));
+        Assert.Contains("worker", missing.Message, StringComparison.OrdinalIgnoreCase);
+        options.Extractor = "unknown";
+        Assert.Throws<InvalidOperationException>(() => DocumentCaptureOptions.Validate(options, new TestHostEnvironment()));
     }
 
     [Fact]

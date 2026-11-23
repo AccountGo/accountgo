@@ -11,7 +11,8 @@ public sealed class DocumentCaptureOptions
 {
     public const string SectionName = "DocumentCapture";
     public bool Enabled { get; set; }
-    public string Extractor { get; set; } = "None";
+    public string Extractor { get; set; } = string.Empty;
+    public DocumentCaptureOcrWorkerOptions OcrWorker { get; set; } = new();
     public int ExtractionLeaseSeconds { get; set; } = 60;
     public int MaxAttemptsPerHour { get; set; } = 20;
     public int MaxAttemptsPerDay { get; set; } = 60;
@@ -29,10 +30,22 @@ public sealed class DocumentCaptureOptions
             || options.MaxAttemptsPerDay is < 1 or > 60
             || options.ImageDecodeSlots is < 1 or > DocumentCaptureImageLimits.DecodeGateSlots
             || options.PdfParseSlots is < 1 or > DocumentCapturePdfLimits.MaxParseGateSlots
-            || options.RetentionStartDelaySeconds is < 0 or > 3_600
-            || (!string.Equals(options.Extractor, "None", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(options.Extractor, "Fake", StringComparison.OrdinalIgnoreCase)))
+            || options.RetentionStartDelaySeconds is < 0 or > 3_600)
             throw new InvalidOperationException("Document capture limits are outside the supported range.");
+
+        if (!string.Equals(options.Extractor, "", StringComparison.Ordinal)
+            && !string.Equals(options.Extractor, "fake", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(options.Extractor, "local-ocr", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("DocumentCapture:Extractor must be empty, fake, or local-ocr.");
+
+        if (string.Equals(options.Extractor, "local-ocr", StringComparison.OrdinalIgnoreCase))
+        {
+            if (options.OcrWorker.MaxConcurrency is < 1 or > 4
+                || options.OcrWorker.MaxWorkerMemoryMb is < 1 or > 1024
+                || options.OcrWorker.IntraOpThreads is < 1 or > 4)
+                throw new InvalidOperationException("Local OCR worker limits are outside the supported range.");
+            options.OcrWorker.ValidateFiles();
+        }
 
         if (string.Equals(options.Extractor, "Fake", StringComparison.OrdinalIgnoreCase)
             && !environment.IsDevelopment()

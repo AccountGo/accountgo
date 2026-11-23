@@ -480,6 +480,8 @@ describe('DocumentCapturePanel & fields.ts', () => {
     expect(overlong.errors.some((e) => e.includes('100 characters'))).toBe(true);
 
     expect(describeCaptureError('DOCUMENT_DECODE_BUSY', 429).canRetryUpload).toBe(true);
+    expect(describeCaptureError('DOCUMENT_PROVIDER_UNAVAILABLE', 503).canRetryUpload).toBe(true);
+    expect(describeCaptureError('DOCUMENT_TOO_COMPLEX', 422).canRetryUpload).toBe(false);
     expect(describeCaptureError('DOCUMENT_BYTES_UNAVAILABLE', 409).canRetryAccept).toBe(false);
     expect(describeCaptureError('DOCUMENT_REVIEW_REQUIRED', 409).code).toBe('DOCUMENT_REVIEW_REQUIRED');
   });

@@ -62,7 +62,7 @@ public sealed class DocumentCaptureService(
     ISecurityAuditService? securityAudit = null,
     TimeProvider? timeProvider = null)
 {
-    private static readonly TimeSpan ExtractorDeadline = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan ExtractorDeadline = CaptureWorkerRunner.Deadline;
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     public async Task<DocumentCaptureView> UploadAsync(
@@ -94,42 +94,22 @@ public sealed class DocumentCaptureService(
 
         var sourceHash = Hash(sourceBytes);
         var fingerprint = Hash(Encoding.UTF8.GetBytes($"{sourceHash}\n{kind}\n{schemaVersion}"));
-        var now = _timeProvider.GetUtcNow().UtcDateTime;
-        if (idempotencyKey is not null)
-        {
-            var prior = await db.DocumentCaptures.AsNoTracking()
-                .SingleOrDefaultAsync(capture => capture.CompanyId == companyId && capture.IdempotencyKey == idempotencyKey, cancellationToken)
-                .ConfigureAwait(false);
-            if (prior is not null)
-            {
-                if (!await CanReadCandidateAsync(prior, companyId, actorId, cancellationToken).ConfigureAwait(false))
-                    prior = null;
-            }
-            if (prior is not null)
-            {
-                if (!CryptographicOperations.FixedTimeEquals(Convert.FromHexString(prior.RequestFingerprint), Convert.FromHexString(fingerprint)))
-                    throw new DocumentCaptureServiceException(409, "IDEMPOTENCY_CONFLICT");
-                if (prior.Status is "ready" or "accepted" or "rejected")
-                    return await GetAsync(prior.Id, cancellationToken).ConfigureAwait(false);
-                else if (prior.Status == "extracting" && prior.LeaseExpiresAt > now)
-                    throw new DocumentCaptureServiceException(409, "DOCUMENT_EXTRACTION_IN_PROGRESS");
-            }
-        }
-        if (!force)
-        {
-            var candidates = await db.DocumentCaptures.AsNoTracking()
-                .Where(capture => capture.CompanyId == companyId && capture.SourceHash == sourceHash
-                    && capture.Kind == kind && capture.SchemaVersion == schemaVersion
-                    && (capture.Status == "ready" || capture.Status == "accepted") && capture.BytesDeletedAt == null
-                    && db.DocumentCaptureBlobs.Any(blob => blob.CompanyId == companyId && blob.CaptureId == capture.Id))
-                .OrderByDescending(capture => capture.CreatedAt).Take(100).ToListAsync(cancellationToken).ConfigureAwait(false);
-            foreach (var candidate in candidates)
-                if (await CanReadCandidateAsync(candidate, companyId, actorId, cancellationToken).ConfigureAwait(false))
-                    return await GetAsync(candidate.Id, cancellationToken).ConfigureAwait(false);
-        }
+        var prior = idempotencyKey is null ? null : await CapturesWithKey(companyId, idempotencyKey).AsNoTracking()
+            .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        if (prior is not null && !await CanReadCandidateAsync(prior, companyId, actorId, cancellationToken).ConfigureAwait(false))
+            prior = null;
 
-        var prepared = await PrepareMediaAsync(kind, contentType, sourceBytes, config, cancellationToken).ConfigureAwait(false);
-        var contentHash = Hash(prepared.Bytes);
+        // The read-only check avoids preparing media and queuing for a replay. The transaction rechecks the result.
+        var skipPreparation = prior is not null
+            ? !FingerprintMatches(prior, fingerprint) || IsTerminalReplay(prior) || HasActiveLease(prior, _timeProvider.GetUtcNow().UtcDateTime)
+            : !force && await FindReadableDuplicateAsync(companyId, actorId, sourceHash, kind, schemaVersion, cancellationToken)
+                .ConfigureAwait(false) is not null;
+        var prepared = skipPreparation ? null
+            : await PrepareMediaAsync(kind, contentType, sourceBytes, config, cancellationToken).ConfigureAwait(false);
+        using var ocrAdmission = prepared is not null && extractor is LocalOcrDocumentFieldExtractor localOcr
+            ? await localOcr.AdmitAsync(prepared.PageCount, cancellationToken).ConfigureAwait(false)
+            : null;
+        var contentHash = prepared is null ? null : Hash(prepared.Bytes);
         var captureId = 0;
         var capturePublicId = string.Empty;
         var generation = 1;
@@ -140,9 +120,9 @@ public sealed class DocumentCaptureService(
             if (!await db.Companies.IgnoreQueryFilters().AnyAsync(c => c.Id == companyId && c.DeletedAt == null, cancellationToken).ConfigureAwait(false))
                 throw new DocumentCaptureServiceException(404, "DOCUMENT_NOT_FOUND");
 
-            var existing = idempotencyKey is null ? null : await db.DocumentCaptures.IgnoreQueryFilters()
-                .SingleOrDefaultAsync(c => c.CompanyId == companyId && c.IdempotencyKey == idempotencyKey, cancellationToken)
-                .ConfigureAwait(false);
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
+            var existing = idempotencyKey is null ? null : await CapturesWithKey(companyId, idempotencyKey)
+                .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
             if (existing is not null && !await CanReadCandidateAsync(existing, companyId, actorId, cancellationToken).ConfigureAwait(false))
             {
                 existing = null;
@@ -150,21 +130,22 @@ public sealed class DocumentCaptureService(
             }
             if (existing is not null)
             {
-                if (!CryptographicOperations.FixedTimeEquals(Convert.FromHexString(existing.RequestFingerprint), Convert.FromHexString(fingerprint)))
+                if (!FingerprintMatches(existing, fingerprint))
                     throw new DocumentCaptureServiceException(409, "IDEMPOTENCY_CONFLICT");
-                if (existing.Status is "ready" or "accepted" or "rejected")
+                if (IsTerminalReplay(existing))
                 {
                     replay = true;
                     captureId = existing.Id;
                     capturePublicId = existing.PublicId;
                     generation = existing.ExtractionGeneration;
                 }
-                else if (existing.Status == "extracting" && existing.LeaseExpiresAt > now)
+                else if (HasActiveLease(existing, now))
                 {
                     throw new DocumentCaptureServiceException(409, "DOCUMENT_EXTRACTION_IN_PROGRESS");
                 }
                 else
                 {
+                    var media = RequirePreparedMedia(prepared);
                     await CheckAttemptLimitAsync(companyId, now, config, cancellationToken).ConfigureAwait(false);
                     existing.ExtractionGeneration++;
                     existing.Status = "extracting";
@@ -180,7 +161,7 @@ public sealed class DocumentCaptureService(
                         {
                             CompanyId = companyId,
                             CaptureId = captureId,
-                            DocumentBytes = prepared.Bytes
+                            DocumentBytes = media.Bytes
                         });
                         existing.BytesDeletedAt = null;
                     }
@@ -196,22 +177,8 @@ public sealed class DocumentCaptureService(
             }
             else
             {
-                List<DocumentCapture> candidates = force ? [] : await db.DocumentCaptures.IgnoreQueryFilters().AsNoTracking()
-                    .Where(c => c.CompanyId == companyId && c.SourceHash == sourceHash
-                        && c.Kind == kind && c.SchemaVersion == schemaVersion
-                        && (c.Status == "ready" || c.Status == "accepted")
-                        && c.BytesDeletedAt == null)
-                    .Where(c => db.DocumentCaptureBlobs.IgnoreQueryFilters()
-                        .Any(blob => blob.CompanyId == companyId && blob.CaptureId == c.Id))
-                    .OrderByDescending(c => c.CreatedAt)
-                    .Take(100).ToListAsync(cancellationToken).ConfigureAwait(false);
-                DocumentCapture? duplicate = null;
-                foreach (var candidate in candidates)
-                    if (await CanReadCandidateAsync(candidate, companyId, actorId, cancellationToken).ConfigureAwait(false))
-                    {
-                        duplicate = candidate;
-                        break;
-                    }
+                var duplicate = force ? null : await FindReadableDuplicateAsync(companyId, actorId, sourceHash, kind,
+                    schemaVersion, cancellationToken).ConfigureAwait(false);
                 if (duplicate is not null)
                 {
                     replay = true;
@@ -221,6 +188,7 @@ public sealed class DocumentCaptureService(
                 }
                 else
                 {
+                    var media = RequirePreparedMedia(prepared);
                     await CheckAttemptLimitAsync(companyId, now, config, cancellationToken).ConfigureAwait(false);
                     var capture = new DocumentCapture
                     {
@@ -229,13 +197,13 @@ public sealed class DocumentCaptureService(
                         SchemaVersion = schemaVersion,
                         Status = "extracting",
                         SourceHash = sourceHash,
-                        ContentHash = contentHash,
-                        NormalizationVersion = prepared.NormalizationVersion,
-                        ContentType = prepared.ContentType,
-                        ByteCount = prepared.Bytes.Length,
-                        Width = prepared.Width,
-                        Height = prepared.Height,
-                        PageCount = prepared.PageCount,
+                        ContentHash = contentHash!,
+                        NormalizationVersion = media.NormalizationVersion,
+                        ContentType = media.ContentType,
+                        ByteCount = media.Bytes.Length,
+                        Width = media.Width,
+                        Height = media.Height,
+                        PageCount = media.PageCount,
                         IdempotencyKey = idempotencyKey ?? $"omitted:{Guid.NewGuid():N}",
                         RequestFingerprint = fingerprint,
                         ExtractionGeneration = generation,
@@ -244,7 +212,7 @@ public sealed class DocumentCaptureService(
                         CreatedBy = actorId,
                         CreatedAt = now,
                         ExpiresAt = now.AddDays(7),
-                        Blob = new DocumentCaptureBlob { CompanyId = companyId, DocumentBytes = prepared.Bytes },
+                        Blob = new DocumentCaptureBlob { CompanyId = companyId, DocumentBytes = media.Bytes },
                         Attempts =
                         [
                             new DocumentCaptureAttempt { CompanyId = companyId, Generation = generation, ReservedAt = now }
@@ -267,7 +235,8 @@ public sealed class DocumentCaptureService(
         await AuditTransitionAsync("document.capture.reserved", "success", companyId, capturePublicId, kind,
             "extracting", generation, actorId).ConfigureAwait(false);
 
-        var result = await RunExtractionAsync(companyId, captureId, capturePublicId, generation, prepared, cancellationToken).ConfigureAwait(false);
+        var result = await RunExtractionAsync(companyId, captureId, capturePublicId, generation, prepared!, ocrAdmission, cancellationToken)
+            .ConfigureAwait(false);
         if (result.Status == "failed")
         {
             var code = result.ErrorCode ?? "DOCUMENT_UNREADABLE";
@@ -280,6 +249,38 @@ public sealed class DocumentCaptureService(
             throw new DocumentCaptureServiceException(statusCode, code, result.Id);
         }
         return result;
+    }
+
+    private IQueryable<DocumentCapture> CapturesWithKey(int companyId, string idempotencyKey) =>
+        db.DocumentCaptures.IgnoreQueryFilters()
+            .Where(capture => capture.CompanyId == companyId && capture.IdempotencyKey == idempotencyKey);
+
+    private static bool FingerprintMatches(DocumentCapture capture, string fingerprint) =>
+        CryptographicOperations.FixedTimeEquals(Convert.FromHexString(capture.RequestFingerprint), Convert.FromHexString(fingerprint));
+
+    private static bool IsTerminalReplay(DocumentCapture capture) => capture.Status is "ready" or "accepted" or "rejected";
+
+    private static bool HasActiveLease(DocumentCapture capture, DateTime now) =>
+        capture.Status == "extracting" && capture.LeaseExpiresAt > now;
+
+    private static PreparedCaptureMedia RequirePreparedMedia(PreparedCaptureMedia? media) =>
+        media ?? throw new DocumentCaptureServiceException(429, "DOCUMENT_DECODE_BUSY");
+
+    private async Task<DocumentCapture?> FindReadableDuplicateAsync(int companyId, string actorId, string sourceHash,
+        string kind, int schemaVersion, CancellationToken cancellationToken)
+    {
+        var candidates = await db.DocumentCaptures.IgnoreQueryFilters().AsNoTracking()
+            .Where(capture => capture.CompanyId == companyId && capture.SourceHash == sourceHash
+                && capture.Kind == kind && capture.SchemaVersion == schemaVersion
+                && (capture.Status == "ready" || capture.Status == "accepted") && capture.BytesDeletedAt == null)
+            .Where(capture => db.DocumentCaptureBlobs.IgnoreQueryFilters()
+                .Any(blob => blob.CompanyId == companyId && blob.CaptureId == capture.Id))
+            .OrderByDescending(capture => capture.CreatedAt)
+            .Take(100).ToListAsync(cancellationToken).ConfigureAwait(false);
+        foreach (var candidate in candidates)
+            if (await CanReadCandidateAsync(candidate, companyId, actorId, cancellationToken).ConfigureAwait(false))
+                return candidate;
+        return null;
     }
 
     public async Task<DocumentCaptureView> GetAsync(int captureId, CancellationToken cancellationToken)
@@ -584,15 +585,14 @@ public sealed class DocumentCaptureService(
         string capturePublicId,
         int generation,
         PreparedCaptureMedia media,
+        LocalOcrDocumentFieldExtractor.Admission? ocrAdmission,
         CancellationToken cancellationToken)
     {
         try
         {
-            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            deadline.CancelAfter(ExtractorDeadline);
             var request = new DocumentExtractionRequest(media.Kind, DocumentCaptureFieldSchemas.CurrentSchemaVersion,
                 media.ContentType, media.Bytes, media.PageCount);
-            var extracted = await extractor.ExtractAsync(request, deadline.Token).WaitAsync(ExtractorDeadline, cancellationToken).ConfigureAwait(false);
+            var extracted = await ExtractAsync(request, ocrAdmission, cancellationToken).ConfigureAwait(false);
             if (string.IsNullOrEmpty(extracted.FieldsJson)
                 || extracted.FieldsJson.Length > DocumentCaptureFieldSchemas.MaxProviderJsonLength
                 || extracted.Warnings is null
@@ -661,8 +661,9 @@ public sealed class DocumentCaptureService(
         }
         catch (Exception ex)
         {
-            logger.LogWarning("Document capture extraction failed. CaptureId={CaptureId}, Kind={Kind}, FailureType={FailureType}",
-                captureId, media.Kind, ex.GetType().Name);
+            if (ocrAdmission is null)
+                logger.LogWarning("Document capture extraction failed. CaptureId={CaptureId}, Kind={Kind}, FailureType={FailureType}",
+                    captureId, media.Kind, ex.GetType().Name);
             var now = _timeProvider.GetUtcNow().UtcDateTime;
             await using var finalization = await AcquireFinalizationLockAsync(companyId).ConfigureAwait(false);
             var updated = await db.DocumentCaptures.IgnoreQueryFilters()
@@ -684,9 +685,23 @@ public sealed class DocumentCaptureService(
             else
                 await finalization.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
             db.ChangeTracker.Clear();
+            if (ex is DocumentCaptureServiceException { ErrorCode: "DOCUMENT_BUSY" or "DOCUMENT_DECODE_BUSY" or "DOCUMENT_TOO_COMPLEX" })
+                throw;
         }
 
         return await GetAsync(captureId, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    private async Task<DocumentExtractionResult> ExtractAsync(DocumentExtractionRequest request,
+        LocalOcrDocumentFieldExtractor.Admission? ocrAdmission, CancellationToken cancellationToken)
+    {
+        // Local OCR owns its deadline so it can kill and reap the worker before returning.
+        if (extractor is LocalOcrDocumentFieldExtractor localOcr && ocrAdmission is not null)
+            return await localOcr.ExtractAdmittedAsync(request, ocrAdmission, cancellationToken).ConfigureAwait(false);
+
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(ExtractorDeadline);
+        return await extractor.ExtractAsync(request, deadline.Token).WaitAsync(ExtractorDeadline, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<PreparedCaptureMedia> PrepareMediaAsync(

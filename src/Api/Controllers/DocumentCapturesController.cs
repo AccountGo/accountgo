@@ -245,7 +245,7 @@ public sealed class DocumentCapturesController(
                 exception.RequiredModules);
             return new ObjectResult(problem) { StatusCode = StatusCodes.Status403Forbidden };
         }
-        if (exception.StatusCode == 503 && exception.ErrorCode == "DOCUMENT_BUSY")
+        if (exception.StatusCode == 503 && exception.ErrorCode is "DOCUMENT_BUSY" or "DOCUMENT_PROVIDER_UNAVAILABLE")
             Response.Headers.RetryAfter = "1";
         return ErrorProblem(exception.StatusCode, exception.ErrorCode, exception.CaptureId);
     }
