@@ -69,15 +69,28 @@ public sealed partial class AssistantPseudonymService : IAssistantPseudonymServi
     public static bool IsPseudonymToken(string? candidate) =>
         !string.IsNullOrWhiteSpace(candidate) && TokenPattern.IsMatch(candidate.Trim());
 
+    public string BuildSyntheticKey(string kind, string rawValue)
+    {
+        if (string.IsNullOrWhiteSpace(kind))
+            throw new ArgumentException("Entity kind is required.", nameof(kind));
+        var normalizedKind = kind.Trim();
+        _ = AssistantPseudonymKind.RolePrefix(normalizedKind);
+        var normalizedValue = (rawValue ?? string.Empty).Trim().ToLowerInvariant();
+        using var hmac = new HMACSHA256(_keyProvider.AppDerivedKey);
+        var digest = hmac.ComputeHash(Encoding.UTF8.GetBytes($"syn|{normalizedKind}|{normalizedValue}"));
+        return $"{AssistantPseudonymKind.SyntheticKeyPrefix}{normalizedKind}:{Convert.ToHexString(digest.AsSpan(0, 8))}";
+    }
+
     public async Task<string> PseudonymizeAsync(
         int companyId,
         string userId,
         string? sessionId,
         string kind,
         string publicId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? displayText = null)
     {
-        var entity = NormalizeEntity(kind, publicId);
+        var entity = NormalizeEntity(kind, publicId, displayText);
         var map = await PseudonymizeBatchAsync(companyId, userId, sessionId, new[] { entity }, cancellationToken)
             .ConfigureAwait(false);
         return map[entity];
@@ -97,12 +110,12 @@ public sealed partial class AssistantPseudonymService : IAssistantPseudonymServi
         ArgumentNullException.ThrowIfNull(entities);
 
         var normalizedUserId = userId.Trim();
-        var normalizedSessionId = string.IsNullOrWhiteSpace(sessionId) ? null : sessionId.Trim();
+        var normalizedSessionId = McpCallerSessionContext.NormalizeSessionId(sessionId);
         var distinct = new List<AssistantPseudonymEntity>();
         var seen = new HashSet<AssistantPseudonymEntity>();
         foreach (var raw in entities)
         {
-            var normalized = NormalizeEntity(raw.Kind, raw.PublicId);
+            var normalized = NormalizeEntity(raw.Kind, raw.PublicId, raw.DisplayText);
             if (seen.Add(normalized))
             {
                 distinct.Add(normalized);
@@ -128,121 +141,132 @@ public sealed partial class AssistantPseudonymService : IAssistantPseudonymServi
         }
 
         var sessionKey = DeriveSessionKey(companyId, normalizedUserId, normalizedSessionId);
-        var uncached = new List<(AssistantPseudonymEntity Entity, string Candidate8, string Candidate12)>();
 
-        foreach (var entity in distinct)
+        for (var attempt = 0; attempt < 2; attempt++)
         {
-            var cacheKey = (companyId, normalizedUserId, normalizedSessionId, entity.Kind, entity.PublicId);
-            if (_entityToToken.TryGetValue(cacheKey, out var cachedToken))
+            result.Clear();
+            var uncached = new List<(AssistantPseudonymEntity Entity, string Candidate8, string Candidate12)>();
+
+            foreach (var entity in distinct)
             {
-                result[entity] = cachedToken;
-                continue;
+                var cacheKey = (companyId, normalizedUserId, normalizedSessionId, entity.Kind, entity.PublicId);
+                if (_entityToToken.TryGetValue(cacheKey, out var cachedToken))
+                {
+                    result[entity] = cachedToken;
+                    continue;
+                }
+
+                var (c8, c12) = ComputeCandidateTokens(sessionKey, entity.Kind, entity.PublicId);
+                uncached.Add((entity, c8, c12));
             }
 
-            var (c8, c12) = ComputeCandidateTokens(sessionKey, entity.Kind, entity.PublicId);
-            uncached.Add((entity, c8, c12));
-        }
-
-        if (uncached.Count == 0)
-        {
-            return result;
-        }
-
-        var candidateTokens = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var item in uncached)
-        {
-            candidateTokens.Add(item.Candidate8);
-            candidateTokens.Add(item.Candidate12);
-        }
-
-        var existingRows = await _db.AssistantPseudonyms
-            .Where(row => row.CompanyId == companyId
-                && row.UserId == normalizedUserId
-                && row.SessionId == normalizedSessionId
-                && candidateTokens.Contains(row.Token))
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        var existingByToken = existingRows.ToDictionary(row => row.Token, StringComparer.Ordinal);
-        var now = _timeProvider.GetUtcNow().UtcDateTime;
-        var expiresAt = now.Add(AssistantPseudonymRetentionService.DefaultTtl);
-        var hasDbChanges = false;
-
-        foreach (var (entity, c8, c12) in uncached)
-        {
-            string chosenToken;
-            if (existingByToken.TryGetValue(c8, out var row8))
+            if (uncached.Count == 0)
             {
-                if (string.Equals(row8.Kind, entity.Kind, StringComparison.Ordinal)
-                    && string.Equals(row8.PublicId, entity.PublicId, StringComparison.Ordinal))
+                return result;
+            }
+
+            var candidateTokens = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var item in uncached)
+            {
+                candidateTokens.Add(item.Candidate8);
+                candidateTokens.Add(item.Candidate12);
+            }
+
+            var existingRows = await _db.AssistantPseudonyms
+                .Where(row => row.CompanyId == companyId
+                    && row.UserId == normalizedUserId
+                    && row.SessionId == normalizedSessionId
+                    && candidateTokens.Contains(row.Token))
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            var existingByToken = existingRows.ToDictionary(row => row.Token, StringComparer.Ordinal);
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
+            var expiresAt = now.Add(AssistantPseudonymRetentionService.DefaultTtl);
+            var hasDbChanges = false;
+
+            foreach (var (entity, c8, c12) in uncached)
+            {
+                string chosenToken;
+                if (existingByToken.TryGetValue(c8, out var row8))
                 {
-                    row8.LastUsedAt = now;
-                    row8.ExpiresAt = expiresAt;
-                    hasDbChanges = true;
-                    chosenToken = c8;
-                }
-                else
-                {
-                    // 8-hex collision within this session: extend to 12 uppercase hex.
-                    chosenToken = c12;
-                    if (existingByToken.TryGetValue(c12, out var row12))
+                    if (string.Equals(row8.Kind, entity.Kind, StringComparison.Ordinal)
+                        && string.Equals(row8.PublicId, entity.PublicId, StringComparison.Ordinal))
                     {
-                        row12.LastUsedAt = now;
-                        row12.ExpiresAt = expiresAt;
+                        row8.LastUsedAt = now;
+                        row8.ExpiresAt = expiresAt;
                         hasDbChanges = true;
+                        chosenToken = c8;
                     }
                     else
                     {
-                        var inserted = CreateRow(companyId, normalizedUserId, normalizedSessionId, c12, entity, now, expiresAt);
-                        _db.AssistantPseudonyms.Add(inserted);
-                        existingByToken[c12] = inserted;
-                        hasDbChanges = true;
+                        // 8-hex collision within this session: extend to 12 uppercase hex.
+                        chosenToken = c12;
+                        if (existingByToken.TryGetValue(c12, out var row12))
+                        {
+                            row12.LastUsedAt = now;
+                            row12.ExpiresAt = expiresAt;
+                            hasDbChanges = true;
+                        }
+                        else
+                        {
+                            var inserted = CreateRow(companyId, normalizedUserId, normalizedSessionId, c12, entity, now, expiresAt);
+                            _db.AssistantPseudonyms.Add(inserted);
+                            existingByToken[c12] = inserted;
+                            hasDbChanges = true;
+                        }
                     }
                 }
+                else
+                {
+                    var inserted = CreateRow(companyId, normalizedUserId, normalizedSessionId, c8, entity, now, expiresAt);
+                    _db.AssistantPseudonyms.Add(inserted);
+                    existingByToken[c8] = inserted;
+                    hasDbChanges = true;
+                    chosenToken = c8;
+                }
+
+                result[entity] = chosenToken;
+                _entityToToken[(companyId, normalizedUserId, normalizedSessionId, entity.Kind, entity.PublicId)] = chosenToken;
+                _tokenToEntity[(companyId, normalizedUserId, normalizedSessionId, chosenToken)] = entity;
             }
-            else
+
+            if (!hasDbChanges)
             {
-                var inserted = CreateRow(companyId, normalizedUserId, normalizedSessionId, c8, entity, now, expiresAt);
-                _db.AssistantPseudonyms.Add(inserted);
-                existingByToken[c8] = inserted;
-                hasDbChanges = true;
-                chosenToken = c8;
+                return result;
             }
 
-            result[entity] = chosenToken;
-            _entityToToken[(companyId, normalizedUserId, normalizedSessionId, entity.Kind, entity.PublicId)] = chosenToken;
-            _tokenToEntity[(companyId, normalizedUserId, normalizedSessionId, chosenToken)] = entity;
-        }
-
-        if (hasDbChanges)
-        {
             try
             {
                 await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                return result;
             }
-            catch (DbUpdateException)
+            catch (DbUpdateException) when (attempt == 0)
             {
-                // Concurrent insert race for the same (CompanyId, UserId, SessionId, Token).
-                // Detach newly added pseudonym rows and fall back to per-entity resolution.
-                foreach (var entry in _db.ChangeTracker.Entries<AssistantPseudonym>().Where(e => e.State == EntityState.Added).ToList())
+                // Concurrent insert race on (CompanyId, UserId, SessionId, Token):
+                // detach ALL tracked AssistantPseudonym rows (Added and Modified),
+                // clear request caches for this scope, and retry once from a fresh DB read.
+                foreach (var entry in _db.ChangeTracker.Entries<AssistantPseudonym>().ToList())
                 {
                     entry.State = EntityState.Detached;
                 }
 
-                var refreshed = await _db.AssistantPseudonyms.AsNoTracking()
-                    .Where(row => row.CompanyId == companyId
-                        && row.UserId == normalizedUserId
-                        && row.SessionId == normalizedSessionId
-                        && candidateTokens.Contains(row.Token))
-                    .ToListAsync(cancellationToken)
-                    .ConfigureAwait(false);
-
-                foreach (var (entity, c8, c12) in uncached)
+                foreach (var key in _entityToToken.Keys
+                    .Where(k => k.CompanyId == companyId
+                        && string.Equals(k.UserId, normalizedUserId, StringComparison.Ordinal)
+                        && string.Equals(k.SessionKey, normalizedSessionId, StringComparison.Ordinal))
+                    .ToList())
                 {
-                    var match = refreshed.FirstOrDefault(r =>
-                        string.Equals(r.Kind, entity.Kind, StringComparison.Ordinal)
-                        && string.Equals(r.PublicId, entity.PublicId, StringComparison.Ordinal));
-                    result[entity] = match?.Token ?? c12;
+                    _entityToToken.Remove(key);
+                }
+
+                foreach (var key in _tokenToEntity.Keys
+                    .Where(k => k.CompanyId == companyId
+                        && string.Equals(k.UserId, normalizedUserId, StringComparison.Ordinal)
+                        && string.Equals(k.SessionKey, normalizedSessionId, StringComparison.Ordinal))
+                    .ToList())
+                {
+                    _tokenToEntity.Remove(key);
                 }
             }
         }
@@ -298,7 +322,9 @@ public sealed partial class AssistantPseudonymService : IAssistantPseudonymServi
         }
 
         var normalizedUserId = userId.Trim();
-        var normalizedSessionId = sessionId.Trim();
+        var normalizedSessionId = McpCallerSessionContext.NormalizeSessionId(sessionId);
+        if (normalizedSessionId is null)
+            return result;
         var now = _timeProvider.GetUtcNow().UtcDateTime;
 
         var rows = await _db.AssistantPseudonyms.AsNoTracking()
@@ -312,7 +338,7 @@ public sealed partial class AssistantPseudonymService : IAssistantPseudonymServi
 
         foreach (var row in rows)
         {
-            result[row.Token] = new AssistantPseudonymResolution(row.Token, row.Kind, row.PublicId);
+            result[row.Token] = new AssistantPseudonymResolution(row.Token, row.Kind, row.PublicId, row.DisplayText);
         }
 
         return result;
@@ -364,7 +390,7 @@ public sealed partial class AssistantPseudonymService : IAssistantPseudonymServi
         return ($"{prefix}-{hex8}", $"{prefix}-{hex12}");
     }
 
-    private static AssistantPseudonymEntity NormalizeEntity(string kind, string publicId)
+    private static AssistantPseudonymEntity NormalizeEntity(string kind, string publicId, string? displayText = null)
     {
         if (string.IsNullOrWhiteSpace(kind))
             throw new ArgumentException("Entity kind is required.", nameof(kind));
@@ -372,8 +398,17 @@ public sealed partial class AssistantPseudonymService : IAssistantPseudonymServi
             throw new ArgumentException("Entity public ID is required.", nameof(publicId));
 
         var normalizedKind = kind.Trim();
+        var normalizedPublicId = publicId.Trim();
         _ = AssistantPseudonymKind.RolePrefix(normalizedKind);
-        return new AssistantPseudonymEntity(normalizedKind, publicId.Trim());
+
+        string? safeDisplayText = null;
+        if (AssistantPseudonymKind.IsSyntheticPublicId(normalizedPublicId) && !string.IsNullOrWhiteSpace(displayText))
+        {
+            var trimmed = displayText.Trim();
+            safeDisplayText = trimmed.Length > 500 ? trimmed[..500] : trimmed;
+        }
+
+        return new AssistantPseudonymEntity(normalizedKind, normalizedPublicId, safeDisplayText);
     }
 
     private static AssistantPseudonym CreateRow(
@@ -391,6 +426,7 @@ public sealed partial class AssistantPseudonymService : IAssistantPseudonymServi
         Token = token,
         Kind = entity.Kind,
         PublicId = entity.PublicId,
+        DisplayText = AssistantPseudonymKind.IsSyntheticPublicId(entity.PublicId) ? entity.DisplayText : null,
         CreatedAt = now,
         LastUsedAt = now,
         ExpiresAt = expiresAt,

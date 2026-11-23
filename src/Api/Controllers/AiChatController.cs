@@ -272,6 +272,17 @@ namespace Api.Controllers
                 return Content(JsonSerializer.Serialize(new { names }), "application/json");
             }
 
+            // Synthetic entries (syn:...) have no backing workspace entity; return their stored DisplayText
+            // directly since the row is already scoped to (companyId, userId, sessionId).
+            foreach (var item in resolved.Values)
+            {
+                if (AssistantPseudonymKind.IsSyntheticPublicId(item.PublicId)
+                    && !string.IsNullOrWhiteSpace(item.DisplayText))
+                {
+                    names[item.Token] = item.DisplayText;
+                }
+            }
+
             var permissions = _tenantContext.Permissions;
 
             if (permissions.Contains(Core.Domain.Security.SystemPermissions.SalesCustomersView))

@@ -19,6 +19,12 @@ public sealed class AssistantPseudonym : BaseEntity, ICompanyOwned
     public string Token { get; set; } = string.Empty;
     public string Kind { get; set; } = string.Empty;
     public string PublicId { get; set; } = string.Empty;
+    /// <summary>
+    /// Original display text stored ONLY for synthetic (<c>syn:</c>) entries that have no backing workspace entity,
+    /// so the UI can re-identify them within the same <c>(CompanyId, UserId, SessionId)</c> scope.
+    /// Always <c>null</c> for real workspace entities.
+    /// </summary>
+    public string? DisplayText { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime LastUsedAt { get; set; }
     public DateTime ExpiresAt { get; set; }

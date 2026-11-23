@@ -857,6 +857,7 @@ WHERE ""DisabledModulesJson"" IS NULL
                 command.CommandText = sql;
                 command.ExecuteNonQuery();
             }
+            AddColumnIfMissing(connection, "AssistantPseudonyms", "DisplayText", "TEXT NULL");
         }
 
         private const string AssistantPseudonymsTableSql = @"
@@ -868,6 +869,7 @@ WHERE ""DisabledModulesJson"" IS NULL
                 ""Token"" TEXT NOT NULL,
                 ""Kind"" TEXT NOT NULL,
                 ""PublicId"" TEXT NOT NULL,
+                ""DisplayText"" TEXT NULL,
                 ""CreatedAt"" TEXT NOT NULL,
                 ""LastUsedAt"" TEXT NOT NULL,
                 ""ExpiresAt"" TEXT NOT NULL

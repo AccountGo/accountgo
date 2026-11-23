@@ -84,7 +84,7 @@ namespace Api.Service.Ai
                 CompanySlug = companySlug.Trim(),
                 IssuedAt = now.ToUnixTimeSeconds(),
                 ExpiresAt = now.Add(lifetime).ToUnixTimeSeconds(),
-                SessionId = string.IsNullOrWhiteSpace(sessionId) ? null : sessionId.Trim(),
+                SessionId = McpCallerSessionContext.NormalizeSessionId(sessionId),
             };
 
             var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(wire);
@@ -161,7 +161,7 @@ namespace Api.Service.Ai
                 wire.CompanySlug,
                 wire.IssuedAt,
                 wire.ExpiresAt,
-                wire.SessionId);
+                McpCallerSessionContext.NormalizeSessionId(wire.SessionId));
             return true;
         }
 

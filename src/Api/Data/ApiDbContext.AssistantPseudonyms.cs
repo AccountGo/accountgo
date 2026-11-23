@@ -22,6 +22,7 @@ public partial class ApiDbContext
             entity.Property(row => row.Token).HasMaxLength(20).IsRequired();
             entity.Property(row => row.Kind).HasMaxLength(32).IsRequired();
             entity.Property(row => row.PublicId).HasMaxLength(64).IsRequired();
+            entity.Property(row => row.DisplayText).HasMaxLength(500);
             entity.HasIndex(row => new { row.CompanyId, row.UserId, row.SessionId, row.Token })
                 .IsUnique()
                 .HasDatabaseName("IX_AssistantPseudonyms_CompanyId_UserId_SessionId_Token");

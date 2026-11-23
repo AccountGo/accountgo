@@ -213,6 +213,73 @@ public sealed class AssistantPseudonymServiceTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public async Task ConcurrentInsertRace_DetachesAllAndRetriesOnce_ReturningPersistedToken()
+    {
+        var t0 = new DateTimeOffset(2026, 11, 23, 12, 0, 0, TimeSpan.Zero);
+        var clock = new MutableTimeProvider(t0);
+
+        // Pre-seed one existing entity so this batch has BOTH a Modified row and a racing Added row.
+        string existingToken;
+        await using (var setupDb = CreateDbContext(companyId: 60))
+        {
+            var setupSvc = new AssistantPseudonymService(setupDb, _keyProvider, clock);
+            existingToken = await setupSvc.PseudonymizeAsync(60, "user-1", "sess-race", AssistantPseudonymKind.Customer, "cus_existing");
+        }
+
+        // Interceptor injects the concurrent insert of cus_racing right before the first SaveChangesAsync.
+        var injected = false;
+        string? winningToken = null;
+        var interceptor = new RacingInsertInterceptor(async () =>
+        {
+            if (injected) return;
+            injected = true;
+            await using var otherDb = CreateDbContext(companyId: 60);
+            var otherSvc = new AssistantPseudonymService(otherDb, _keyProvider, clock);
+            winningToken = await otherSvc.PseudonymizeAsync(60, "user-1", "sess-race", AssistantPseudonymKind.Customer, "cus_racing");
+        });
+
+        var tenant = new TenantContext();
+        tenant.SetTenant(60, "org-60", CompanyMemberRole.Owner, Array.Empty<string>(), "user-1");
+        var options = new DbContextOptionsBuilder<ApiDbContext>()
+            .UseSqlite("Data Source=" + _dbPath)
+            .AddInterceptors(interceptor)
+            .Options;
+
+        await using var racingDb = new ApiDbContext(options, tenant);
+        var racingSvc = new AssistantPseudonymService(racingDb, _keyProvider, clock);
+        var batch = await racingSvc.PseudonymizeBatchAsync(
+            60,
+            "user-1",
+            "sess-race",
+            new[]
+            {
+                new AssistantPseudonymEntity(AssistantPseudonymKind.Customer, "cus_existing"),
+                new AssistantPseudonymEntity(AssistantPseudonymKind.Customer, "cus_racing"),
+            });
+
+        Assert.True(injected);
+        Assert.NotNull(winningToken);
+        Assert.Equal(existingToken, batch[new AssistantPseudonymEntity(AssistantPseudonymKind.Customer, "cus_existing")]);
+        Assert.Equal(winningToken, batch[new AssistantPseudonymEntity(AssistantPseudonymKind.Customer, "cus_racing")]);
+
+        var resolved = await racingSvc.ResolveTokenAsync(60, "user-1", "sess-race", winningToken!);
+        Assert.NotNull(resolved);
+        Assert.Equal("cus_racing", resolved!.PublicId);
+    }
+
+    private sealed class RacingInsertInterceptor(Func<Task> onFirstSave) : Microsoft.EntityFrameworkCore.Diagnostics.SaveChangesInterceptor
+    {
+        public override async ValueTask<Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int>> SavingChangesAsync(
+            Microsoft.EntityFrameworkCore.Diagnostics.DbContextEventData eventData,
+            Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int> result,
+            System.Threading.CancellationToken cancellationToken = default)
+        {
+            await onFirstSave();
+            return await base.SavingChangesAsync(eventData, result, cancellationToken);
+        }
+    }
+
     private sealed class MutableTimeProvider(DateTimeOffset utcNow) : TimeProvider
     {
         private DateTimeOffset _utcNow = utcNow;

@@ -280,11 +280,19 @@ public static partial class AssistantAttachmentMessageBuilder
                 .ConfigureAwait(false);
         }
 
-        var publicId = !string.IsNullOrWhiteSpace(matchedPublicId)
-            ? matchedPublicId
-            : McpResponseDeidentifier.BuildSyntheticKey(kind, $"{capturePublicId}:{lowered}");
+        var isSynthetic = string.IsNullOrWhiteSpace(matchedPublicId);
+        var publicId = isSynthetic
+            ? pseudonymService.BuildSyntheticKey(kind, $"{capturePublicId}:{lowered}")
+            : matchedPublicId!;
 
-        return await pseudonymService.PseudonymizeAsync(companyId, userId, sessionId, kind, publicId, cancellationToken)
+        return await pseudonymService.PseudonymizeAsync(
+                companyId,
+                userId,
+                sessionId,
+                kind,
+                publicId,
+                cancellationToken,
+                displayText: isSynthetic ? rawValue : null)
             .ConfigureAwait(false);
     }
 

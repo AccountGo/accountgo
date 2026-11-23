@@ -58,6 +58,7 @@ public sealed class McpDeidentificationTests : IAsyncLifetime
     private string _bankPublicId = null!;
     private string _invoicePublicId = null!;
     private string _billPublicId = null!;
+    private string _itemPublicId = null!;
     private int _rpcId = 1;
 
     public async Task InitializeAsync()
@@ -266,6 +267,7 @@ public sealed class McpDeidentificationTests : IAsyncLifetime
         _bankPublicId = bank.PublicId;
         _invoicePublicId = invoice.PublicId;
         _billPublicId = bill.PublicId;
+        _itemPublicId = item.PublicId;
     }
 
     public Task DisposeAsync()
@@ -373,56 +375,60 @@ public sealed class McpDeidentificationTests : IAsyncLifetime
             SentinelFreeText,
         };
 
-        var calls = new (string Tool, object? Args)[]
+        // Dynamically enumerate EVERY registered MCP tool from /mcp tools/list so no tool can be missed (D3).
+        using var listReq = new HttpRequestMessage(HttpMethod.Post, "/mcp");
+        listReq.Headers.Add(Api.Middleware.TenantResolutionMiddleware.McpServerKeyHeaderName, TestAnterApiKey);
+        listReq.Headers.Add(McpCallerAssertionService.HeaderName, MintAssertion("sess_leak_1"));
+        listReq.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        listReq.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
+        listReq.Content = new StringContent("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}", Encoding.UTF8, "application/json");
+        using var listRes = await _client.SendAsync(listReq);
+        var listRaw = await listRes.Content.ReadAsStringAsync();
+        Assert.True(listRes.IsSuccessStatusCode, listRaw);
+        var listJson = listRaw.TrimStart().StartsWith('{')
+            ? listRaw
+            : string.Concat(listRaw.Split('\n').Where(l => l.StartsWith("data:")).Select(l => l["data:".Length..].Trim()));
+        var registeredTools = JsonNode.Parse(listJson)!["result"]!["tools"]!.AsArray()
+            .Select(t => t!["name"]!.GetValue<string>())
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(registeredTools.Count >= 38, $"Expected at least 38 registered MCP tools, got {registeredTools.Count}");
+
+        var specialArgs = new Dictionary<string, object?>(StringComparer.Ordinal)
         {
-            ("get_workspace_context", null),
-            ("get_dashboard_summary", null),
-            ("search_clients", null),
-            ("get_client", new { clientId = _customerPublicId }),
-            ("search_invoices", null),
-            ("get_invoice", new { invoiceId = _invoicePublicId }),
-            ("get_receivables_aging", null),
-            ("get_recurring_schedules", null),
-            ("search_vendors", null),
-            ("get_vendor", new { vendorId = _vendorPublicId }),
-            ("search_bills", null),
-            ("get_bill", new { billId = _billPublicId }),
-            ("get_payables_aging", null),
-            ("search_bill_payments", null),
-            ("list_bank_accounts", null),
-            ("list_bank_accounts", new { bankId = _bankPublicId }),
-            ("get_bank_register", new { bankId = _bankPublicId }),
-            ("get_bank_reconciliations", new { bankId = _bankPublicId }),
-            ("get_bank_statement_lines", new { bankId = _bankPublicId }),
-            ("get_chart_of_accounts", null),
-            ("get_trial_balance", null),
-            ("get_balance_sheet", null),
-            ("get_income_statement", null),
-            ("get_cash_flow", null),
-            ("get_general_ledger_transactions", new { take = 25 }),
-            ("search_journal_entries", null),
-            ("get_books_checks", new { fromDate = "2026-01-01", toDate = "2026-12-31" }),
-            ("search_items", null),
-            ("get_tax_rates", null),
-            ("get_linked_entries", null),
-            ("get_fiscal_years", null),
-            ("get_members_and_roles", null),
-            ("get_equity_statement", null),
-            ("get_tax_report", null),
-            ("search_receipts", null),
-            ("get_bank_outstanding_items", new { bankId = _bankPublicId }),
-            ("get_record_history", new { entityType = "SalesInvoiceHeader", entityId = _invoicePublicId }),
+            ["get_client"] = new { clientId = _customerPublicId },
+            ["get_invoice"] = new { invoiceId = _invoicePublicId },
+            ["get_vendor"] = new { vendorId = _vendorPublicId },
+            ["get_bill"] = new { billId = _billPublicId },
+            ["get_bank_register"] = new { bankId = _bankPublicId },
+            ["get_bank_reconciliations"] = new { bankId = _bankPublicId },
+            ["get_bank_statement_lines"] = new { bankId = _bankPublicId },
+            ["get_bank_outstanding_items"] = new { bankId = _bankPublicId },
+            ["get_general_ledger_transactions"] = new { take = 25 },
+            ["get_books_checks"] = new { fromDate = "2026-01-01", toDate = "2026-12-31" },
+            ["get_record_history"] = new { entityType = "SalesInvoiceHeader", entityId = _invoicePublicId },
+            ["get_journal_entry"] = new { journalEntryId = "je_00000000000000000000000000" },
+            ["get_stock_movements"] = new { itemId = _itemPublicId },
         };
 
+        var calls = registeredTools
+            .Select(tool => (Tool: tool, Args: specialArgs.TryGetValue(tool, out var a) ? a : (object?)null))
+            .ToList();
+        calls.Add(("list_bank_accounts", new { bankId = _bankPublicId }));
+
+        var calledTools = new HashSet<string>(StringComparer.Ordinal);
         var unclassifiedProperties = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         string? customerTokenFromClients = null;
         string? customerTokenFromInvoices = null;
         string? vendorTokenFromVendors = null;
         string? bankTokenFromList = null;
+        string? bankTokenFromCoa = null;
 
         foreach (var (tool, args) in calls)
         {
+            calledTools.Add(tool);
             var payload = await CallMcpToolAsync(tool, args, sessionId: "sess_leak_1");
             var rawJson = payload.ToJsonString();
 
@@ -464,7 +470,7 @@ public sealed class McpDeidentificationTests : IAsyncLifetime
                 var bankAccountRow = payload["accounts"]!.AsArray()
                     .FirstOrDefault(a => a!["isCash"]?.GetValue<bool>() == true && a["name"]!.GetValue<string>().StartsWith("B-", StringComparison.Ordinal));
                 Assert.NotNull(bankAccountRow);
-                Assert.Equal(bankTokenFromList, bankAccountRow!["name"]!.GetValue<string>());
+                bankTokenFromCoa = bankAccountRow!["name"]!.GetValue<string>();
             }
             else if (tool == "get_bill")
             {
@@ -476,9 +482,12 @@ public sealed class McpDeidentificationTests : IAsyncLifetime
             }
         }
 
-        // Consistent token across tools within the same session.
+        // Consistent token across tools within the same session, and every registered tool was covered.
+        Assert.Equal(registeredTools.Count, calledTools.Count);
         Assert.NotNull(customerTokenFromClients);
         Assert.Equal(customerTokenFromClients, customerTokenFromInvoices);
+        Assert.NotNull(bankTokenFromList);
+        Assert.Equal(bankTokenFromList, bankTokenFromCoa);
 
         Assert.True(unclassifiedProperties.Count == 0,
             "Unclassified MCP string properties found: " + string.Join(", ", unclassifiedProperties.OrderBy(x => x)));
@@ -586,7 +595,90 @@ public sealed class McpDeidentificationTests : IAsyncLifetime
         Assert.DoesNotContain("Unmatched Prospect Co", built.CombinedMessage!, StringComparison.OrdinalIgnoreCase);
         Assert.Contains($"- Vendor: {expectedVendorToken}", built.CombinedMessage!);
         Assert.Contains("- Total: 88.25", built.CombinedMessage!);
-        Assert.Matches(@"- Customer: C-[0-9A-F]{8}", built.CombinedMessage!);
+        var customerMatch = System.Text.RegularExpressions.Regex.Match(built.CombinedMessage!, @"- Customer: (C-[0-9A-F]{8})");
+        Assert.True(customerMatch.Success);
+        var syntheticCustomerToken = customerMatch.Groups[1].Value;
+
+        // D1: Synthetic entry stores keyed syn: PublicId + DisplayText and re-identifies via /reidentify.
+        var synRow = await db.AssistantPseudonyms.SingleAsync(r => r.SessionId == sessionId && r.Token == syntheticCustomerToken);
+        Assert.StartsWith("syn:customer:", synRow.PublicId);
+        Assert.Equal("Unmatched Prospect Co", synRow.DisplayText);
+
+        using var reidReq = new HttpRequestMessage(HttpMethod.Post, $"/api/ai/chat/sessions/{sessionId}/reidentify");
+        reidReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+        reidReq.Headers.Add("X-AccountGo-Org", _slug);
+        reidReq.Content = JsonContent.Create(new { tokens = new[] { expectedVendorToken, syntheticCustomerToken } });
+        using var reidRes = await _client.SendAsync(reidReq);
+        Assert.Equal(HttpStatusCode.OK, reidRes.StatusCode);
+        using var reidDoc = JsonDocument.Parse(await reidRes.Content.ReadAsStringAsync());
+        var names = reidDoc.RootElement.GetProperty("names");
+        Assert.Equal(SentinelVendorName, names.GetProperty(expectedVendorToken).GetString());
+        Assert.Equal("Unmatched Prospect Co", names.GetProperty(syntheticCustomerToken).GetString());
+
+        // E1: Synthetic token passed to get_client is rejected as InvalidRequest and never echoes syn:.
+        var synLookup = await CallMcpToolAsync("get_client", new { clientId = syntheticCustomerToken }, sessionId: sessionId);
+        Assert.Equal("InvalidRequest", synLookup["status"]!.GetValue<string>());
+        Assert.DoesNotContain("syn:", synLookup.ToJsonString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task NoTenantFallback_UsesRandomPerRequestKey_NotUnkeyedHash()
+    {
+        using var scope1 = _factory.Services.CreateScope();
+        using var scope2 = _factory.Services.CreateScope();
+        var deid1 = scope1.ServiceProvider.GetRequiredService<IMcpResponseDeidentifier>();
+        var deid2 = scope2.ServiceProvider.GetRequiredService<IMcpResponseDeidentifier>();
+
+        var sample = """{"status":"Success","customerId":"cus_abc123","customerName":"Anonymous Fallback Customer"}""";
+        var out1 = await deid1.DeidentifyJsonAsync("search_clients", JsonNode.Parse(sample)!);
+        var out2 = await deid2.DeidentifyJsonAsync("search_clients", JsonNode.Parse(sample)!);
+
+        var tok1 = out1!["customerName"]!.GetValue<string>();
+        var tok2 = out2!["customerName"]!.GetValue<string>();
+        Assert.Matches(@"^C-[0-9A-F]{8}$", tok1);
+        Assert.Matches(@"^C-[0-9A-F]{8}$", tok2);
+        Assert.NotEqual(tok1, tok2);
+    }
+
+    [Fact]
+    public async Task ResolveIdAsync_WhenMappedEntityDeleted_EchoesOnlyOriginalTokenNotPublicId()
+    {
+        const string sessionId = "sess_deleted_echo";
+        string deletedPublicId;
+        string ghostToken;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var tenant = scope.ServiceProvider.GetRequiredService<Core.Tenancy.ITenantContext>();
+            using var _ = tenant.Impersonate(_companyId, _slug);
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            var tempCustomer = new Customer
+            {
+                CompanyId = _companyId,
+                No = "CUST-TEMP-DEL",
+                Party = new Party
+                {
+                    CompanyId = _companyId,
+                    Name = "Temporary Ghost Customer",
+                    PartyType = PartyTypes.Customer,
+                    IsActive = true,
+                }
+            };
+            db.Customers.Add(tempCustomer);
+            await db.SaveChangesAsync();
+            deletedPublicId = tempCustomer.PublicId;
+
+            var svc = scope.ServiceProvider.GetRequiredService<IAssistantPseudonymService>();
+            ghostToken = await svc.PseudonymizeAsync(_companyId, _userId, sessionId, AssistantPseudonymKind.Customer, deletedPublicId);
+
+            db.Customers.Remove(tempCustomer);
+            await db.SaveChangesAsync();
+        }
+
+        var notFound = await CallMcpToolAsync("get_client", new { clientId = ghostToken }, sessionId: sessionId);
+        Assert.Equal("NotFound", notFound["status"]!.GetValue<string>());
+        var message = notFound["message"]!.GetValue<string>();
+        Assert.Contains(ghostToken, message);
+        Assert.DoesNotContain(deletedPublicId, message);
     }
 
     [Fact]

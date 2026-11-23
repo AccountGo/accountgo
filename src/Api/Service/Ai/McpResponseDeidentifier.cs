@@ -43,6 +43,7 @@ public sealed class McpResponseDeidentifier : IMcpResponseDeidentifier
     private readonly IAssistantPseudonymService _pseudonymService;
 
     private Dictionary<string, string>? _bankAccountPublicIdByLedgerAccountPublicId;
+    private byte[]? _ephemeralFallbackKey;
 
     public McpResponseDeidentifier(
         ApiDbContext db,
@@ -160,15 +161,19 @@ public sealed class McpResponseDeidentifier : IMcpResponseDeidentifier
 
         if (companyId <= 0 || string.IsNullOrWhiteSpace(userId))
         {
-            // No resolved tenant/user (e.g. unauthenticated or anonymous refusal) -> fail closed with ephemeral tokens.
+            // No resolved tenant/user (e.g. unauthenticated or anonymous refusal) -> fail closed with a random
+            // per-request ephemeral key (never unkeyed/linkable and never persisted).
+            _ephemeralFallbackKey ??= RandomNumberGenerator.GetBytes(32);
             var fallback = new Dictionary<AssistantPseudonymEntity, string>();
+            var usedTokens = new Dictionary<string, AssistantPseudonymEntity>(StringComparer.Ordinal);
             foreach (var t in targets)
             {
-                if (!fallback.ContainsKey(t.Entity))
-                {
-                    var prefix = AssistantPseudonymKind.RolePrefix(t.Entity.Kind);
-                    fallback[t.Entity] = $"{prefix}-{ComputeShortHash($"{t.Entity.Kind}|{t.Entity.PublicId}")}";
-                }
+                if (fallback.ContainsKey(t.Entity))
+                    continue;
+                var (c8, c12) = AssistantPseudonymService.ComputeCandidateTokens(_ephemeralFallbackKey, t.Entity.Kind, t.Entity.PublicId);
+                var chosen = usedTokens.TryGetValue(c8, out var occupant) && occupant != t.Entity ? c12 : c8;
+                fallback[t.Entity] = chosen;
+                usedTokens[chosen] = t.Entity;
             }
             return fallback;
         }
@@ -207,7 +212,7 @@ public sealed class McpResponseDeidentifier : IMcpResponseDeidentifier
         return map;
     }
 
-    private static void CollectTargets(
+    private void CollectTargets(
         JsonNode node,
         string? parentProperty,
         string? toolName,
@@ -250,7 +255,7 @@ public sealed class McpResponseDeidentifier : IMcpResponseDeidentifier
         }
     }
 
-    private static void TransformNode(
+    private void TransformNode(
         JsonNode node,
         string? parentProperty,
         string? toolName,
@@ -293,7 +298,7 @@ public sealed class McpResponseDeidentifier : IMcpResponseDeidentifier
         }
     }
 
-    private static void TransformArray(
+    private void TransformArray(
         JsonArray arr,
         string? arrayPropertyName,
         string? toolName,
@@ -335,7 +340,7 @@ public sealed class McpResponseDeidentifier : IMcpResponseDeidentifier
         }
     }
 
-    private static string TransformStringProperty(
+    private string TransformStringProperty(
         JsonObject owner,
         string propertyName,
         string value,
@@ -462,7 +467,7 @@ public sealed class McpResponseDeidentifier : IMcpResponseDeidentifier
         return baseDisposition;
     }
 
-    private static AssistantPseudonymEntity? TryResolvePseudonymEntity(
+    private AssistantPseudonymEntity? TryResolvePseudonymEntity(
         JsonObject owner,
         string propertyName,
         string value,
@@ -473,28 +478,37 @@ public sealed class McpResponseDeidentifier : IMcpResponseDeidentifier
         var effective = ResolveEffectiveDisposition(owner, propertyName, toolName, rootKind, bankMap);
         return effective switch
         {
-            McpFieldDisposition.PseudonymizeCustomer => new AssistantPseudonymEntity(
+            McpFieldDisposition.PseudonymizeCustomer => BuildEntity(
                 AssistantPseudonymKind.Customer,
-                FindSiblingId(owner, "cus_", "clientId", "customerId", "partyId", "id")
-                    ?? BuildSyntheticKey(AssistantPseudonymKind.Customer, value)),
+                FindSiblingId(owner, "cus_", "clientId", "customerId", "partyId", "id"),
+                value),
 
-            McpFieldDisposition.PseudonymizeVendor => new AssistantPseudonymEntity(
+            McpFieldDisposition.PseudonymizeVendor => BuildEntity(
                 AssistantPseudonymKind.Vendor,
-                FindSiblingId(owner, "ven_", "vendorId", "supplierId", "partyId", "id")
-                    ?? BuildSyntheticKey(AssistantPseudonymKind.Vendor, value)),
+                FindSiblingId(owner, "ven_", "vendorId", "supplierId", "partyId", "id"),
+                value),
 
-            McpFieldDisposition.PseudonymizeBankAccount => new AssistantPseudonymEntity(
+            McpFieldDisposition.PseudonymizeBankAccount => BuildEntity(
                 AssistantPseudonymKind.BankAccount,
-                ResolveBankPublicId(owner, bankMap)
-                    ?? BuildSyntheticKey(AssistantPseudonymKind.BankAccount, value)),
+                ResolveBankPublicId(owner, bankMap),
+                value),
 
-            McpFieldDisposition.PseudonymizePerson => new AssistantPseudonymEntity(
+            McpFieldDisposition.PseudonymizePerson => BuildEntity(
                 AssistantPseudonymKind.Person,
-                FindSiblingId(owner, "mem_", "memberId", "companyMemberId", "id")
-                    ?? BuildSyntheticKey(AssistantPseudonymKind.Person, value)),
+                FindSiblingId(owner, "mem_", "memberId", "companyMemberId", "id"),
+                value),
 
             _ => null,
         };
+    }
+
+    private AssistantPseudonymEntity BuildEntity(string kind, string? realPublicId, string displayValue)
+    {
+        if (!string.IsNullOrWhiteSpace(realPublicId))
+            return new AssistantPseudonymEntity(kind, realPublicId, DisplayText: null);
+
+        var synKey = _pseudonymService.BuildSyntheticKey(kind, displayValue);
+        return new AssistantPseudonymEntity(kind, synKey, DisplayText: displayValue);
     }
 
     private static string? ResolveBankPublicId(JsonObject owner, Dictionary<string, string> bankMap)
@@ -555,15 +569,6 @@ public sealed class McpResponseDeidentifier : IMcpResponseDeidentifier
             }
         }
         return null;
-    }
-
-    internal static string BuildSyntheticKey(string kind, string rawValue) =>
-        $"raw:{kind}:{ComputeShortHash(rawValue.Trim().ToLowerInvariant())}";
-
-    private static string ComputeShortHash(string input)
-    {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
-        return Convert.ToHexString(bytes.AsSpan(0, 8));
     }
 
     private sealed record PseudonymTarget(AssistantPseudonymEntity Entity);

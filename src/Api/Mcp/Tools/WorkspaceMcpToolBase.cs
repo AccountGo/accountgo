@@ -50,7 +50,8 @@ namespace Api.Mcp.Tools
             if (string.IsNullOrWhiteSpace(publicId))
                 return new IdArg(null, null);
 
-            var candidate = publicId.Trim();
+            var originalArg = publicId.Trim();
+            var candidate = originalArg;
             if (Api.Service.Ai.AssistantPseudonymService.IsPseudonymToken(candidate))
             {
                 var expectedKind = prefix switch
@@ -73,7 +74,9 @@ namespace Api.Mcp.Tools
                 }
 
                 var mapped = await Reader.Pseudonyms.ResolveTokenAsync(companyId, Tenant.UserId, sessionId, candidate, cancellationToken);
-                if (mapped is null || !string.Equals(mapped.Kind, expectedKind, StringComparison.Ordinal))
+                if (mapped is null
+                    || !string.Equals(mapped.Kind, expectedKind, StringComparison.Ordinal)
+                    || Api.Service.Ai.AssistantPseudonymKind.IsSyntheticPublicId(mapped.PublicId))
                 {
                     return new IdArg(null, Invalid(kind, $"{paramName} must be an id like '{prefix}_…', as returned by the tools that list these records."));
                 }
@@ -86,7 +89,7 @@ namespace Api.Mcp.Tools
                 return new IdArg(result.Id, null);
 
             return result.Error == Api.PublicIds.PublicIdLookupError.NotFound
-                ? new IdArg(null, NotFound(kind, $"No record '{candidate}' for {paramName} in this workspace."))
+                ? new IdArg(null, NotFound(kind, $"No record '{originalArg}' for {paramName} in this workspace."))
                 : new IdArg(null, Invalid(kind, $"{paramName} must be an id like '{prefix}_…', as returned by the tools that list these records."));
         }
 

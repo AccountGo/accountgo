@@ -166,5 +166,22 @@ namespace AccountGo.BackendTests.Ai
             Assert.Equal(StatusCodes.Status401Unauthorized, http.Response.StatusCode);
             Assert.Null(sessionContext.SessionId);
         }
+
+        [Fact]
+        public void McpCallerSessionContext_SetSessionId_RejectsInvalidCharactersAndOverlongIds()
+        {
+            var ctx = new McpCallerSessionContext();
+            ctx.SetSessionId("valid_Session-123");
+            Assert.Equal("valid_Session-123", ctx.SessionId);
+
+            ctx.SetSessionId("bad/session");
+            Assert.Null(ctx.SessionId);
+
+            ctx.SetSessionId(new string('x', 129));
+            Assert.Null(ctx.SessionId);
+
+            ctx.SetSessionId(new string('x', 128));
+            Assert.Equal(new string('x', 128), ctx.SessionId);
+        }
     }
 }
