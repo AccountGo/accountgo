@@ -27,6 +27,8 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 - Scanned bills now include the document's tax, as a recoverable tax rate for VAT/GST workspaces or in the line costs otherwise, and can't be approved with the tax missing.
 
+- Scanned sales invoices now apply the document's tax as output tax, and the tax treatment of every scanned bill and invoice is recorded.
+
 - Switching workspaces no longer counts canceled requests as service outages or failed saves.
 
 - Notices and banners now use readable colours in the dark theme when the device itself is in light mode.

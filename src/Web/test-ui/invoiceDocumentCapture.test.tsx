@@ -151,6 +151,8 @@ function setupInvoiceEditMocks(
     existingDraft?: any;
     linkedCaptures?: DocumentCaptureView[];
     saveInvoiceConflictOnce?: any;
+    taxRegime?: 'None' | 'SalesTax' | 'VatGst';
+    taxes?: Array<{ id: string; taxCode: string; taxName: string; rate: number; isActive: boolean }>;
   }
 ) {
   let saveCalls = 0;
@@ -170,7 +172,10 @@ function setupInvoiceEditMocks(
     }
     if (url === '/api/Common/Items') return jsonRes([]);
     if (url === '/api/Tax/Taxes') {
-      return jsonRes({ taxes: [{ id: 'tax_10', taxCode: 'VAT10', taxName: 'VAT 10%', rate: 10, isActive: true }] });
+      return jsonRes({ taxes: options?.taxes ?? [{ id: 'tax_10', taxCode: 'VAT10', taxName: 'VAT 10%', rate: 10, isActive: true }] });
+    }
+    if (url === '/api/organizations/current/accounting-policy') {
+      return options?.taxRegime ? jsonRes({ taxRegime: options.taxRegime }) : jsonRes({}, 403);
     }
     if (url === '/api/Sales/SalesAccounts') return jsonRes([]);
     if (url.startsWith('/api/Sales/NextSalesInvoiceNumber')) return jsonRes({ next: 'INV-0042' });
@@ -722,5 +727,75 @@ describe('InvoiceEdit & InvoiceDetail document capture integration (PR 3)', () =
     fireEvent.click(screen.getByRole('button', { name: /^Cancel$/i }));
     expect(screen.queryByText(/Captured source review/i)).toBeNull();
     expect(screen.queryByLabelText(/Acknowledge difference for/i)).toBeNull();
+  });
+
+  describe('scanned tax on sales invoices by tax regime (rules T-09, T-10)', () => {
+    const scannedInvoice = () =>
+      makeSalesCapture({
+        fields: {
+          customerName: 'Northwind Traders',
+          sourceInvoiceNo: 'EXT-INV-77',
+          date: '2026-11-10',
+          currency: 'USD',
+          lines: [
+            { description: 'Advisory services', quantity: '1', unitAmount: '244.48' },
+            { description: 'Report', quantity: '1', unitAmount: '162.99' },
+          ],
+          sourceTotals: { subtotal: '407.47', taxTotal: '33.62', grandTotal: '441.09', priceBasis: 'exclusive' },
+        },
+      });
+    const vat825 = [{ id: 'tax_825', taxCode: 'VAT825', taxName: 'Sales VAT 8.25%', rate: 8.25, isActive: true }];
+
+    it('VatGst with one matching rate sets output tax on every line and shows the chip', async () => {
+      setupInvoiceEditMocks(() => scannedInvoice(), { taxRegime: 'VatGst', taxes: vat825 });
+      renderWithRouter('/org/acme/sales/new');
+      await scanAndAccept();
+      await confirmUnrecordedSale();
+
+      await waitFor(() => expect(screen.getByText(/Tax rate from scan: Sales VAT 8.25%/i)).toBeTruthy());
+      expect(screen.getByText(/output tax Sales VAT 8.25% 8.25%/i)).toBeTruthy();
+      expect((screen.getByLabelText('Line 1 tax') as HTMLSelectElement).value).toBe('tax_825');
+      expect((screen.getByLabelText('Line 2 tax') as HTMLSelectElement).value).toBe('tax_825');
+      expect(screen.getByText(/Matches source total/i)).toBeTruthy();
+    });
+
+    it('SalesTax applies the matching rate the same way', async () => {
+      setupInvoiceEditMocks(() => scannedInvoice(), { taxRegime: 'SalesTax', taxes: vat825 });
+      renderWithRouter('/org/acme/sales/new');
+      await scanAndAccept();
+      await confirmUnrecordedSale();
+
+      await waitFor(() => expect(screen.getByText(/Tax rate from scan: Sales VAT 8.25%/i)).toBeTruthy());
+      expect((screen.getByLabelText('Line 1 tax') as HTMLSelectElement).value).toBe('tax_825');
+      expect(screen.getByText(/Matches source total/i)).toBeTruthy();
+    });
+
+    it('None leaves lines untaxed, never grosses up revenue, and allows acknowledging the tax-only difference', async () => {
+      setupInvoiceEditMocks(() => scannedInvoice(), { taxRegime: 'None', taxes: vat825 });
+      renderWithRouter('/org/acme/sales/new');
+      await scanAndAccept();
+      await confirmUnrecordedSale();
+
+      await waitFor(() => expect(screen.getByText(/This document charges 33.62 tax but your workspace isn't set up for tax/i)).toBeTruthy());
+      expect((screen.getByLabelText('Line 1 tax') as HTMLSelectElement).value).toBe('');
+      expect((screen.getByLabelText('Line 1 unit price') as HTMLInputElement).value).toBe('244.48');
+      expect((screen.getByLabelText('Line 2 unit price') as HTMLInputElement).value).toBe('162.99');
+      expect(screen.getByLabelText(/Acknowledge difference/i)).toBeTruthy();
+    });
+
+    it('VatGst with no matching rate leaves lines untaxed, asks for a rate, and blocks acknowledging the missing tax', async () => {
+      setupInvoiceEditMocks(() => scannedInvoice(), {
+        taxRegime: 'VatGst',
+        taxes: [{ id: 'tax_10', taxCode: 'VAT10', taxName: 'VAT 10%', rate: 10, isActive: true }],
+      });
+      renderWithRouter('/org/acme/sales/new');
+      await scanAndAccept();
+      await confirmUnrecordedSale();
+
+      await waitFor(() => expect(screen.getByText(/This document charges 33.62 tax. Choose a tax rate/i)).toBeTruthy());
+      expect((screen.getByLabelText('Line 1 tax') as HTMLSelectElement).value).toBe('');
+      expect(screen.getAllByText(/Tax of 33.62 on the document isn't on this invoice/i).length).toBeGreaterThan(0);
+      expect(screen.queryByLabelText(/Acknowledge difference/i)).toBeNull();
+    });
   });
 });

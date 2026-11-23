@@ -909,6 +909,8 @@ WHERE ""DisabledModulesJson"" IS NULL
                 command.ExecuteNonQuery();
             }
 
+            AddColumnIfMissing(connection, "DocumentCaptureLinks", "TaxTreatment", "TEXT NULL");
+
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "DROP INDEX IF EXISTS \"IX_DocumentCaptures_CompanyId_Status_ExpiresAt\";";
@@ -987,6 +989,7 @@ WHERE ""DisabledModulesJson"" IS NULL
                 ""TargetId"" INTEGER NOT NULL,
                 ""LinkedBy"" TEXT NOT NULL,
                 ""LinkedAt"" TEXT NOT NULL,
+                ""TaxTreatment"" TEXT NULL,
                 CONSTRAINT ""FK_DocumentCaptureLinks_DocumentCaptures_CompanyId_CaptureId""
                     FOREIGN KEY (""CompanyId"", ""CaptureId"") REFERENCES ""DocumentCaptures"" (""CompanyId"", ""Id"") ON DELETE CASCADE
             );";

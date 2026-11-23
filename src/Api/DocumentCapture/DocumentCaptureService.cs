@@ -48,7 +48,7 @@ public sealed record DocumentCaptureView(
     DateTime? AcceptedAt,
     DateTime? RejectedAt);
 
-public sealed record DocumentCaptureLinkView(string TargetType, string TargetId, DateTime LinkedAt);
+public sealed record DocumentCaptureLinkView(string TargetType, string TargetId, DateTime LinkedAt, string? TaxTreatment = null);
 
 public sealed class DocumentCaptureService(
     ApiDbContext db,
@@ -453,6 +453,7 @@ public sealed class DocumentCaptureService(
             LinkedAt = _timeProvider.GetUtcNow().UtcDateTime
         });
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        CaptureTaxTreatment.RefreshForTarget(db, tenant, targetType, targetId);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         db.ChangeTracker.Clear();
         await AuditTransitionAsync("document.capture.linked", "success", companyId, capture.PublicId, capture.Kind,
@@ -485,7 +486,7 @@ public sealed class DocumentCaptureService(
         var links = await db.DocumentCaptureLinks.AsNoTracking()
             .Where(link => link.CompanyId == companyId && link.TargetType == targetType && link.TargetId == targetId)
             .OrderBy(link => link.LinkedAt)
-            .Select(link => new { link.CaptureId, link.TargetType, link.TargetId, link.LinkedAt })
+            .Select(link => new { link.CaptureId, link.TargetType, link.TargetId, link.LinkedAt, link.TaxTreatment })
             .Take(100)
             .ToListAsync(cancellationToken).ConfigureAwait(false);
         var captureIds = links.Select(link => link.CaptureId).ToArray();
@@ -508,7 +509,7 @@ public sealed class DocumentCaptureService(
             views.Add(ToView(capture, blobIds.Contains(capture.Id),
                 DocumentCaptureAccessPolicy.AuthorizeExistingWrite(entitlements, companyId, tenant.Permissions, capture.Kind)
                     == DocumentCaptureAccessFailure.None,
-                new DocumentCaptureLinkView(link.TargetType, targetPublicId, DateTime.SpecifyKind(link.LinkedAt, DateTimeKind.Utc))));
+                new DocumentCaptureLinkView(link.TargetType, targetPublicId, DateTime.SpecifyKind(link.LinkedAt, DateTimeKind.Utc), link.TaxTreatment)));
         }
         return views;
     }
@@ -914,7 +915,7 @@ public sealed class DocumentCaptureService(
         };
         if (string.IsNullOrWhiteSpace(targetPublicId))
             throw new DocumentCaptureServiceException(404, "DOCUMENT_NOT_FOUND");
-        return new DocumentCaptureLinkView(link.TargetType, targetPublicId, DateTime.SpecifyKind(link.LinkedAt, DateTimeKind.Utc));
+        return new DocumentCaptureLinkView(link.TargetType, targetPublicId, DateTime.SpecifyKind(link.LinkedAt, DateTimeKind.Utc), link.TaxTreatment);
     }
 
     private void EnsureCreatorAccess(DocumentCapture capture)

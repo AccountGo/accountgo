@@ -84,6 +84,7 @@ public partial class ApiDbContext
             entity.HasKey(link => link.Id);
             entity.Property(link => link.TargetType).HasMaxLength(30).IsRequired();
             entity.Property(link => link.LinkedBy).HasMaxLength(256).IsRequired();
+            entity.Property(link => link.TaxTreatment).HasMaxLength(64);
             entity.HasIndex(link => new { link.CompanyId, link.CaptureId }).IsUnique();
             entity.HasIndex(link => new { link.CompanyId, link.TargetType, link.TargetId });
             entity.HasOne(link => link.Capture)

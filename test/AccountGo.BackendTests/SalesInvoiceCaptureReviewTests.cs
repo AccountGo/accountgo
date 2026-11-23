@@ -282,6 +282,194 @@ public sealed class SalesInvoiceCaptureReviewTests : MultiTenancyPhase3TestBase
         Assert.Contains("22", audit);
     }
 
+    private const string ScannedTaxInvoiceFields =
+        """{"date":"2026-11-10","sourceInvoiceNo":"EXT-77","sourceTotals":{"subtotal":"407.47","taxTotal":"33.62","grandTotal":"441.09","priceBasis":"exclusive"}}""";
+
+    private void SetTaxRegime(TaxRegime regime) => WithDb(db =>
+    {
+        db.CompanySettings.Single(setting => setting.CompanyId == _companyId).TaxRegime = regime;
+        db.SaveChanges();
+    });
+
+    private int SeedOutputTax(string name, decimal rate)
+    {
+        var taxId = 0;
+        WithDb(db =>
+        {
+            var tax = new Tax
+            {
+                CompanyId = _companyId,
+                TaxCode = $"OT{Guid.NewGuid().ToString("N")[..4]}",
+                TaxName = name,
+                Rate = rate,
+                IsActive = true,
+                SalesAccountId = db.Accounts.Single(a => a.AccountCode == "20300").Id,
+            };
+            db.Taxes.Add(tax);
+            db.SaveChanges();
+            taxId = tax.Id;
+        });
+        return taxId;
+    }
+
+    private List<Core.Domain.Financials.GeneralLedgerLine> InvoiceLedger(int invoiceId)
+    {
+        List<Core.Domain.Financials.GeneralLedgerLine>? lines = null;
+        WithDb(db =>
+        {
+            var glId = db.SalesInvoiceHeaders.Single(i => i.Id == invoiceId).GeneralLedgerHeaderId!.Value;
+            lines = db.GeneralLedgerLines.AsNoTracking().Where(l => l.GeneralLedgerHeaderId == glId).ToList();
+        });
+        return lines!;
+    }
+
+    private int InvoiceAccountId(string code)
+    {
+        var id = 0;
+        WithDb(db => id = db.Accounts.Single(a => a.AccountCode == code).Id);
+        return id;
+    }
+
+    private static List<Dto.DocumentCapture.CaptureReviewContext> TaxReview(int captureId, decimal form, bool acknowledged) =>
+    [
+        new Dto.DocumentCapture.CaptureReviewContext
+        {
+            CaptureId = captureId,
+            SourceGrandTotal = 441.09m,
+            FormTotal = form,
+            DiscrepancyAcknowledged = acknowledged,
+        }
+    ];
+
+    [Fact]
+    [Trait("Rule", "T-10")]
+    public async Task SaveSalesInvoice_Issue_ScannedTaxAsOutputTax_PostsReceivableSalesAndSalesTaxPayable()
+    {
+        SetTaxRegime(TaxRegime.VatGst);
+        var customerId = await SeedCustomerAsync("Registered Client");
+        var vat = SeedOutputTax("Sales VAT 8.25%", 8.25m);
+        var (captureId, _) = SeedSalesCapture(acceptedFieldsJson: ScannedTaxInvoiceFields);
+
+        var invoice = NewInvoice(customerId, "Open", ("Advisory", 1m, 244.48m, vat), ("Report", 1m, 162.99m, vat));
+        invoice.CaptureReviews = TaxReview(captureId, 441.09m, acknowledged: false);
+
+        var issued = await SaveInvoiceOk(invoice);
+        var entry = InvoiceLedger(issued.Id);
+        Assert.Contains(entry, l => l.DrCr == DrOrCrSide.Dr && l.AccountId == InvoiceAccountId("10120") && l.Amount == 441.09m);
+        Assert.Contains(entry, l => l.DrCr == DrOrCrSide.Cr && l.AccountId == InvoiceAccountId("40100") && l.Amount == 407.47m);
+        Assert.Contains(entry, l => l.DrCr == DrOrCrSide.Cr && l.AccountId == InvoiceAccountId("20300") && l.Amount == 33.62m);
+    }
+
+    [Fact]
+    [Trait("Rule", "T-11")]
+    public async Task SaveSalesInvoice_Issue_NoTaxRegime_AllowsAcknowledgingTheTaxOnlyDifference_AndKeepsTheInvoiceTotal()
+    {
+        SetTaxRegime(TaxRegime.None);
+        var customerId = await SeedCustomerAsync("Unregistered Seller Client");
+        var (captureId, _) = SeedSalesCapture(acceptedFieldsJson: ScannedTaxInvoiceFields);
+
+        var invoice = NewInvoice(customerId, "Open", ("Advisory", 1m, 244.48m, null), ("Report", 1m, 162.99m, null));
+        invoice.CaptureReviews = TaxReview(captureId, 407.47m, acknowledged: true);
+
+        var issued = await SaveInvoiceOk(invoice);
+        Assert.Equal("Open", issued.Status);
+        var entry = InvoiceLedger(issued.Id);
+        Assert.Contains(entry, l => l.DrCr == DrOrCrSide.Dr && l.AccountId == InvoiceAccountId("10120") && l.Amount == 407.47m);
+        Assert.Contains(entry, l => l.DrCr == DrOrCrSide.Cr && l.AccountId == InvoiceAccountId("40100") && l.Amount == 407.47m);
+        Assert.DoesNotContain(entry, l => l.AccountId == InvoiceAccountId("20300"));
+    }
+
+    [Theory]
+    [InlineData(TaxRegime.VatGst)]
+    [InlineData(TaxRegime.SalesTax)]
+    [Trait("Rule", "T-11")]
+    public async Task SaveSalesInvoice_Issue_TaxRegime_RefusesAcknowledgingTheTaxOnlyDifference_With400(TaxRegime regime)
+    {
+        SetTaxRegime(regime);
+        var customerId = await SeedCustomerAsync($"Taxed Client {regime}");
+        var (captureId, capturePublicId) = SeedSalesCapture(acceptedFieldsJson: ScannedTaxInvoiceFields);
+
+        var invoice = NewInvoice(customerId, "Open", ("Advisory", 1m, 244.48m, null), ("Report", 1m, 162.99m, null));
+        invoice.CaptureReviews = TaxReview(captureId, 407.47m, acknowledged: true);
+
+        var refused = await SaveInvoice(invoice);
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        using (var doc = JsonDocument.Parse(await refused.Content.ReadAsStringAsync()))
+        {
+            Assert.Equal("CAPTURE_TAX_NOT_APPLIED", doc.RootElement.GetProperty("code").GetString());
+            Assert.Equal(capturePublicId, doc.RootElement.GetProperty("captureId").GetString());
+            Assert.Contains("invoice", doc.RootElement.GetProperty("detail").GetString(), StringComparison.Ordinal);
+        }
+
+        // Nothing the client sends changes the workspace's regime: the same body is refused again.
+        var again = await SaveInvoice(invoice);
+        Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
+
+        // A draft can still be saved while the tax is being sorted out.
+        invoice.Status = "Draft";
+        Assert.Equal("Draft", (await SaveInvoiceOk(invoice)).Status);
+    }
+
+    [Fact]
+    [Trait("Rule", "T-11")]
+    public async Task SaveSalesInvoice_Issue_TaxRegime_StillAllowsAcknowledgingADifferenceThatIsNotTheDocumentsTax()
+    {
+        SetTaxRegime(TaxRegime.VatGst);
+        var customerId = await SeedCustomerAsync("Discounted Client");
+        var (captureId, _) = SeedSalesCapture(acceptedFieldsJson: ScannedTaxInvoiceFields);
+
+        var invoice = NewInvoice(customerId, "Open", ("Advisory", 1m, 400m, null));
+        invoice.CaptureReviews = TaxReview(captureId, 400m, acknowledged: true);
+
+        Assert.Equal("Open", (await SaveInvoiceOk(invoice)).Status);
+    }
+
+    private string? InvoiceLinkTaxTreatment(int captureId)
+    {
+        string? value = null;
+        WithDb(db => value = db.DocumentCaptureLinks.AsNoTracking().Single(l => l.CompanyId == _companyId && l.CaptureId == captureId).TaxTreatment);
+        return value;
+    }
+
+    [Fact]
+    [Trait("Rule", "T-10")]
+    public async Task SaveSalesInvoice_ResaveOfLinkedInvoice_PersistsTheServerDerivedTaxTreatment()
+    {
+        SetTaxRegime(TaxRegime.VatGst);
+        var customerId = await SeedCustomerAsync("Treatment Client");
+        var vat = SeedOutputTax("Sales VAT 8.25%", 8.25m);
+        string vatPublicId = string.Empty;
+        WithDb(db => vatPublicId = db.Taxes.Single(t => t.Id == vat).PublicId);
+        var (captureId, _) = SeedSalesCapture(acceptedFieldsJson: ScannedTaxInvoiceFields);
+
+        var invoice = NewInvoice(customerId, "Draft", ("Advisory", 1m, 244.48m, null), ("Report", 1m, 162.99m, null));
+        var draft = await SaveInvoiceOk(invoice);
+        WithDb(db =>
+        {
+            db.DocumentCaptureLinks.Add(new DocumentCaptureLink
+            {
+                CompanyId = _companyId,
+                CaptureId = captureId,
+                TargetType = "invoice",
+                TargetId = draft.Id,
+                LinkedBy = "tester",
+                LinkedAt = DateTime.UtcNow,
+            });
+            db.SaveChanges();
+        });
+        Assert.Null(InvoiceLinkTaxTreatment(captureId));
+
+        foreach (var line in draft.SalesInvoiceLines!) line.TaxId = vat;
+        var withRate = await SaveInvoiceOk(draft);
+        Assert.Equal("tax-rate:" + vatPublicId, InvoiceLinkTaxTreatment(captureId));
+
+        // A workspace without tax that issued the invoice without the tax: the acknowledged difference is recorded.
+        SetTaxRegime(TaxRegime.None);
+        foreach (var line in withRate.SalesInvoiceLines!) line.TaxId = null;
+        await SaveInvoiceOk(withRate);
+        Assert.Equal("acknowledged", InvoiceLinkTaxTreatment(captureId));
+    }
+
     [Fact]
     public async Task SaveSalesInvoice_Issue_MatchingTotals_SucceedsAndWritesNoDiscrepancyAuditEvent()
     {
