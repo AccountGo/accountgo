@@ -942,25 +942,68 @@ export function evaluateFinancialApplyGates(
   };
 }
 
-export interface VendorOptionLike {
-  id: string;
+export type PartyMatchReason = 'alias' | 'identifier' | 'name';
+
+export interface PartyMatchCandidate {
+  partyId: string;
   name: string;
-  archived?: boolean;
+  reason: PartyMatchReason;
+  score: number;
+  archived: boolean;
+}
+
+export function describePartyMatchReason(reason: PartyMatchReason): string {
+  switch (reason) {
+    case 'alias':
+      return 'matched before';
+    case 'identifier':
+      return 'same email/phone';
+    case 'name':
+    default:
+      return 'similar name';
+  }
 }
 
 /**
- * Exact trimmed case-insensitive single active vendor match.
- * Never creates a vendor; returns null on 0 or >1 matches.
+ * Only a single non-archived alias or identifier candidate may be pre-selected.
+ * Name-only candidates and archived parties are never pre-selected (M-05, M-06).
  */
-export function findSuggestedVendor<T extends VendorOptionLike>(
-  vendorName: string | null | undefined,
-  vendors: readonly T[]
-): T | null {
-  const active = vendors.filter((v) => !v.archived);
-  const needle = vendorName?.trim().toLowerCase();
-  if (!needle) return null;
-  const matches = active.filter((v) => v.name.trim().toLowerCase() === needle);
-  return matches.length === 1 ? matches[0] : null;
+export function resolveAutoPreselectCandidate(
+  candidates: readonly PartyMatchCandidate[]
+): PartyMatchCandidate | null {
+  const strong = candidates.filter(
+    (c) => !c.archived && (c.reason === 'alias' || c.reason === 'identifier')
+  );
+  return strong.length === 1 ? strong[0] : null;
+}
+
+export async function fetchPartyMatchCandidates(
+  authFetch: (input: string, init?: RequestInit) => Promise<Response>,
+  role: 'vendor' | 'customer',
+  captureId: string
+): Promise<PartyMatchCandidate[]> {
+  if (!captureId) return [];
+  try {
+    const res = await authFetch(
+      `/api/document-captures/party-match?role=${encodeURIComponent(role)}&captureId=${encodeURIComponent(captureId)}`
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!Array.isArray(data)) return [];
+    return data
+      .filter(
+        (item): item is PartyMatchCandidate =>
+          item &&
+          typeof item.partyId === 'string' &&
+          typeof item.name === 'string' &&
+          (item.reason === 'alias' || item.reason === 'identifier' || item.reason === 'name') &&
+          typeof item.score === 'number' &&
+          typeof item.archived === 'boolean'
+      )
+      .slice(0, 3);
+  } catch {
+    return [];
+  }
 }
 
 export interface CaptureDiscrepancy {

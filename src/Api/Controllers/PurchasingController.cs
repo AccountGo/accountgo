@@ -314,10 +314,53 @@ namespace Api.Controllers
                 return NotFound(new { message = "Vendor not found." });
 
             var supplier = ToSupplier(vendor, LoadVendorContacts(vendor));
+            supplier.Aliases = LoadVendorAliases(vendor);
             supplier.CanDelete = !VendorHasRecords(id);
             AddBalances(new[] { supplier }, id);
             return Ok(supplier);
         }
+
+        [HttpDelete]
+        [Route("DeleteVendorAlias")]
+        [RequirePermission(SystemPermissions.PurchasesVendorsManage)]
+        public IActionResult DeleteVendorAlias([Dto.Common.PublicId("ven")] int vendorId, [FromQuery] string alias)
+        {
+            var vendor = _db.Vendors.Include(v => v.Party).FirstOrDefault(v => v.Id == vendorId && v.Party != null);
+            if (vendor == null)
+                return NotFound(new { message = "Vendor not found." });
+
+            var normalized = Api.DocumentCaptures.Matching.PartyNameNormalizer.Normalize(alias);
+            var trimmed = (alias ?? string.Empty).Trim();
+            var existing = _db.PartyAliases.FirstOrDefault(a =>
+                a.PartyId == vendor.PartyId
+                && a.Role == Api.DocumentCaptures.Matching.PartyMatchingService.RoleVendor
+                && (a.NormalizedAlias == trimmed || a.NormalizedAlias == normalized));
+            if (existing == null)
+                return NotFound(new { message = "Alias not found." });
+
+            _db.PartyAliases.Remove(existing);
+            _db.SaveChanges();
+
+            var supplier = ToSupplier(vendor, LoadVendorContacts(vendor));
+            supplier.Aliases = LoadVendorAliases(vendor);
+            supplier.CanDelete = !VendorHasRecords(vendorId);
+            AddBalances(new[] { supplier }, vendorId);
+            return Ok(supplier);
+        }
+
+        private List<Dto.Common.PartyAliasDto> LoadVendorAliases(Vendor vendor) =>
+            vendor.PartyId is int partyId
+                ? _db.PartyAliases
+                    .AsNoTracking()
+                    .Where(a => a.PartyId == partyId && a.Role == Api.DocumentCaptures.Matching.PartyMatchingService.RoleVendor)
+                    .OrderBy(a => a.NormalizedAlias)
+                    .Select(a => new Dto.Common.PartyAliasDto
+                    {
+                        Alias = a.NormalizedAlias,
+                        CreatedAt = DateTime.SpecifyKind(a.CreatedAt, DateTimeKind.Utc),
+                    })
+                    .ToList()
+                : new List<Dto.Common.PartyAliasDto>();
 
         [HttpPost]
         [Route("SaveVendor")]
@@ -973,6 +1016,25 @@ namespace Api.Controllers
                     }
                     acknowledgedDiscrepancies = reviewResult.AcknowledgedDiscrepancies;
                     _purchasingService.ApproveBill(bill.Id, GetUserNameFromRequestHeader(), DateTime.UtcNow);
+                }
+                if (billDto.CaptureReviews is { Count: > 0 } && bill.VendorId is int savedVendorId)
+                {
+                    var vendorPartyId = _db.Vendors
+                        .AsNoTracking()
+                        .Where(v => v.Id == savedVendorId)
+                        .Select(v => v.PartyId)
+                        .FirstOrDefault();
+                    if (vendorPartyId is > 0)
+                    {
+                        Api.DocumentCaptures.Matching.PartyMatchingService.RecordAliasesForCaptures(
+                            _db,
+                            _tenantContext.RequireCompanyId(),
+                            Api.DocumentCaptures.Matching.PartyMatchingService.RoleVendor,
+                            vendorPartyId.Value,
+                            billDto.CaptureReviews.Select(r => r.CaptureId),
+                            GetUserNameFromRequestHeader());
+                        _db.SaveChanges();
+                    }
                 }
                 tx.Commit();
 

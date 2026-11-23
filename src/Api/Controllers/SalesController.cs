@@ -300,10 +300,53 @@ namespace Api.Controllers
                 return NotFound(new { message = "Client not found." });
 
             var client = ToClient(customer, LoadClientContacts(customer));
+            client.Aliases = LoadClientAliases(customer);
             client.CanDelete = !ClientHasRecords(id);
             AddBalances(new[] { client }, customerId: id);
             return Ok(client);
         }
+
+        [HttpDelete]
+        [Route("DeleteClientAlias")]
+        [RequirePermission(Core.Domain.Security.SystemPermissions.SalesCustomersManage)]
+        public IActionResult DeleteClientAlias([Dto.Common.PublicId("cus")] int clientId, [FromQuery] string alias)
+        {
+            var customer = _db.Customers.Include(c => c.Party).FirstOrDefault(c => c.Id == clientId && c.Party != null);
+            if (customer == null)
+                return NotFound(new { message = "Client not found." });
+
+            var normalized = Api.DocumentCaptures.Matching.PartyNameNormalizer.Normalize(alias);
+            var trimmed = (alias ?? string.Empty).Trim();
+            var existing = _db.PartyAliases.FirstOrDefault(a =>
+                a.PartyId == customer.PartyId
+                && a.Role == Api.DocumentCaptures.Matching.PartyMatchingService.RoleCustomer
+                && (a.NormalizedAlias == trimmed || a.NormalizedAlias == normalized));
+            if (existing == null)
+                return NotFound(new { message = "Alias not found." });
+
+            _db.PartyAliases.Remove(existing);
+            _db.SaveChanges();
+
+            var client = ToClient(customer, LoadClientContacts(customer));
+            client.Aliases = LoadClientAliases(customer);
+            client.CanDelete = !ClientHasRecords(clientId);
+            AddBalances(new[] { client }, customerId: clientId);
+            return Ok(client);
+        }
+
+        private List<Dto.Common.PartyAliasDto> LoadClientAliases(Core.Domain.Sales.Customer customer) =>
+            customer.PartyId is int partyId
+                ? _db.PartyAliases
+                    .AsNoTracking()
+                    .Where(a => a.PartyId == partyId && a.Role == Api.DocumentCaptures.Matching.PartyMatchingService.RoleCustomer)
+                    .OrderBy(a => a.NormalizedAlias)
+                    .Select(a => new Dto.Common.PartyAliasDto
+                    {
+                        Alias = a.NormalizedAlias,
+                        CreatedAt = DateTime.SpecifyKind(a.CreatedAt, DateTimeKind.Utc),
+                    })
+                    .ToList()
+                : new List<Dto.Common.PartyAliasDto>();
 
         /// <summary>
         /// What each client owes, from the same invoice totals and statuses the invoice pages show. Drafts and voided
@@ -2100,6 +2143,25 @@ namespace Api.Controllers
                 }
                 if (CapturePaymentInstructionsIfIssued(salesInvoice))
                     _salesService.UpdateSalesInvoice(salesInvoice);
+                if (salesInvoiceDto.CaptureReviews is { Count: > 0 } && salesInvoice.CustomerId > 0)
+                {
+                    var customerPartyId = _db.Customers
+                        .AsNoTracking()
+                        .Where(c => c.Id == salesInvoice.CustomerId)
+                        .Select(c => c.PartyId)
+                        .FirstOrDefault();
+                    if (customerPartyId is > 0)
+                    {
+                        Api.DocumentCaptures.Matching.PartyMatchingService.RecordAliasesForCaptures(
+                            _db,
+                            _tenantContext.RequireCompanyId(),
+                            Api.DocumentCaptures.Matching.PartyMatchingService.RoleCustomer,
+                            customerPartyId.Value,
+                            salesInvoiceDto.CaptureReviews.Select(r => r.CaptureId),
+                            GetUserNameFromRequestHeader());
+                        _db.SaveChanges();
+                    }
+                }
                 tx.Commit();
                 tx.Dispose();
 

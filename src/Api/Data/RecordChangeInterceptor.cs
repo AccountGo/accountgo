@@ -38,7 +38,7 @@ public sealed class RecordChangeInterceptor : SaveChangesInterceptor
         [typeof(PurchaseInvoiceHeader)] = "PurchaseInvoiceHeader", [typeof(PurchaseInvoiceLine)] = "PurchaseInvoiceLine",
         [typeof(SalesReceiptHeader)] = "SalesReceiptHeader", [typeof(SalesReceiptLine)] = "SalesReceiptLine",
         [typeof(VendorPayment)] = "VendorPayment", [typeof(Customer)] = "Customer", [typeof(Vendor)] = "Vendor",
-        [typeof(Party)] = "Party", [typeof(Tax)] = "Tax", [typeof(TaxGroup)] = "TaxGroup",
+        [typeof(Party)] = "Party", [typeof(PartyAlias)] = "PartyAlias", [typeof(Tax)] = "Tax", [typeof(TaxGroup)] = "TaxGroup",
         [typeof(TaxGroupTax)] = "TaxGroupTax", [typeof(Company)] = "Company", [typeof(CompanySetting)] = "CompanySetting",
         [typeof(CustomerAllocation)] = "CustomerAllocation", [typeof(MainContraAccount)] = "MainContraAccount",
         [typeof(PaymentTerm)] = "PaymentTerm",
@@ -59,7 +59,8 @@ public sealed class RecordChangeInterceptor : SaveChangesInterceptor
             [typeof(SalesReceiptLine)] = ("SalesReceiptHeader", nameof(SalesReceiptLine.SalesReceiptHeaderId)),
             [typeof(RecurringScheduleLine)] = ("RecurringSchedule", nameof(RecurringScheduleLine.RecurringScheduleId)),
             [typeof(TaxGroupTax)] = ("TaxGroup", nameof(TaxGroupTax.TaxGroupId)),
-            [typeof(CompanyMemberSecurityRole)] = ("CompanyMember", nameof(CompanyMemberSecurityRole.CompanyMemberId))
+            [typeof(CompanyMemberSecurityRole)] = ("CompanyMember", nameof(CompanyMemberSecurityRole.CompanyMemberId)),
+            [typeof(PartyAlias)] = ("Party", nameof(PartyAlias.PartyId))
         };
 
     private readonly IRequestAuditContext _auditContext;

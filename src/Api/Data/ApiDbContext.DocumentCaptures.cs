@@ -13,6 +13,7 @@ public partial class ApiDbContext
     public virtual DbSet<DocumentCaptureBlob> DocumentCaptureBlobs { get; set; } = null!;
     public virtual DbSet<DocumentCaptureAttempt> DocumentCaptureAttempts { get; set; } = null!;
     public virtual DbSet<DocumentCaptureLink> DocumentCaptureLinks { get; set; } = null!;
+    public virtual DbSet<PartyAlias> PartyAliases { get; set; } = null!;
 
     private static void ConfigureDocumentCaptureModel(ModelBuilder builder)
     {
@@ -89,6 +90,21 @@ public partial class ApiDbContext
                 .WithMany(capture => capture.Links)
                 .HasForeignKey(link => new { link.CompanyId, link.CaptureId })
                 .HasPrincipalKey(capture => new { capture.CompanyId, capture.Id })
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<PartyAlias>(entity =>
+        {
+            entity.ToTable("PartyAliases");
+            entity.HasKey(alias => alias.Id);
+            entity.Property(alias => alias.Role).HasMaxLength(20).IsRequired();
+            entity.Property(alias => alias.NormalizedAlias).HasMaxLength(200).IsRequired();
+            entity.Property(alias => alias.CreatedBy).HasMaxLength(256).IsRequired();
+            entity.HasIndex(alias => new { alias.CompanyId, alias.Role, alias.NormalizedAlias }).IsUnique();
+            entity.HasIndex(alias => new { alias.CompanyId, alias.PartyId, alias.Role });
+            entity.HasOne(alias => alias.Party)
+                .WithMany()
+                .HasForeignKey(alias => alias.PartyId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

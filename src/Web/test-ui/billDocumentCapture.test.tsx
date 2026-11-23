@@ -169,6 +169,14 @@ function setupBillEditMocks(
       capFetches++;
       return jsonRes(capsEnabled);
     }
+    if (url.startsWith('/api/document-captures/party-match')) {
+      const cap = captureFactory();
+      const name = String(((cap.acceptedFields ?? cap.fields) as { vendorName?: string } | null)?.vendorName ?? '').trim().toLowerCase();
+      if (name === 'acme supply') {
+        return jsonRes([{ partyId: 'ven_01acme000000000000000001', name: 'Acme Supply', reason: 'name', score: 1.0, archived: false }]);
+      }
+      return jsonRes([]);
+    }
     if (url.startsWith('/api/Purchasing/Bill?id=') && options?.existingDraft) {
       return jsonRes(options.existingDraft);
     }
@@ -248,11 +256,11 @@ describe('BillEdit & BillDetail document capture integration', () => {
     renderWithRouter('/org/acme/purchases/new');
     await scanAndAccept();
 
-    await waitFor(() => expect(screen.getByText(/Suggested vendor match from scan/i)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Did you mean one of these existing vendors/i)).toBeTruthy());
     expect(screen.getByText(/Source amounts include tax/i)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: /Confirm vendor/i }));
-    await waitFor(() => expect(screen.queryByText(/Suggested vendor match from scan/i)).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: /Use vendor/i }));
+    await waitFor(() => expect(screen.queryByText(/Did you mean one of these existing vendors/i)).toBeNull());
     expect(screen.getByText('Acme Supply')).toBeTruthy();
   });
 
@@ -289,8 +297,8 @@ describe('BillEdit & BillDetail document capture integration', () => {
 
     renderWithRouter('/org/acme/purchases/new');
     await scanAndAccept();
-    await waitFor(() => expect(screen.getByRole('button', { name: /Confirm vendor/i })).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: /Confirm vendor/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Use vendor/i })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /Use vendor/i }));
 
     fireEvent.click(screen.getByRole('button', { name: /Save draft/i }));
     await waitFor(() => expect(screen.getByText(/attaching the source document failed/i)).toBeTruthy());
@@ -306,8 +314,8 @@ describe('BillEdit & BillDetail document capture integration', () => {
 
     renderWithRouter('/org/acme/purchases/new');
     await scanAndAccept();
-    await waitFor(() => expect(screen.getByRole('button', { name: /Confirm vendor/i })).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: /Confirm vendor/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Use vendor/i })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /Use vendor/i }));
 
     fireEvent.click(screen.getByRole('button', { name: /Save draft/i }));
     await waitFor(() => expect(screen.getByText(/attaching the source document failed/i)).toBeTruthy());

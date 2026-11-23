@@ -28,17 +28,20 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { usePermissions } from '../components/Gating';
 import { useOptionalCapabilities } from '../lib/entitlements';
 import { DocumentCapturePanel } from '../components/document-capture/DocumentCapturePanel';
+import { PartyMatchPrompt } from '../components/document-capture/PartyMatchPrompt';
 import {
   computeCaptureDiscrepancy,
   describeCaptureError,
   DocumentCaptureCapabilities,
   DocumentCaptureView,
   evaluateFinancialApplyGates,
-  findSuggestedVendor,
+  fetchPartyMatchCandidates,
   formatSignedCurrencyDifference,
   isValidIsoDate,
   MAX_SALES_REFERENCE_NO_LENGTH,
   parseStrictDecimal,
+  PartyMatchCandidate,
+  resolveAutoPreselectCandidate,
   SalesCaptureFields,
 } from '../components/document-capture/fields';
 import {
@@ -184,8 +187,10 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
   const [acceptedCapture, setAcceptedCapture] = useState<DocumentCaptureView | null>(null);
   const [unrecordedSaleConfirmed, setUnrecordedSaleConfirmed] = useState(false);
   const [ambiguousCurrencyConfirmed, setAmbiguousCurrencyConfirmed] = useState(false);
-  const [suggestedCustomer, setSuggestedCustomer] = useState<CustomerOption | null>(null);
-  const [unmatchedCustomerName, setUnmatchedCustomerName] = useState<string | null>(null);
+  const [customerMatchCandidates, setCustomerMatchCandidates] = useState<PartyMatchCandidate[]>([]);
+  const [autoMatchedCustomer, setAutoMatchedCustomer] = useState<PartyMatchCandidate | null>(null);
+  const [extractedCustomerName, setExtractedCustomerName] = useState<string | null>(null);
+  const [customerMatchDismissed, setCustomerMatchDismissed] = useState(false);
   const [pendingDueDate, setPendingDueDate] = useState<string | null>(null);
   const [pendingLineMerge, setPendingLineMerge] = useState<FormLineItem[] | null>(null);
   const [ackSnapshots, setAckSnapshots] = useState<
@@ -617,7 +622,10 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     setShowCapturePanel(false);
     setAcceptedCapture(null);
     setUnrecordedSaleConfirmed(false);
-    setSuggestedCustomer(null);
+    setCustomerMatchCandidates([]);
+    setAutoMatchedCustomer(null);
+    setExtractedCustomerName(null);
+    setCustomerMatchDismissed(false);
     setPendingDueDate(null);
     setPendingLineMerge(null);
     setAckSnapshots({});
@@ -734,10 +742,24 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
       const fields = ((canonical.acceptedFields ?? canonical.fields) as SalesCaptureFields | null) ?? {};
       const gates = evaluateFinancialApplyGates(canonical, currentOrg.currency, ambiguousCurrencyConfirmed);
 
-      const matched = findSuggestedVendor(fields.customerName, customers);
-      setSuggestedCustomer(matched && matched.id !== selectedCustomerId ? matched : null);
       const trimmedCustomerName = typeof fields.customerName === 'string' ? fields.customerName.trim() : '';
-      setUnmatchedCustomerName(!matched && trimmedCustomerName && !selectedCustomerId ? trimmedCustomerName : null);
+      setCustomerMatchCandidates([]);
+      setAutoMatchedCustomer(null);
+      setExtractedCustomerName(trimmedCustomerName || null);
+      setCustomerMatchDismissed(false);
+      void fetchPartyMatchCandidates(authFetch, 'customer', canonical.id).then((candidates) => {
+        if (selectedCustomerId) {
+          return;
+        }
+        const preselect = resolveAutoPreselectCandidate(candidates);
+        if (preselect) {
+          setSelectedCustomerId(preselect.partyId);
+          setAutoMatchedCustomer(preselect);
+          setCustomerMatchCandidates([]);
+        } else {
+          setCustomerMatchCandidates(candidates);
+        }
+      });
 
       if (!gates.canApplyNonMonetary) {
         return;
@@ -774,7 +796,10 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     setShowCapturePanel(false);
     setUnrecordedSaleConfirmed(false);
     setAmbiguousCurrencyConfirmed(false);
-    setSuggestedCustomer(null);
+    setCustomerMatchCandidates([]);
+    setAutoMatchedCustomer(null);
+    setExtractedCustomerName(null);
+    setCustomerMatchDismissed(false);
     setPendingDueDate(null);
     setPendingLineMerge(null);
     setPendingLink(null);
@@ -989,7 +1014,10 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
     } else if (selectedCustomerId === client.id) {
       void loadClientDetail(client.id);
     }
-    setUnmatchedCustomerName(null);
+    setExtractedCustomerName(null);
+    setCustomerMatchCandidates([]);
+    setAutoMatchedCustomer(null);
+    setCustomerMatchDismissed(true);
     setClientDialog(null);
   };
 
@@ -1149,57 +1177,31 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         );
       })()}
 
-      {/* Customer suggestion confirmation (exact client-side active match only, never creates a client) */}
-      {suggestedCustomer && (
-        <div role="status" className="mb-4 rounded-xl border border-[var(--brand-ring)]/40 bg-[var(--brand-subtle)]/40 p-3.5 flex flex-wrap items-center justify-between gap-2 text-xs">
-          <span>
-            Suggested client match from scan: <strong className="text-[var(--text-main)]">{suggestedCustomer.name}</strong>
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedCustomerId(suggestedCustomer.id);
-                setSuggestedCustomer(null);
-              }}
-              className="px-3 py-1.5 font-semibold rounded-lg bg-[var(--brand-primary)] text-white hover:opacity-90 transition"
-            >
-              Confirm client
-            </button>
-            <button
-              type="button"
-              onClick={() => setSuggestedCustomer(null)}
-              className="px-2.5 py-1.5 font-semibold rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Unmatched customer prompt: opens the existing New client dialog pre-filled (never auto-creates) */}
-      {unmatchedCustomerName && !selectedCustomerId && canManageClients && (
-        <div role="status" className="mb-4 rounded-xl border border-[var(--brand-ring)]/40 bg-[var(--brand-subtle)]/40 p-3.5 flex flex-wrap items-center justify-between gap-2 text-xs">
-          <span>
-            No existing client matches <strong className="text-[var(--text-main)]">{unmatchedCustomerName}</strong>.
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setClientDialog({ initialName: unmatchedCustomerName })}
-              className="px-3 py-1.5 font-semibold rounded-lg bg-[var(--brand-primary)] text-white hover:opacity-90 transition"
-            >
-              Create client &ldquo;{unmatchedCustomerName}&rdquo;
-            </button>
-            <button
-              type="button"
-              onClick={() => setUnmatchedCustomerName(null)}
-              className="px-2.5 py-1.5 font-semibold rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
+      {/* Server-backed customer matching (M-05 / M-06): never pre-selects fuzzy name or archived matches */}
+      {!customerMatchDismissed && (
+        <PartyMatchPrompt
+          role="client"
+          extractedName={extractedCustomerName}
+          candidates={customerMatchCandidates}
+          autoMatched={autoMatchedCustomer}
+          canManage={canManageClients}
+          selectedPartyId={selectedCustomerId}
+          orgSlug={orgSlug ?? ''}
+          onSelectCandidate={(candidate) => {
+            setSelectedCustomerId(candidate.partyId);
+            setCustomerMatchCandidates([]);
+            setAutoMatchedCustomer(null);
+            setCustomerMatchDismissed(true);
+          }}
+          onCreateNew={(initialName) => {
+            setClientDialog({ initialName });
+          }}
+          onDismiss={() => {
+            setCustomerMatchDismissed(true);
+            setCustomerMatchCandidates([]);
+            setAutoMatchedCustomer(null);
+          }}
+        />
       )}
 
       {/* Explicit due-date vs payment-term choice */}

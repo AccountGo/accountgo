@@ -26,6 +26,8 @@ namespace Dto.Purchasing
         public int? BillToContactId { get; set; }
         /// <summary>Contact persons linked to this vendor. Populated on a single-vendor read.</summary>
         public List<ContactPersonDto> Contacts { get; set; } = new();
+        /// <summary>Normalized capture name aliases remembered for this vendor. Populated on a single-vendor read.</summary>
+        public List<PartyAliasDto> Aliases { get; set; } = new();
         public bool Archived { get; set; }
         /// <summary>Unpaid on its approved bills.</summary>
         public decimal Outstanding { get; set; }

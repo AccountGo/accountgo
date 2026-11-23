@@ -17,6 +17,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ### Changed
 
+- Scanned bills and invoices now suggest existing vendors and customers even when the name is written differently, and remember your choices.
 - Rejected document scans and scans left unused for 24 hours are now deleted, including the extracted details.
 
 ### Fixed

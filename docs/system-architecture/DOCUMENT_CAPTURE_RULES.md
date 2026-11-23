@@ -10,8 +10,8 @@ This register inventories every deterministic extraction, validation, warning, a
 
 ## Current `RulesVersion`
 
-- **`RulesVersion`:** `rules-1`
-- **`ProviderVersion` (local OCR):** `ocr-1+d5de5df3+20b69451+rules-1` (`CaptureWorkerModels.Version + "+" + DocumentTextFieldParser.RulesVersion`, must stay ≤ 100 characters)
+- **`RulesVersion`:** `rules-2`
+- **`ProviderVersion` (local OCR):** `ocr-1+d5de5df3+20b69451+rules-2` (`CaptureWorkerModels.Version + "+" + DocumentTextFieldParser.RulesVersion`, must stay ≤ 100 characters)
 
 ## How to change a rule
 
@@ -35,7 +35,7 @@ This register inventories every deterministic extraction, validation, warning, a
 - `G-` general parser bounds, sanitization, and deadline
 - `W-` warning codes and sanitization
 - `S-` sensitive-data masking
-- `M-` reserved for matching (future PR; no `M-` rows yet)
+- `M-` party matching (vendor and customer matching, aliases, and archived handling)
 
 IDs are two digits (`V-01`), stable, and never reused. A retired rule keeps its row with status `retired`.
 
@@ -85,6 +85,12 @@ IDs are two digits (`V-01`), stable, and never reused. A retired rule keeps its 
 | `W-01` | `warnings` | Expose every parser-emitted warning code (`AMBIGUOUS_CURRENCY`, `TOTAL_UNLABELED`, `TOTALS_INCONSISTENT`, `PARSE_TRUNCATED`) in `DocumentTextFieldParser.WarningCodes`, keep all codes in `DocumentCaptureWarningCodes.Known`, and map any unknown warning string to `REVIEW_REQUIRED` in `Sanitize`. | E4, `c93b7ae7` | `DocumentCaptureWarningCodes.cs` (`Known`, `Sanitize`), `DocumentTextFieldParser.cs` (`WarningCodes`, `WarningAmbiguousCurrency`, `WarningTotalUnlabeled`, `WarningTotalsInconsistent`, `WarningParseTruncated`) | `DocumentTextFieldParserTests.WarningCodes_E4_ListsEveryParserWarningCode`, `DocumentCaptureMaskingTests.ProviderWarnings_AreReducedToStableCodes`, `DocumentCaptureMaskingTests.ParserWarningCodes_AreAllowedAndHaveUserFacingText` | `active` |
 | `S-01` | `masking` | Redact IBAN patterns (`IbanRegex`) and 8–17 digit account/routing-like sequences (`AccountNumberRegex`) with `••••` via `MaskSensitiveValue`, while preserving plausible ISO dates (`yyyy-MM-dd` in 1990–2100 via `IsPlausibleDate`). | Foundation security | `DocumentCaptureMasking.cs` (`MaskSensitiveValue`, `IsPlausibleDate`, `IbanRegex`, `AccountNumberRegex`) | `DocumentCaptureMaskingTests.MaskSensitiveValue_MasksFinancialIdentifiers` | `active` |
 | `S-02` | `masking` | Apply `MaskSensitiveValue` to assistant attachment `label` and `value` fields (`MaskAssistantFields`), to `rawText` after capping at `MaxRawTextLength` (`MaskRawText`), and to financial free-text `notes` and `lines[].description` without altering structured numeric or ID fields (`MaskFinancialFreeText`, `MaskProperty`). | Foundation security | `DocumentCaptureMasking.cs` (`MaskAssistantFields`, `MaskRawText`, `MaskFinancialFreeText`, `MaskProperty`) | `DocumentCaptureMaskingTests.AssistantFields_AreMaskedBeforeCanonicalStorage`, `DocumentCaptureMaskingTests.AssistantLabels_AreMaskedAlongsideValues`, `DocumentCaptureMaskingTests.RawText_IsBoundedAndMasked`, `DocumentCaptureMaskingTests.FinancialFreeText_IsMaskedWithoutChangingStructuredNumbers` | `active` |
+| `M-01` | `partyMatch` | Normalize party names with NFKD Latin-accent stripping (preserving non-Latin combining marks such as Thai vowels/tones), invariant lower-casing, punctuation-to-space collapsing, and repeated stripping of legal suffixes (`SingleTokenLegalSuffixes`: `ltd`, `limited`, `inc`, `incorporated`, `llc`, `llp`, `corp`, `corporation`, `co`, `company`, `pte`, `gmbh`, `plc`, `sa`, `bv`, `pty`; `MultiTokenLegalSuffixes`: `sdn bhd`, `l l c`, `s a`, `b v`; Thai `บริษัท`…`จำกัด`/`มหาชน`), keeping the un-stripped form if stripping leaves empty (core-empty guard), max 200 chars. | #95 PR 2 | `PartyNameNormalizer.cs` (`Normalize`, `SingleTokenLegalSuffixes`, `MultiTokenLegalSuffixes`, `ThaiCompanyPrefix`, `ThaiCompanySuffixes`) | `PartyMatchingTests.Normalizer_M01_HandlesAccentsPunctuationLegalSuffixesThaiAndCoreEmptyGuard` | `active` |
+| `M-02` | `partyMatch` | Score normalized party names in `[0, 1]` as `0.60 * TokenSetSimilarity` (symmetric fuzzy-token Dice with per-token Jaro-Winkler floor `0.88`) `+ 0.40 * max(JaroWinkler(raw), JaroWinkler(sorted))`, accepting candidates at or above `MatchThreshold` (`0.82`) and returning at most 3 candidates ordered by tier (`identifier` > `alias` > `name`), score descending, most recently used bill/invoice date descending, then name ascending. | #95 PR 2 | `PartyNameMatcher.cs` (`Score`, `ScoreNormalized`, `MatchThreshold`, `MaxCandidates`), `PartyMatchingService.cs` (`RankCandidates`) | `PartyMatchingTests.Scorer_M02_ScoresAndBreaksTiesByScoreRecencyAndName`, `PartyMatchingTests.MatchingAccuracy_M02_44InventedPairsMeetPrecisionAndRecall` | `active` |
+| `M-03` | `partyMatch` | Match extracted email addresses (case-insensitive) and phone numbers (digits-only last 8+ digits on phone-labeled lines) against stored `Party.Email`, `Party.Phone`, and `Party.Fax` before name matching; identifier hits get reason `identifier` (score `1.0`) and rank above every name match; masked values (`••••`) are never compared. | #95 PR 2 | `PartyMatchingService.cs` (`ExtractIdentifiers`, `CollectIdentifiersFromText`, `MatchesIdentifier`, `ExtractPhoneLast8`, `ContainsMask`) | `PartyMatchingTests.Identifiers_M03_MatchesEmailAndPhoneAboveNameAndIgnoresMaskedValues` | `active` |
+| `M-04` | `partyMatch` | Store tenant-scoped normalized capture name aliases in `PartyAliases` (unique on `(CompanyId, Role, NormalizedAlias)`) server-side in the same bill/invoice save transaction whenever the chosen party was not already matched via `alias`/`identifier`; exact alias hits get reason `alias` (score `1.0`), and alias removal on the party page is audited via `RecordChangeInterceptor`. | #95 PR 2 | `PartyMatchingService.cs` (`RecordAliasesForCaptures`, `MatchCaptureAsync`), `PurchasingController.cs` (`SaveBill`, `DeleteVendorAlias`), `SalesController.cs` (`SaveSalesInvoice`, `DeleteClientAlias`), `RecordChangeInterceptor.cs` (`AllowList`) | `PartyMatchingTests.Aliases_M04_CreatedOnSaveEnforcesUniqueConstraintTenantIsolationAndAuditsRemoval` | `active` |
+| `M-05` | `partyMatch` | Serve top-3 candidates from `GET /api/document-captures/party-match` (`role=vendor` or `customer`, `captureId=<public id>`) reading the caller's capture server-side with role permission checks (`PurchasesVendorsView` / `SalesCustomersView`), returning 404 for cross-tenant captures and never returning the full party list; in `BillEdit` and `InvoiceEdit`, pre-select only a single non-archived `alias` or `identifier` candidate, never pre-select `name` candidates, and gate "Create new …" behind "None of these" whenever candidates exist. | #95 PR 2 (CFO condition) | `DocumentCapturesController.cs` (`MatchParty`), `PartyMatchingService.cs` (`MatchCaptureAsync`), `fields.ts` (`resolveAutoPreselectCandidate`, `fetchPartyMatchCandidates`), `PartyMatchPrompt.tsx` | `PartyMatchingTests.Endpoint_M05_EnforcesRolePermissionsTenantIsolationAndTop3Cap` | `active` |
+| `M-06` | `partyMatch` | Return archived matching parties with `archived: true` so the UI labels them `archived` with an unarchive hint and never pre-selects an archived party even on an `alias` or `identifier` hit. | #95 PR 2 | `PartyMatchingService.cs` (`LoadCandidateSourcesAsync`, `RankCandidates`), `fields.ts` (`resolveAutoPreselectCandidate`), `PartyMatchPrompt.tsx` | `PartyMatchingTests.Archived_M06_ReturnedWithArchivedFlagAndNeverPreselected` | `active` |
 
 ## Known gaps
 
@@ -99,6 +105,15 @@ The benchmark measures `vendor`, `date`, and `total` only. `N-`, `C-`, `L-`, `P-
 | rules version | date | synthetic field accuracy (per field and overall) | notes |
 |---|---|---|---|
 | `rules-1` | 2026-11-23 | OCR (65): vendor 65/65 (100.0%), date 65/65 (100.0%), total 65/65 (100.0%), overall 195/195 (100.0%); clean text (18): vendor 18/18 (100.0%), date 18/18 (100.0%), total 18/18 (100.0%), overall 54/54 (100.0%) | Local OCR synthetic gate (13 EN x 5 variants) + 18 clean-text fixtures (EN+TH) |
+| `rules-2` | 2026-11-23 | OCR (65): vendor 65/65 (100.0%), date 65/65 (100.0%), total 65/65 (100.0%), overall 195/195 (100.0%); clean text (18): vendor 18/18 (100.0%), date 18/18 (100.0%), total 18/18 (100.0%), overall 54/54 (100.0%) | Local OCR synthetic gate (13 EN x 5 variants) + 18 clean-text fixtures (EN+TH) |
+
+### Matching accuracy (`M-01` / `M-02`)
+
+Evaluated by `PartyMatchingTests.MatchingAccuracy_M02_44InventedPairsMeetPrecisionAndRecall` on 44 invented pairs (25 positive variants across legal suffixes, case, punctuation, accents, Thai, token order, and 1-character OCR typos; 19 near-miss negative pairs).
+
+| rules version | date | threshold | pairs | precision | recall | notes |
+|---|---|---:|---:|---:|---:|---|
+| `rules-2` | 2026-11-23 | `0.82` | 44 (25 pos / 19 neg) | 96.2% (25/26) | 100.0% (25/25) | `TP=25, FP=1, TN=18, FN=0` (1 near-miss FP: `Sunrise Bakery` vs `Sunset Bakery`; fuzzy name matches are never pre-selected) |
 
 **Future benchmark sets:** SROIE and CORD (not yet integrated; no external benchmark datasets are stored in this repository).
 
@@ -107,3 +122,4 @@ The benchmark measures `vendor`, `date`, and `total` only. `N-`, `C-`, `L-`, `P-
 | date | rule ID(s) | summary | PR |
 |---|---|---|---|
 | 2026-11-23 | all | Register created from rules as of `f50d0f9e` | PR #576 |
+| 2026-11-23 | `M-01`–`M-06` | Added party name normalization, fuzzy scoring, identifier matching, tenant-scoped `PartyAliases`, server-side matching endpoint, and suggestion UX (`RulesVersion` bumped to `rules-2`) | PR #… |
