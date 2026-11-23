@@ -287,11 +287,6 @@ public static partial class AssistantAttachmentMessageBuilder
     public const string LooksLikeSalesInvoice = "sales-invoice";
     public const string LooksLikeVendorBillOrReceipt = "vendor-bill-or-receipt";
 
-    private static readonly HashSet<string> LegalSuffixTokens = new(StringComparer.Ordinal)
-    {
-        "ltd", "limited", "inc", "incorporated", "llc", "llp", "corp", "corporation",
-        "co", "company", "pte", "gmbh", "plc", "sa", "bv", "pty", "bhd", "sdn",
-    };
 
     /// <summary>
     /// Deterministic document-type hint (no AI): bank identifier labels without invoice/total labels -> bank-details;
@@ -429,67 +424,9 @@ public static partial class AssistantAttachmentMessageBuilder
         || lowerLabel == "company"
         || lowerLabel == "company name";
 
-    private static string NormalizeCompanyName(string? raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw))
-            return string.Empty;
-
-        var decomposed = raw.Normalize(NormalizationForm.FormKD);
-        var noLatinMarks = new StringBuilder(decomposed.Length);
-        foreach (var ch in decomposed)
-        {
-            if (ch is (>= '\u0300' and <= '\u036F') or (>= '\u1AB0' and <= '\u1AFF') or (>= '\u1DC0' and <= '\u1DFF'))
-                continue;
-            noLatinMarks.Append(ch);
-        }
-
-        var recomposed = noLatinMarks.ToString()
-            .Replace("\u0E4D\u0E32", "\u0E33", StringComparison.Ordinal)
-            .Normalize(NormalizationForm.FormC);
-
-        var sb = new StringBuilder(recomposed.Length);
-        var prevSpace = true;
-        foreach (var ch in recomposed)
-        {
-            var cat = System.Globalization.CharUnicodeInfo.GetUnicodeCategory(ch);
-            if (char.IsLetterOrDigit(ch) || cat is System.Globalization.UnicodeCategory.NonSpacingMark or System.Globalization.UnicodeCategory.SpacingCombiningMark)
-            {
-                sb.Append(char.ToLowerInvariant(ch));
-                prevSpace = false;
-            }
-            else if (!prevSpace)
-            {
-                sb.Append(' ');
-                prevSpace = true;
-            }
-        }
-
-        var folded = sb.ToString().Trim();
-        if (string.IsNullOrEmpty(folded))
-            return string.Empty;
-
-        var tokens = folded.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
-        var changed = true;
-        while (changed && tokens.Count > 0)
-        {
-            changed = false;
-            if (tokens[0] == "บริษัท")
-            {
-                tokens.RemoveAt(0);
-                changed = true;
-                continue;
-            }
-            var last = tokens[^1];
-            if (LegalSuffixTokens.Contains(last) || last is "จำกัด" or "มหาชน")
-            {
-                tokens.RemoveAt(tokens.Count - 1);
-                changed = true;
-            }
-        }
-
-        var stripped = string.Join(' ', tokens);
-        return string.IsNullOrEmpty(stripped) ? folded : stripped;
-    }
+    // Same normalisation as vendor/customer matching (rules M-01) so both features agree on what a company name is.
+    private static string NormalizeCompanyName(string? raw) =>
+        Api.DocumentCaptures.Matching.PartyNameNormalizer.Normalize(raw);
 
     internal static string? TryClassifyPartyLabel(string label)
     {
