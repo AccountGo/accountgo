@@ -123,6 +123,16 @@ public static class DocumentTextFieldParser
         @"^(?:bill(?:ed)?\s*to|sold\s*to|customer\s*name|client\s*name|customer|client)(?:\s*[:#\-]\s*(.*)|\s*)$",
         LinearI);
 
+    // E9: BILLED TO / BILL TO / CUSTOMER followed directly by a merged right-column label phrase (not a customer name).
+    private static readonly Regex BillToWithTrailingLabelRegex = new(
+        @"^(?:bill(?:ed)?\s*to|sold\s*to|customer\s*name|client\s*name|customer|client)\s+(?:issue\s*date|invoice\s*date|due\s*date|payment\s*due|invoice\s*(?:no\.?|number|#)|terms|date)\b",
+        LinearI);
+
+    // E9: strip trailing merged right-column label phrase from customer candidate lines.
+    private static readonly Regex TrailingColumnLabelPhraseRegex = new(
+        @"\b(?:issue\s*date|invoice\s*date|due\s*date|payment\s*due|invoice\s*(?:no\.?|number|#)|terms|date)\b.*$",
+        LinearI);
+
     // E6: stop vendor scanning once recipient/customer section begins.
     private static readonly Regex VendorBlockStopRegex = new(
         @"^(?:bill(?:ed)?\s*to|ship\s*to|customer)\b",
@@ -649,7 +659,7 @@ public static class DocumentTextFieldParser
         return false;
     }
 
-    // K12: anchored labels, skip Customer Service/ID, reject digit-heavy / phone-like candidates.
+    // K12 + E9: anchored labels, skip Customer Service/ID, ignore merged right-column label phrases, reject digit-heavy / phone-like candidates.
     private static string? ExtractSalesCustomer(List<string> lines)
     {
         for (var i = 0; i < lines.Count; i++)
@@ -659,16 +669,20 @@ public static class DocumentTextFieldParser
                 continue;
 
             var m = BillToLabelRegex.Match(line);
-            if (!m.Success)
+            var matchedWithTrailingLabel = !m.Success && BillToWithTrailingLabelRegex.IsMatch(line);
+            if (!m.Success && !matchedWithTrailingLabel)
                 continue;
 
-            var inline = m.Groups[1].Value.Trim();
-            if (IsValidCustomerCandidate(inline))
-                return inline;
+            if (m.Success)
+            {
+                var inline = StripTrailingColumnLabelPhrase(m.Groups[1].Value);
+                if (IsValidCustomerCandidate(inline))
+                    return inline;
+            }
 
             for (var j = i + 1; j < Math.Min(lines.Count, i + 4); j++)
             {
-                var cand = lines[j].Trim();
+                var cand = StripTrailingColumnLabelPhrase(lines[j]);
                 if (IsValidCustomerCandidate(cand))
                     return cand;
             }
@@ -676,6 +690,9 @@ public static class DocumentTextFieldParser
 
         return null;
     }
+
+    private static string StripTrailingColumnLabelPhrase(string raw) =>
+        TrailingColumnLabelPhraseRegex.Replace(raw, string.Empty).Trim(' ', ':', '-', '|');
 
     private static bool IsValidCustomerCandidate(string cand)
     {

@@ -991,6 +991,11 @@ public sealed class DocumentTextFieldParserTests
         var parsedLines = root.GetProperty("lines").EnumerateArray().ToList();
         Assert.Single(parsedLines);
         Assert.Equal("Consulting services", parsedLines[0].GetProperty("description").GetString());
+
+        // E9: same two-column layout parsed as sales-invoice extracts "Globex Example Corp" as customerName
+        var salesRoot = ParseAndValidate("sales-invoice", lines, out _);
+        Assert.Equal("Globex Example Corp", salesRoot.GetProperty("customerName").GetString());
+        Assert.Equal("7", salesRoot.GetProperty("sourceInvoiceNo").GetString());
     }
 
     [Fact]
