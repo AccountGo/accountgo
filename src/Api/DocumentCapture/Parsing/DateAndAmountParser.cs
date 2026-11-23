@@ -172,6 +172,55 @@ internal static class DateAndAmountParser
         return null;
     }
 
+    /// <summary>Every date written in the text, as ISO dates, using the same patterns and boundaries as <see cref="TryExtractDate"/>.</summary>
+    public static IReadOnlyList<string> ExtractAllDates(string text)
+    {
+        var results = new List<string>();
+        if (string.IsNullOrWhiteSpace(text))
+            return results;
+
+        foreach (Match m in IsoDateRegex.Matches(text))
+        {
+            if (!HasDateTokenBoundaries(text, m.Index, m.Length)) continue;
+            if (TryMakeIsoDate(m.Groups[1].Value, m.Groups[2].Value, m.Groups[3].Value) is { } iso) results.Add(iso);
+        }
+
+        foreach (Match m in ThaiMonthDateRegex.Matches(text))
+        {
+            if (!HasDigitBoundaries(text, m.Index, m.Length)) continue;
+            if (ThaiMonths.TryGetValue(m.Groups[2].Value, out var month)
+                && TryMakeIsoDate(m.Groups[3].Value, month, m.Groups[1].Value) is { } iso) results.Add(iso);
+        }
+
+        foreach (Match m in DayMonthYearEnRegex.Matches(text))
+        {
+            if (!HasDigitBoundaries(text, m.Index, m.Length)) continue;
+            if (EnglishMonths.TryGetValue(m.Groups[2].Value, out var month)
+                && TryMakeIsoDate(m.Groups[3].Value, month, m.Groups[1].Value) is { } iso) results.Add(iso);
+        }
+
+        foreach (Match m in MonthDayYearEnRegex.Matches(text))
+        {
+            if (m.Index > 0 && char.IsAsciiLetter(text[m.Index - 1])) continue;
+            if (m.Index + m.Length < text.Length && char.IsAsciiDigit(text[m.Index + m.Length])) continue;
+            if (EnglishMonths.TryGetValue(m.Groups[1].Value, out var month)
+                && TryMakeIsoDate(m.Groups[3].Value, month, m.Groups[2].Value) is { } iso) results.Add(iso);
+        }
+
+        foreach (Match m in NumericDateRegex.Matches(text))
+        {
+            if (!HasDateTokenBoundaries(text, m.Index, m.Length)) continue;
+            if (!int.TryParse(m.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var first)
+                || !int.TryParse(m.Groups[2].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var second))
+                continue;
+            // Both readings of an ambiguous numeric date are in the text; a value matching either is not invented.
+            if (second <= 12 && TryMakeIsoDate(m.Groups[3].Value, second, first) is { } dayFirst) results.Add(dayFirst);
+            if (first <= 12 && TryMakeIsoDate(m.Groups[3].Value, first, second) is { } monthFirst) results.Add(monthFirst);
+        }
+
+        return results;
+    }
+
     public static IReadOnlyList<decimal> ExtractAmounts(string line)
     {
         if (string.IsNullOrWhiteSpace(line) || PhoneContextRegex.IsMatch(line))
