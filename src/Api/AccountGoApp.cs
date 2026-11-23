@@ -396,6 +396,7 @@ public static class AccountGoApp
             options.BaseUrl = Pick(options.BaseUrl, builder.Configuration["ANTER_BASE_URL"]) ?? options.BaseUrl;
         });
         builder.Services.AddSingleton<Api.Service.Ai.IMcpCallerAssertionService, Api.Service.Ai.McpCallerAssertionService>();
+        builder.Services.AddScoped<Api.Service.Ai.IMcpCallerSessionContext, Api.Service.Ai.McpCallerSessionContext>();
         builder.Services.AddHttpClient<Api.Service.Ai.IAnterAgentRunnerClient, Api.Service.Ai.AnterAgentRunnerClient>(client =>
         {
             client.Timeout = TimeSpan.FromMinutes(10);

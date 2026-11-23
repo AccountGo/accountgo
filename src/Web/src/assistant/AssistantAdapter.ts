@@ -249,23 +249,25 @@ export class AssistantAdapter implements ChatAdapter {
     executionId: string,
     options?: SendMessageOptions,
   ): Promise<ReadableStream<Uint8Array>> {
+    const sessionId = this.executionSessions.get(executionId);
     const stream = await assistantFetchStream(
       `/api/ai/chat/executions/${encodeURIComponent(executionId)}/resume`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: '{}',
+        body: JSON.stringify(sessionId ? { sessionId } : {}),
         signal: options?.signal,
       },
     );
     return createReidentifyingSseStream(
       stream,
-      this.executionSessions.get(executionId),
+      sessionId,
       (sid, tokens) => this.lookupPseudonymNames(sid, tokens),
     );
   }
 
   async resolveToolApproval({
+    sessionId,
     approval,
     decision,
     reason,
@@ -280,6 +282,7 @@ export class AssistantAdapter implements ChatAdapter {
     if (!executionId || !toolCallId) {
       throw new Error('AccountGo Assistant: approval is missing execution or tool call id');
     }
+    this.rememberExecutionSession(executionId, sessionId);
     await assistantFetchJson(
       `/api/ai/chat/approvals/${encodeURIComponent(executionId)}/${encodeURIComponent(toolCallId)}`,
       {

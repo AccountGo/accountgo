@@ -175,6 +175,56 @@ namespace AccountGo.BackendTests.Ai
             Assert.Equal(_userId, payload.UserId);
             Assert.Equal(_companyIdA, payload.CompanyId);
             Assert.Equal(_slugA, payload.CompanySlug);
+            Assert.Equal("session_test_1", payload.SessionId);
+        }
+
+        [Fact]
+        public async Task ResumeExecution_AttachesSignedCallerAssertionWithSessionId()
+        {
+            while (_anterHandler.Requests.TryDequeue(out _)) { }
+
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/api/ai/chat/executions/exec_resume_1/resume");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+            req.Headers.Add("X-AccountGo-Org", _slugA);
+            req.Content = JsonContent.Create(new { sessionId = "session_resume_42" });
+
+            var response = await _client.SendAsync(req);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            Assert.True(_anterHandler.Requests.TryDequeue(out var captured));
+            Assert.EndsWith("/api/v1/external/agent-runner/executions/exec_resume_1/resume", captured.Uri.AbsolutePath);
+
+            using var bodyDoc = JsonDocument.Parse(captured.Body);
+            var assertion = bodyDoc.RootElement
+                .GetProperty("mcpPassThroughHeaders")
+                .GetProperty(McpCallerAssertionService.HeaderName)
+                .GetString();
+            Assert.NotNull(assertion);
+
+            using var scope = _factory.Services.CreateScope();
+            var assertionService = scope.ServiceProvider.GetRequiredService<IMcpCallerAssertionService>();
+            Assert.True(assertionService.TryValidateAssertion(assertion, out var payload));
+            Assert.Equal(_userId, payload.UserId);
+            Assert.Equal(_companyIdA, payload.CompanyId);
+            Assert.Equal(_slugA, payload.CompanySlug);
+            Assert.Equal("session_resume_42", payload.SessionId);
+
+            // Empty body still succeeds with a null SessionId (backward compatibility).
+            using var emptyReq = new HttpRequestMessage(HttpMethod.Post, "/api/ai/chat/executions/exec_resume_2/resume");
+            emptyReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+            emptyReq.Headers.Add("X-AccountGo-Org", _slugA);
+            emptyReq.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+
+            var emptyRes = await _client.SendAsync(emptyReq);
+            Assert.Equal(HttpStatusCode.OK, emptyRes.StatusCode);
+            Assert.True(_anterHandler.Requests.TryDequeue(out var emptyCaptured));
+            using var emptyDoc = JsonDocument.Parse(emptyCaptured.Body);
+            var emptyAssertion = emptyDoc.RootElement
+                .GetProperty("mcpPassThroughHeaders")
+                .GetProperty(McpCallerAssertionService.HeaderName)
+                .GetString();
+            Assert.True(assertionService.TryValidateAssertion(emptyAssertion, out var emptyPayload));
+            Assert.Null(emptyPayload.SessionId);
         }
 
         [Fact]

@@ -70,6 +70,11 @@ namespace Api.Controllers
             public string? Reason { get; set; }
         }
 
+        public sealed class ResumeExecutionRequest
+        {
+            public string? SessionId { get; set; }
+        }
+
         private string? CurrentUserId =>
             User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
 
@@ -264,7 +269,10 @@ namespace Api.Controllers
         }
 
         [HttpPost("executions/{executionId}/resume")]
-        public async Task ResumeExecution(string executionId, CancellationToken cancellationToken)
+        public async Task ResumeExecution(
+            string executionId,
+            [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] ResumeExecutionRequest? body,
+            CancellationToken cancellationToken)
         {
             if (!await EnsureConfiguredAsync(cancellationToken)) return;
             var userId = CurrentUserId;
@@ -284,7 +292,11 @@ namespace Api.Controllers
             var companyId = _tenantContext.CompanyId.Value;
             var companySlug = _tenantContext.CompanySlug ?? $"company-{companyId}";
             var scopedUserId = AnterRunStreamBody.BuildScopedUserId(companyId, userId);
-            var callerAssertion = _assertionService.MintAssertion(userId, companyId, companySlug);
+            var callerAssertion = _assertionService.MintAssertion(
+                userId,
+                companyId,
+                companySlug,
+                sessionId: body?.SessionId);
 
             HttpResponseMessage upstream;
             try
