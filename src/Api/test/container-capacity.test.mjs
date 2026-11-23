@@ -2,13 +2,19 @@ import test from "node:test";
 import assert from "node:assert";
 import {
   CapacityRouter,
+  WarmupThrottle,
   isTieredCapacityEnabled,
   parseCapacityPool,
+  parseDocumentCaptureExtractionPool,
   resolveContainerInstanceType,
   resolvePoolContainerName,
   resolvePoolInstanceType,
   resolveWriterContainerName,
 } from "../container-capacity.ts";
+import {
+  isDocumentCaptureCapabilitiesRoute,
+  isDocumentCaptureUploadRoute,
+} from "../container-proxy.ts";
 
 test("isTieredCapacityEnabled only accepts true", () => {
   assert.equal(isTieredCapacityEnabled("true"), true);
@@ -94,4 +100,48 @@ test('only public authentication endpoints use the optional V2 auth pool', async
     assert.equal(capacity.isPublicAuthRequest(path), true, path);
   for (const path of ['/health', '/api/auth/me', '/api/auth/logout', '/api/auth/google/extra', '/api/organizations'])
     assert.equal(capacity.isPublicAuthRequest(path), false, path);
+});
+
+test("parseDocumentCaptureExtractionPool only accepts paid", () => {
+  assert.equal(parseDocumentCaptureExtractionPool("paid"), "paid");
+  assert.equal(parseDocumentCaptureExtractionPool(" PAID "), "paid");
+  assert.equal(parseDocumentCaptureExtractionPool("free"), null);
+  assert.equal(parseDocumentCaptureExtractionPool(""), null);
+  assert.equal(parseDocumentCaptureExtractionPool(undefined), null);
+});
+
+test("document capture upload and capabilities route matching isolates upload from other capture routes", () => {
+  for (const uploadPath of ["/api/document-captures", "/api/document-captures/", "/API/Document-Captures", "/api/%64ocument-captures"]) {
+    assert.equal(isDocumentCaptureUploadRoute(uploadPath), true, uploadPath);
+    assert.equal(isDocumentCaptureCapabilitiesRoute(uploadPath), false, uploadPath);
+  }
+
+  for (const capPath of ["/api/document-captures/capabilities", "/api/document-captures/capabilities/", "/API/Document-Captures/Capabilities"]) {
+    assert.equal(isDocumentCaptureCapabilitiesRoute(capPath), true, capPath);
+    assert.equal(isDocumentCaptureUploadRoute(capPath), false, capPath);
+  }
+
+  for (const otherPath of [
+    "/api/document-captures/cap_123",
+    "/api/document-captures/cap_123/image",
+    "/api/document-captures/cap_123/accept",
+    "/api/document-captures/cap_123/reject",
+    "/api/document-captures/cap_123/links",
+    "/api/bills",
+  ]) {
+    assert.equal(isDocumentCaptureUploadRoute(otherPath), false, otherPath);
+    assert.equal(isDocumentCaptureCapabilitiesRoute(otherPath), false, otherPath);
+  }
+});
+
+test("WarmupThrottle permits at most one warm-up per interval", () => {
+  let now = 1_000;
+  const throttle = new WarmupThrottle(60_000, () => now);
+  assert.equal(throttle.shouldRun(), true);
+  assert.equal(throttle.shouldRun(), false);
+  now += 59_999;
+  assert.equal(throttle.shouldRun(), false);
+  now += 1;
+  assert.equal(throttle.shouldRun(), true);
+  assert.equal(throttle.shouldRun(), false);
 });

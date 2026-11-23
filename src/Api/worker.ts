@@ -4,9 +4,11 @@ import {
   CAPACITY_POOL_HEADER,
   CapacityRouter,
   WORKSPACE_HEADER,
+  WarmupThrottle,
   isTieredCapacityEnabled,
   isPublicAuthRequest,
   parseCapacityPool,
+  parseDocumentCaptureExtractionPool,
   resolvePoolContainerName,
   resolveWriterContainerName,
 } from "./container-capacity";
@@ -31,6 +33,8 @@ import {
   RestoreState,
   bufferRequest,
   fetchFromContainer,
+  isDocumentCaptureCapabilitiesRoute,
+  isDocumentCaptureUploadRoute,
   maxRequestBodyBytesForRoute,
   payloadTooLargeResponse,
   toRequest,
@@ -86,7 +90,8 @@ export class AccountGoApiContainer extends Container<Env> {
     this.enableInternet = true;
     this.envVars = buildContainerEnvVars(
       this.env as unknown as Record<string, unknown>,
-      CONTAINER_PORT
+      CONTAINER_PORT,
+      "v1"
     );
     const self = this;
     this.host = {
@@ -427,6 +432,8 @@ export class AccountGoApiContainer extends Container<Env> {
 const runtimeFlags = new RuntimeFlags();
 /** Workspace slug → capacity pool, learnt from API responses (per isolate). */
 const capacityRouter = new CapacityRouter();
+/** Per-isolate throttle (60 s) for non-blocking paid-pool warm-up pings from capabilities requests. */
+const captureWarmupThrottle = new WarmupThrottle(60_000);
 let loggedContainerName = false;
 
 interface TurnstileVerifyResponse {
@@ -497,7 +504,7 @@ async function verifyTurnstile(
 }
 
 export default {
-  async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
     if (url.pathname === "/healthz" || url.pathname === "/readyz") {
@@ -588,6 +595,56 @@ export default {
       if (!loggedContainerName && isDev) {
         loggedContainerName = true;
         console.warn(`[worker] Routing public request to container: ${containerName}`);
+      }
+    }
+
+    // Route document capture uploads to the V2 paid pool when DOCUMENT_CAPTURE_EXTRACTION_POOL=paid
+    // (applies whether or not tiered capacity is enabled). Other capture routes stay on their current route.
+    const captureExtractionPool = parseDocumentCaptureExtractionPool(env.DOCUMENT_CAPTURE_EXTRACTION_POOL);
+    if (!isAdminRequest && captureExtractionPool === "paid") {
+      const method = request.method.toUpperCase();
+      if (method === "POST" && isDocumentCaptureUploadRoute(url.pathname)) {
+        const binding = env.CONTAINER_V2;
+        if (!binding) {
+          console.error(
+            "[worker] DOCUMENT_CAPTURE_EXTRACTION_POOL=paid but CONTAINER_V2 binding is missing"
+          );
+          return serviceUnavailable(
+            "SERVICE_MISCONFIGURED",
+            "Document capture extraction pool is misconfigured",
+            30
+          );
+        }
+        const headers = new Headers(request.headers);
+        headers.set(CAPACITY_POOL_HEADER, "paid");
+        const versionId = env.CF_VERSION_METADATA?.id || "dev";
+        const name = resolvePoolContainerName("paid", versionId);
+        const stub = binding.get(binding.idFromName(name), { locationHint: "enam" });
+        return stub.fetch(new Request(request, { headers }));
+      }
+
+      // Non-blocking warm-up of the V2 paid pool on capabilities checks (throttled to 1/60s per isolate).
+      if (
+        method === "GET" &&
+        isDocumentCaptureCapabilitiesRoute(url.pathname) &&
+        url.searchParams.get("warmup") !== "0" &&
+        env.CONTAINER_V2 &&
+        captureWarmupThrottle.shouldRun()
+      ) {
+        const versionId = env.CF_VERSION_METADATA?.id || "dev";
+        const name = resolvePoolContainerName("paid", versionId);
+        const stub = env.CONTAINER_V2.get(env.CONTAINER_V2.idFromName(name), { locationHint: "enam" });
+        const warmupUrl = new URL("/health", url.origin);
+        const warmupRequest = new Request(warmupUrl.toString(), {
+          method: "GET",
+          headers: { [CAPACITY_POOL_HEADER]: "paid" },
+        });
+        ctx.waitUntil(
+          stub.fetch(warmupRequest).then(
+            (res) => res.body?.cancel(),
+            (err) => console.warn(`[worker] capture pool warm-up failed: ${errorText(err)}`)
+          )
+        );
       }
     }
 

@@ -199,6 +199,16 @@ export function isDocumentCaptureUploadRoute(pathname: string): boolean {
   return segments.length === 2 && segments[0] === "api" && segments[1] === "document-captures";
 }
 
+export function isDocumentCaptureCapabilitiesRoute(pathname: string): boolean {
+  const segments = canonicalSegments(pathname);
+  return (
+    segments.length === 3 &&
+    segments[0] === "api" &&
+    segments[1] === "document-captures" &&
+    segments[2] === "capabilities"
+  );
+}
+
 const TURNSTILE_AUTH_ACTIONS: Record<string, string> = {
   "/api/auth/send-otp": "login",
   "/api/auth/signup": "signup",

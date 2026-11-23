@@ -155,3 +155,27 @@ export function isPublicAuthRequest(path: string): boolean {
   const normalized = path.split(/[?#]/)[0].replace(/\/+/g, "/").replace(/\/+$/, "").toLowerCase();
   return PUBLIC_AUTH_PATHS.has(path) || PUBLIC_AUTH_PATHS.has(normalized);
 }
+
+/** Optional pool override for document capture uploads ("paid" routes uploads to V2 paid). */
+export function parseDocumentCaptureExtractionPool(value: string | undefined | null): "paid" | null {
+  return (value ?? "").trim().toLowerCase() === "paid" ? "paid" : null;
+}
+
+/** Per-isolate throttle for non-blocking paid-pool warm-up pings. */
+export class WarmupThrottle {
+  private lastRunAt = -Infinity;
+  private readonly intervalMs: number;
+  private readonly now: () => number;
+
+  constructor(intervalMs = 60_000, now: () => number = Date.now) {
+    this.intervalMs = intervalMs;
+    this.now = now;
+  }
+
+  shouldRun(): boolean {
+    const current = this.now();
+    if (current - this.lastRunAt < this.intervalMs) return false;
+    this.lastRunAt = current;
+    return true;
+  }
+}

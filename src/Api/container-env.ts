@@ -21,9 +21,12 @@ export function requirePersistentDatabase(env: { DatabaseProvider?: unknown }): 
   }
 }
 
+export type ContainerEnvPool = "v1" | "free" | "paid";
+
 export function buildContainerEnvVars(
   env: Record<string, unknown>,
-  containerPort: number
+  containerPort: number,
+  pool: ContainerEnvPool = "v1"
 ): Record<string, string> {
   const envVars: Record<string, string> = {
     ASPNETCORE_URLS: `http://+:${containerPort}`,
@@ -40,6 +43,19 @@ export function buildContainerEnvVars(
     if (typeof value === "string") {
       envVars[key] = value;
     }
+  }
+  const capturePool =
+    typeof env.DOCUMENT_CAPTURE_EXTRACTION_POOL === "string"
+      ? env.DOCUMENT_CAPTURE_EXTRACTION_POOL.trim().toLowerCase()
+      : "";
+  if (capturePool === "paid") {
+    // Strip any case-variant ops setting so V1 and V2 free can never inherit ExtractionHost=true.
+    for (const key of Object.keys(envVars)) {
+      if (key.toLowerCase() === "documentcapture__extractionhost") {
+        delete envVars[key];
+      }
+    }
+    envVars.DocumentCapture__ExtractionHost = pool === "paid" ? "true" : "false";
   }
   return envVars;
 }
