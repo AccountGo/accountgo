@@ -3703,6 +3703,50 @@ namespace Api.Data.Migrations.ApiDb
                     b.ToTable("Party");
                 });
 
+            modelBuilder.Entity("Core.Domain.PartyAlias", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("NormalizedAlias")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("PartyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PartyId");
+
+                    b.HasIndex("CompanyId", "PartyId", "Role");
+
+                    b.HasIndex("CompanyId", "Role", "NormalizedAlias")
+                        .IsUnique();
+
+                    b.ToTable("PartyAliases", (string)null);
+                });
+
             modelBuilder.Entity("Core.Domain.PaymentTerm", b =>
                 {
                     b.Property<int>("Id")
@@ -8321,6 +8365,17 @@ namespace Api.Data.Migrations.ApiDb
                     b.Navigation("Measurement");
 
                     b.Navigation("SalesAccount");
+                });
+
+            modelBuilder.Entity("Core.Domain.PartyAlias", b =>
+                {
+                    b.HasOne("Core.Domain.Party", "Party")
+                        .WithMany()
+                        .HasForeignKey("PartyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Party");
                 });
 
             modelBuilder.Entity("Core.Domain.PersonalWorkspace", b =>

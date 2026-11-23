@@ -2,9 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 #nullable enable
+using Api.Data;
 using Api.DocumentCaptures;
+using Api.DocumentCaptures.Matching;
 using Api.Filters;
 using Api.PublicIds;
+using Core.Domain.Security;
 using Core.Entitlements;
 using Core.Tenancy;
 using Microsoft.AspNetCore.Authorization;
@@ -195,6 +198,39 @@ public sealed class DocumentCapturesController(
         try
         {
             return Ok(await captures.LinkAsync(id, request.TargetType, request.TargetId, cancellationToken).ConfigureAwait(false));
+        }
+        catch (DocumentCaptureServiceException ex)
+        {
+            return ServiceProblem(ex);
+        }
+        catch (DocumentCaptureAdmissionBusyException)
+        {
+            Response.Headers.RetryAfter = "1";
+            return ErrorProblem(503, "DOCUMENT_BUSY");
+        }
+    }
+
+    [HttpGet("party-match")]
+    public async Task<IActionResult> MatchParty(
+        [FromQuery] string role,
+        [FromQuery][Dto.Common.PublicId("cap")] int captureId,
+        CancellationToken cancellationToken)
+    {
+        var normalizedRole = PartyMatchingService.NormalizeRole(role);
+        if (normalizedRole is null)
+            return BadRequest(new { message = "Role must be 'vendor' or 'customer'." });
+
+        var requiredPermission = normalizedRole == PartyMatchingService.RoleVendor
+            ? SystemPermissions.PurchasesVendorsView
+            : SystemPermissions.SalesCustomersView;
+        if (!tenant.Permissions.Contains(requiredPermission))
+            return RequirePermissionAttribute.Denied(requiredPermission);
+
+        try
+        {
+            var candidates = await captures.MatchPartyAsync(normalizedRole, captureId, cancellationToken)
+                .ConfigureAwait(false);
+            return Ok(candidates);
         }
         catch (DocumentCaptureServiceException ex)
         {

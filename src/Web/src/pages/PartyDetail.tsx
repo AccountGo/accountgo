@@ -171,6 +171,7 @@ export const PartyDetail: React.FC<{ role: PartyRole }> = ({ role }) => {
   const term = paymentTerms.find((t) => t.id === party.paymentTermId);
   const address = [party.street, [party.city, party.postalCode].filter(Boolean).join(' '), party.country].filter(Boolean);
   const contacts = party.contacts ?? [];
+  const aliases = party.aliases ?? [];
   const newDocumentPath = config.newDocumentPath?.(currentOrg.slug, party.id);
   const canStartDocument = canCreateDocument && !!newDocumentPath;
   const contactName = (c: ContactPerson) => c.fullName || `${c.firstName} ${c.lastName}`.trim();
@@ -376,6 +377,42 @@ export const PartyDetail: React.FC<{ role: PartyRole }> = ({ role }) => {
           </ul>
         )}
       </section>
+
+      {aliases.length > 0 && (
+        <section aria-label="Recognized scan names" className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-[var(--text-main)]">Recognized scan names</h2>
+              <span className="text-xs font-medium text-[var(--text-muted)] bg-[var(--bg-muted)] px-2 py-0.5 rounded-full">
+                {aliases.length}
+              </span>
+            </div>
+          </div>
+          <ul className="divide-y divide-[var(--border-subtle)]">
+            {aliases.map((item) => (
+              <li key={item.alias} className="px-5 py-3 flex items-center justify-between gap-3 text-sm">
+                <div className="min-w-0">
+                  <span className="font-medium text-[var(--text-main)]">{item.alias}</span>
+                  <span className="ml-2 text-xs text-[var(--text-muted)]">
+                    added {formatDate(item.createdAt)}
+                  </span>
+                </div>
+                {canManage && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => mutateContact(config.api.removeAlias(party.id, item.alias), 'DELETE')}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:underline disabled:opacity-50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Remove
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {documentRows && (
         <section aria-label={`${config.Document}s`} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] overflow-hidden shadow-sm">

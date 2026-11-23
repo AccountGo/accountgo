@@ -19,7 +19,7 @@ public sealed class DocumentCaptureSqliteSchemaTests
             db.Database.EnsureCreated();
         }
 
-        Execute(connection, "DROP TABLE \"DocumentCaptureLinks\"; DROP TABLE \"DocumentCaptureAttempts\"; DROP TABLE \"DocumentCaptureBlobs\"; DROP TABLE \"DocumentCaptures\";");
+        Execute(connection, "DROP TABLE \"PartyAliases\"; DROP TABLE \"DocumentCaptureLinks\"; DROP TABLE \"DocumentCaptureAttempts\"; DROP TABLE \"DocumentCaptureBlobs\"; DROP TABLE \"DocumentCaptures\";");
         SQLitePCL.raw.sqlite3_limit(connection.Handle, SQLitePCL.raw.SQLITE_LIMIT_COMPOUND_SELECT, 1);
 
         SqliteSchemaUpgrader.Upgrade(connection);
@@ -29,6 +29,9 @@ public sealed class DocumentCaptureSqliteSchemaTests
         Assert.Equal(1, ScalarInt(connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'DocumentCaptureBlobs';"));
         Assert.Equal(1, ScalarInt(connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'DocumentCaptureAttempts';"));
         Assert.Equal(1, ScalarInt(connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'DocumentCaptureLinks';"));
+        Assert.Equal(1, ScalarInt(connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'PartyAliases';"));
+        Assert.Contains("UNIQUE", ScalarText(connection,
+            "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'IX_PartyAliases_CompanyId_Role_NormalizedAlias';"), StringComparison.OrdinalIgnoreCase);
         var captureRetentionIndex = ScalarText(connection,
             "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'IX_DocumentCaptures_ExpiresAt_Unaccepted';");
         Assert.Contains("ON \"DocumentCaptures\" (\"ExpiresAt\")", captureRetentionIndex, StringComparison.Ordinal);

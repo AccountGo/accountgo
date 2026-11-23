@@ -179,6 +179,14 @@ function setupInvoiceEditMocks(
       capFetches++;
       return jsonRes(capsEnabled);
     }
+    if (url.startsWith('/api/document-captures/party-match')) {
+      const cap = captureFactory();
+      const name = String(((cap.acceptedFields ?? cap.fields) as { customerName?: string } | null)?.customerName ?? '').trim().toLowerCase();
+      if (name === 'northwind traders') {
+        return jsonRes([{ partyId: 'cus_01north00000000000000001', name: 'Northwind Traders', reason: 'name', score: 1.0, archived: false }]);
+      }
+      return jsonRes([]);
+    }
     if (url.startsWith('/api/Sales/SalesInvoice?id=') && options?.existingDraft) {
       return jsonRes(options.existingDraft);
     }
@@ -301,9 +309,9 @@ describe('InvoiceEdit & InvoiceDetail document capture integration (PR 3)', () =
     await scanAndAccept();
     await confirmUnrecordedSale();
 
-    await waitFor(() => expect(screen.getByText(/Suggested client match from scan/i)).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: /Confirm client/i }));
-    await waitFor(() => expect(screen.queryByText(/Suggested client match from scan/i)).toBeNull());
+    await waitFor(() => expect(screen.getByText(/Did you mean one of these existing clients/i)).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /Use client/i }));
+    await waitFor(() => expect(screen.queryByText(/Did you mean one of these existing clients/i)).toBeNull());
     expect(authFetch.mock.calls.some(([u]) => String(u).includes('/api/Sales/SaveClient'))).toBe(false);
   });
 
@@ -401,8 +409,8 @@ describe('InvoiceEdit & InvoiceDetail document capture integration (PR 3)', () =
     renderWithRouter('/org/acme/sales/new');
     await scanAndAccept();
     await confirmUnrecordedSale();
-    await waitFor(() => expect(screen.getByRole('button', { name: /Confirm client/i })).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: /Confirm client/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Use client/i })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /Use client/i }));
 
     fireEvent.click(screen.getByRole('button', { name: /Save draft/i }));
     await waitFor(() => expect(screen.getByText(/attaching the source document failed/i)).toBeTruthy());
@@ -419,8 +427,8 @@ describe('InvoiceEdit & InvoiceDetail document capture integration (PR 3)', () =
     renderWithRouter('/org/acme/sales/new');
     await scanAndAccept();
     await confirmUnrecordedSale();
-    await waitFor(() => expect(screen.getByRole('button', { name: /Confirm client/i })).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: /Confirm client/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Use client/i })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /Use client/i }));
 
     fireEvent.click(screen.getByRole('button', { name: /Save draft/i }));
     await waitFor(() => expect(screen.getByText(/attaching the source document failed/i)).toBeTruthy());

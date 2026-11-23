@@ -3701,6 +3701,50 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.ToTable("Party");
                 });
 
+            modelBuilder.Entity("Core.Domain.PartyAlias", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("NormalizedAlias")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("PartyId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PartyId");
+
+                    b.HasIndex("CompanyId", "PartyId", "Role");
+
+                    b.HasIndex("CompanyId", "Role", "NormalizedAlias")
+                        .IsUnique();
+
+                    b.ToTable("PartyAliases", (string)null);
+                });
+
             modelBuilder.Entity("Core.Domain.PaymentTerm", b =>
                 {
                     b.Property<int>("Id")
@@ -8316,6 +8360,17 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Navigation("Measurement");
 
                     b.Navigation("SalesAccount");
+                });
+
+            modelBuilder.Entity("Core.Domain.PartyAlias", b =>
+                {
+                    b.HasOne("Core.Domain.Party", "Party")
+                        .WithMany()
+                        .HasForeignKey("PartyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Party");
                 });
 
             modelBuilder.Entity("Core.Domain.PersonalWorkspace", b =>

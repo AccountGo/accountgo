@@ -41,6 +41,7 @@ export interface PartyRoleConfig {
     setBillToContact: (partyId: string, contactId: string) => string;
     setPrimaryContact: (partyId: string, contactId: string) => string;
     removeContact: (partyId: string, contactId: string) => string;
+    removeAlias: (partyId: string, alias: string) => string;
   };
   viewPermission: string;
   managePermission: string;
@@ -93,6 +94,8 @@ export const partyRoles: Record<PartyRole, PartyRoleConfig> = {
         `/api/Sales/SetClientPrimaryContact?clientId=${partyId}&contactId=${contactId}`,
       removeContact: (partyId, contactId) =>
         `/api/Sales/DeleteClientContact?clientId=${partyId}&contactId=${contactId}`,
+      removeAlias: (partyId, alias) =>
+        `/api/Sales/DeleteClientAlias?clientId=${encodeURIComponent(partyId)}&alias=${encodeURIComponent(alias)}`,
     },
     viewPermission: 'sales.customers.view',
     managePermission: 'sales.customers.manage',
@@ -148,6 +151,8 @@ export const partyRoles: Record<PartyRole, PartyRoleConfig> = {
         `/api/Purchasing/SetVendorPrimaryContact?vendorId=${partyId}&contactId=${contactId}`,
       removeContact: (partyId, contactId) =>
         `/api/Purchasing/DeleteVendorContact?vendorId=${partyId}&contactId=${contactId}`,
+      removeAlias: (partyId, alias) =>
+        `/api/Purchasing/DeleteVendorAlias?vendorId=${encodeURIComponent(partyId)}&alias=${encodeURIComponent(alias)}`,
     },
     viewPermission: 'purchases.vendors.view',
     managePermission: 'purchases.vendors.manage',

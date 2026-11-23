@@ -898,7 +898,10 @@ WHERE ""DisabledModulesJson"" IS NULL
                 DocumentCaptureAttemptsGenerationIndexSql,
                 DocumentCaptureAttemptsReservationIndexSql,
                 DocumentCaptureLinksCaptureIndexSql,
-                DocumentCaptureLinksTargetIndexSql
+                DocumentCaptureLinksTargetIndexSql,
+                PartyAliasesTableSql,
+                PartyAliasesUniqueIndexSql,
+                PartyAliasesPartyIndexSql
             })
             {
                 using var command = connection.CreateCommand();
@@ -1020,6 +1023,27 @@ WHERE ""DisabledModulesJson"" IS NULL
         private const string DocumentCaptureLinksTargetIndexSql = @"
             CREATE INDEX IF NOT EXISTS ""IX_DocumentCaptureLinks_CompanyId_TargetType_TargetId""
             ON ""DocumentCaptureLinks"" (""CompanyId"", ""TargetType"", ""TargetId"");";
+
+        private const string PartyAliasesTableSql = @"
+            CREATE TABLE IF NOT EXISTS ""PartyAliases"" (
+                ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""PartyId"" INTEGER NOT NULL,
+                ""Role"" TEXT NOT NULL,
+                ""NormalizedAlias"" TEXT NOT NULL,
+                ""CreatedBy"" TEXT NOT NULL,
+                ""CreatedAt"" TEXT NOT NULL,
+                CONSTRAINT ""FK_PartyAliases_Party_PartyId""
+                    FOREIGN KEY (""PartyId"") REFERENCES ""Party"" (""Id"") ON DELETE CASCADE
+            );";
+
+        private const string PartyAliasesUniqueIndexSql = @"
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_PartyAliases_CompanyId_Role_NormalizedAlias""
+            ON ""PartyAliases"" (""CompanyId"", ""Role"", ""NormalizedAlias"");";
+
+        private const string PartyAliasesPartyIndexSql = @"
+            CREATE INDEX IF NOT EXISTS ""IX_PartyAliases_CompanyId_PartyId_Role""
+            ON ""PartyAliases"" (""CompanyId"", ""PartyId"", ""Role"");";
 
         private static void EnsureCreditsReturnsRefundsSchema(DbConnection connection)
         {

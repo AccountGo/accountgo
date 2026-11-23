@@ -17,6 +17,11 @@ export interface ContactPerson {
   isBillTo: boolean;
 }
 
+export interface PartyAliasItem {
+  alias: string;
+  createdAt: string;
+}
+
 /**
  * What clients and vendors share: both are parties, the same details and balances seen from the side of sales or
  * purchases. What each one owes or is owed comes from its issued invoices or approved bills.
@@ -37,6 +42,8 @@ export interface PartyBase {
   billToContactId?: string | null;
   /** Contact persons; populated on a single-party read. */
   contacts?: ContactPerson[];
+  /** Normalized scan name aliases; populated on a single-party read. */
+  aliases?: PartyAliasItem[];
   archived: boolean;
   /** Nothing recorded for it yet, so it can be deleted rather than archived. */
   canDelete?: boolean;

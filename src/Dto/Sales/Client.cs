@@ -26,6 +26,8 @@ namespace Dto.Sales
         public int? BillToContactId { get; set; }
         /// <summary>Contact persons linked to this client. Populated on a single-client read.</summary>
         public List<ContactPersonDto> Contacts { get; set; } = new();
+        /// <summary>Normalized capture name aliases remembered for this client. Populated on a single-client read.</summary>
+        public List<PartyAliasDto> Aliases { get; set; } = new();
         public bool Archived { get; set; }
         /// <summary>Unpaid on its issued invoices.</summary>
         public decimal Outstanding { get; set; }

@@ -9,18 +9,21 @@ import { ItemFormDialog } from '../components/ItemFormDialog';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { usePermissions } from '../components/Gating';
 import { DocumentCapturePanel } from '../components/document-capture/DocumentCapturePanel';
+import { PartyMatchPrompt } from '../components/document-capture/PartyMatchPrompt';
 import {
   computeCaptureDiscrepancy,
   describeCaptureError,
   DocumentCaptureCapabilities,
   DocumentCaptureView,
   evaluateFinancialApplyGates,
-  findSuggestedVendor,
+  fetchPartyMatchCandidates,
   formatSignedCurrencyDifference,
   isValidIsoDate,
   MAX_REFERENCE_NO_LENGTH,
   MAX_VENDOR_INVOICE_NO_LENGTH,
   parseStrictDecimal,
+  PartyMatchCandidate,
+  resolveAutoPreselectCandidate,
   VendorCaptureFields,
 } from '../components/document-capture/fields';
 import { Bill, BillAccount, CatalogItem, CustomerOption, ItemOption, PaymentTermOption, TenantContextType, Vendor } from '../types';
@@ -112,8 +115,10 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
   const [linkedCaptures, setLinkedCaptures] = useState<DocumentCaptureView[]>([]);
   const [acceptedCapture, setAcceptedCapture] = useState<DocumentCaptureView | null>(null);
   const [ambiguousCurrencyConfirmed, setAmbiguousCurrencyConfirmed] = useState(false);
-  const [suggestedVendor, setSuggestedVendor] = useState<CustomerOption | null>(null);
-  const [unmatchedVendorName, setUnmatchedVendorName] = useState<string | null>(null);
+  const [vendorMatchCandidates, setVendorMatchCandidates] = useState<PartyMatchCandidate[]>([]);
+  const [autoMatchedVendor, setAutoMatchedVendor] = useState<PartyMatchCandidate | null>(null);
+  const [extractedVendorName, setExtractedVendorName] = useState<string | null>(null);
+  const [vendorMatchDismissed, setVendorMatchDismissed] = useState(false);
   const [newVendorInitialName, setNewVendorInitialName] = useState<string | undefined>(undefined);
   const [pendingDueDate, setPendingDueDate] = useState<string | null>(null);
   const [pendingLineMerge, setPendingLineMerge] = useState<LineDraft[] | null>(null);
@@ -300,7 +305,10 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
     setCaptureCapabilities(null);
     setShowCapturePanel(false);
     setAcceptedCapture(null);
-    setSuggestedVendor(null);
+    setVendorMatchCandidates([]);
+    setAutoMatchedVendor(null);
+    setExtractedVendorName(null);
+    setVendorMatchDismissed(false);
     setPendingDueDate(null);
     setPendingLineMerge(null);
     setAckSnapshots({});
@@ -437,11 +445,25 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
       const fields = ((canonical.acceptedFields ?? canonical.fields) as VendorCaptureFields | null) ?? {};
       const gates = evaluateFinancialApplyGates(canonical, currentOrg.currency, false);
 
-      // Exact-name vendor suggestion requires user confirmation and never creates a vendor.
-      const matched = findSuggestedVendor(fields.vendorName, vendors);
-      setSuggestedVendor(matched && matched.id !== vendorId ? matched : null);
+      // Server-side party matching (M-01..M-06): only a single non-archived alias/identifier may pre-select.
       const trimmedVendorName = typeof fields.vendorName === 'string' ? fields.vendorName.trim() : '';
-      setUnmatchedVendorName(!matched && trimmedVendorName && !vendorId ? trimmedVendorName : null);
+      setVendorMatchCandidates([]);
+      setAutoMatchedVendor(null);
+      setExtractedVendorName(trimmedVendorName || null);
+      setVendorMatchDismissed(false);
+      void fetchPartyMatchCandidates(authFetch, 'vendor', canonical.id).then((candidates) => {
+        if (vendorId) {
+          return;
+        }
+        const preselect = resolveAutoPreselectCandidate(candidates);
+        if (preselect) {
+          setVendorId(preselect.partyId);
+          setAutoMatchedVendor(preselect);
+          setVendorMatchCandidates([]);
+        } else {
+          setVendorMatchCandidates(candidates);
+        }
+      });
 
       if (!gates.canApplyNonMonetary) {
         return;
@@ -744,62 +766,6 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
         </div>
       )}
 
-      {/* Vendor suggestion confirmation (exact-name match only, never auto-creates a vendor) */}
-      {suggestedVendor && (
-        <div role="status" className="mb-4 rounded-xl border border-[var(--brand-ring)]/40 bg-[var(--brand-subtle)]/40 p-3.5 flex flex-wrap items-center justify-between gap-2 text-xs">
-          <span>
-            Suggested vendor match from scan: <strong className="text-[var(--text-main)]">{suggestedVendor.name}</strong>
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setVendorId(suggestedVendor.id);
-                setSuggestedVendor(null);
-              }}
-              className="px-3 py-1.5 font-semibold rounded-lg bg-[var(--brand-primary)] text-white hover:opacity-90 transition"
-            >
-              Confirm vendor
-            </button>
-            <button
-              type="button"
-              onClick={() => setSuggestedVendor(null)}
-              className="px-2.5 py-1.5 font-semibold rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Unmatched vendor prompt: opens the existing New vendor dialog pre-filled (never auto-creates) */}
-      {unmatchedVendorName && !vendorId && canManageVendors && (
-        <div role="status" className="mb-4 rounded-xl border border-[var(--brand-ring)]/40 bg-[var(--brand-subtle)]/40 p-3.5 flex flex-wrap items-center justify-between gap-2 text-xs">
-          <span>
-            No existing vendor matches <strong className="text-[var(--text-main)]">{unmatchedVendorName}</strong>.
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setNewVendorInitialName(unmatchedVendorName);
-                setIsAddingVendor(true);
-              }}
-              className="px-3 py-1.5 font-semibold rounded-lg bg-[var(--brand-primary)] text-white hover:opacity-90 transition"
-            >
-              Create vendor &ldquo;{unmatchedVendorName}&rdquo;
-            </button>
-            <button
-              type="button"
-              onClick={() => setUnmatchedVendorName(null)}
-              className="px-2.5 py-1.5 font-semibold rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Explicit due-date / payment-term choice when a payment term was already selected */}
       {pendingDueDate && (
         <div role="status" className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-800 dark:text-amber-300">
@@ -1088,6 +1054,33 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
             )}
             {vendors.length === 0 && !canManageVendors && (
               <p className="text-xs text-[var(--text-muted)]">There are no vendors yet, and adding one takes the "Create & Edit Vendors" permission.</p>
+            )}
+            {/* Server-backed vendor matching (M-05 / M-06): rendered directly under the vendor field */}
+            {!vendorMatchDismissed && (
+              <PartyMatchPrompt
+                role="vendor"
+                extractedName={extractedVendorName}
+                candidates={vendorMatchCandidates}
+                autoMatched={autoMatchedVendor}
+                canManage={canManageVendors}
+                selectedPartyId={vendorId ?? ''}
+                orgSlug={orgSlug ?? ''}
+                onSelectCandidate={(candidate) => {
+                  setVendorId(candidate.partyId);
+                  setVendorMatchCandidates([]);
+                  setAutoMatchedVendor(null);
+                  setVendorMatchDismissed(true);
+                }}
+                onCreateNew={(initialName) => {
+                  setNewVendorInitialName(initialName);
+                  setIsAddingVendor(true);
+                }}
+                onDismiss={() => {
+                  setVendorMatchDismissed(true);
+                  setVendorMatchCandidates([]);
+                  setAutoMatchedVendor(null);
+                }}
+              />
             )}
           </div>
 
@@ -1473,7 +1466,10 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
             setVendors((prev) => [option, ...prev]);
             setVendorId(saved.id);
             if (saved.paymentTermId) applyTerm(saved.paymentTermId);
-            setUnmatchedVendorName(null);
+            setExtractedVendorName(null);
+            setVendorMatchCandidates([]);
+            setAutoMatchedVendor(null);
+            setVendorMatchDismissed(true);
             setNewVendorInitialName(undefined);
             setIsAddingVendor(false);
           }}
