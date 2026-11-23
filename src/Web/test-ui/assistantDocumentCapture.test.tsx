@@ -128,6 +128,7 @@ describe('AssistantSidepanel document capture integration (PR 5)', () => {
     render(<AssistantSidepanel orgSlug="acme" />);
 
     await waitFor(() => expect(authFetch).toHaveBeenCalledWith('/api/document-captures/capabilities'));
+    expect(screen.getByText('Names and personal details are hidden from the AI.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Attach document/i })).toBeNull();
   });
 
