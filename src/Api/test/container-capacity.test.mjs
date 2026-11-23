@@ -14,6 +14,7 @@ import {
 import {
   isDocumentCaptureCapabilitiesRoute,
   isDocumentCaptureUploadRoute,
+  isDocumentCaptureWarmupRequest,
 } from "../container-proxy.ts";
 
 test("isTieredCapacityEnabled only accepts true", () => {
@@ -144,4 +145,14 @@ test("WarmupThrottle permits at most one warm-up per interval", () => {
   now += 1;
   assert.equal(throttle.shouldRun(), true);
   assert.equal(throttle.shouldRun(), false);
+});
+
+test("isDocumentCaptureWarmupRequest requires opt-in warmup=1 on GET capabilities", () => {
+  assert.equal(isDocumentCaptureWarmupRequest("/api/document-captures/capabilities", "GET", "?warmup=1"), true);
+  assert.equal(isDocumentCaptureWarmupRequest("/api/document-captures/capabilities", "GET", "?foo=bar&warmup=1"), true);
+  assert.equal(isDocumentCaptureWarmupRequest("/api/document-captures/capabilities", "GET", ""), false);
+  assert.equal(isDocumentCaptureWarmupRequest("/api/document-captures/capabilities", "GET", "?warmup=0"), false);
+  assert.equal(isDocumentCaptureWarmupRequest("/api/document-captures/capabilities", "GET", "?warmup=true"), false);
+  assert.equal(isDocumentCaptureWarmupRequest("/api/document-captures/capabilities", "POST", "?warmup=1"), false);
+  assert.equal(isDocumentCaptureWarmupRequest("/api/document-captures", "GET", "?warmup=1"), false);
 });

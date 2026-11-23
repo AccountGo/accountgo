@@ -84,10 +84,15 @@ export function useDocumentCapture({
   // Always revoke object URLs on unmount.
   useEffect(() => () => revokePreview(), [revokePreview]);
 
-  // Fetch action-aware capture capabilities for the active workspace only when not provided by the host.
+  // Fetch action-aware capture capabilities with opt-in ?warmup=1 when the scan panel opens.
+  // When the host already pre-fetched capabilities, fire a non-blocking ?warmup=1 ping if capture is active
+  // so the paid extraction container warms without ordinary sidebar/page loads waking it.
   useEffect(() => {
     if (hasExternalCapabilities) {
       setCapabilitiesLoading(false);
+      if (externalCapabilities?.enabled && externalCapabilities?.providerAvailable) {
+        void Promise.resolve(authFetch('/api/document-captures/capabilities?warmup=1')).catch(() => {});
+      }
       return;
     }
     let cancelled = false;
@@ -95,7 +100,7 @@ export function useDocumentCapture({
     setCapabilitiesLoading(true);
     (async () => {
       try {
-        const res = await authFetch('/api/document-captures/capabilities');
+        const res = await authFetch('/api/document-captures/capabilities?warmup=1');
         if (cancelled || activeScopeRef.current.split('::')[0] !== expectedOrg) return;
         if (!res.ok) {
           setFetchedCapabilities(null);
@@ -114,7 +119,7 @@ export function useDocumentCapture({
     return () => {
       cancelled = true;
     };
-  }, [authFetch, hasExternalCapabilities, orgSlug]);
+  }, [authFetch, externalCapabilities?.enabled, externalCapabilities?.providerAvailable, hasExternalCapabilities, orgSlug]);
 
   const isCurrent = useCallback(
     (expectedScope: string, expectedGen: number) =>

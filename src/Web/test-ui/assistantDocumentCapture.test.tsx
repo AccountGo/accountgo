@@ -131,16 +131,23 @@ describe('AssistantSidepanel document capture integration (PR 5)', () => {
     expect(screen.queryByRole('button', { name: /Attach document/i })).toBeNull();
   });
 
-  it('fetches capabilities only once across AssistantSidepanel and DocumentCapturePanel', async () => {
+  it('fetches plain capabilities on AssistantSidepanel load and sends warmup=1 only when DocumentCapturePanel opens', async () => {
     authFetch.mockResolvedValue(jsonResponse(assistantCaps));
 
     render(<AssistantSidepanel orgSlug="acme" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: /Attach document/i }));
+    const attachBtn = await screen.findByRole('button', { name: /Attach document/i });
+    const beforeOpenUrls = authFetch.mock.calls.map(([url]) => url);
+    expect(beforeOpenUrls).toContain('/api/document-captures/capabilities');
+    expect(beforeOpenUrls).not.toContain('/api/document-captures/capabilities?warmup=1');
+
+    fireEvent.click(attachBtn);
     await screen.findByRole('button', { name: /Choose image or PDF/i });
 
     const capCalls = authFetch.mock.calls.filter(([url]) => url === '/api/document-captures/capabilities');
     expect(capCalls).toHaveLength(1);
+    const warmupCalls = authFetch.mock.calls.filter(([url]) => url === '/api/document-captures/capabilities?warmup=1');
+    expect(warmupCalls).toHaveLength(1);
   });
 
   it('accepts masked assistant fields, sets public captureId on AssistantAdapter, and shows attached chip', async () => {

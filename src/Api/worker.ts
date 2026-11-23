@@ -33,8 +33,8 @@ import {
   RestoreState,
   bufferRequest,
   fetchFromContainer,
-  isDocumentCaptureCapabilitiesRoute,
   isDocumentCaptureUploadRoute,
+  isDocumentCaptureWarmupRequest,
   maxRequestBodyBytesForRoute,
   payloadTooLargeResponse,
   toRequest,
@@ -623,11 +623,9 @@ export default {
         return stub.fetch(new Request(request, { headers }));
       }
 
-      // Non-blocking warm-up of the V2 paid pool on capabilities checks (throttled to 1/60s per isolate).
+      // Opt-in non-blocking warm-up of the V2 paid pool when a scan panel opens (?warmup=1), throttled to 1/60s per isolate.
       if (
-        method === "GET" &&
-        isDocumentCaptureCapabilitiesRoute(url.pathname) &&
-        url.searchParams.get("warmup") !== "0" &&
+        isDocumentCaptureWarmupRequest(url.pathname, method, url.search) &&
         env.CONTAINER_V2 &&
         captureWarmupThrottle.shouldRun()
       ) {

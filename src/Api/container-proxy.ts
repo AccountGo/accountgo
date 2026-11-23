@@ -209,6 +209,17 @@ export function isDocumentCaptureCapabilitiesRoute(pathname: string): boolean {
   );
 }
 
+/** True only when a scan panel explicitly opts into warming the paid capture pool via GET .../capabilities?warmup=1. */
+export function isDocumentCaptureWarmupRequest(
+  pathname: string,
+  method: string,
+  search: string
+): boolean {
+  if (method.toUpperCase() !== "GET") return false;
+  if (!isDocumentCaptureCapabilitiesRoute(pathname)) return false;
+  return new URLSearchParams(search).get("warmup") === "1";
+}
+
 const TURNSTILE_AUTH_ACTIONS: Record<string, string> = {
   "/api/auth/send-otp": "login",
   "/api/auth/signup": "signup",

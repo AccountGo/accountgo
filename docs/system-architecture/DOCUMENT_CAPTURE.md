@@ -110,13 +110,14 @@ capture uploads run on the V2 `paid` pool at `standard-1`:
   `DocumentCapturePdfWarmup` does not run. `GET /api/document-captures/capabilities`
   still reports `enabled` and `providerAvailable` from the normal flags, and
   accept, reject, link, and evidence reads work normally.
-- Startup validation requires `DocumentCapture:ExtractionHost=false` to be
-  paired with `DocumentCapture:Enabled=true` and a configured
-  `DocumentCapture:Extractor`.
-- On `GET /api/document-captures/capabilities` with the pool var set (unless
-  `warmup=0` is passed), the Worker fires a non-blocking `GET /health` warm-up
-  to the V2 `paid` pool via `ctx.waitUntil`, throttled to at most once per
-  isolate per 60 seconds, to absorb container cold start before the user uploads.
+- `DocumentCapture:ExtractionHost=false` is also valid when `DocumentCapture:Enabled=false`
+  so ops can flip `DocumentCapture__Enabled=false` as a kill switch without
+  clearing `DOCUMENT_CAPTURE_EXTRACTION_POOL`.
+- On `GET /api/document-captures/capabilities?warmup=1` with the pool var set
+  (opt-in, sent only by `useDocumentCapture` when a scan panel opens), the
+  Worker fires a non-blocking `GET /health` warm-up to the V2 `paid` pool via
+  `ctx.waitUntil`, throttled to at most once per isolate per 60 seconds, so
+  ordinary sidebar/page availability checks never wake the `standard-1` container.
 
 ### Measured resource envelope
 

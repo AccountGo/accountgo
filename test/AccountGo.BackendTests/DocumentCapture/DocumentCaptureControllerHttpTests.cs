@@ -789,10 +789,11 @@ public sealed class DocumentCaptureControllerHttpTests : IAsyncLifetime
         });
         using var nonHostClient = nonHostFactory.CreateClient();
 
-        // 1. Capabilities still reports enabled and providerAvailable.
-        using (var capReq = NewRequest(HttpMethod.Get, "/api/document-captures/capabilities"))
-        using (var capRes = await nonHostClient.SendAsync(capReq))
+        // 1. Capabilities still reports enabled and providerAvailable, and ignores unknown query params like ?warmup=1.
+        foreach (var capPath in new[] { "/api/document-captures/capabilities", "/api/document-captures/capabilities?warmup=1" })
         {
+            using var capReq = NewRequest(HttpMethod.Get, capPath);
+            using var capRes = await nonHostClient.SendAsync(capReq);
             Assert.Equal(HttpStatusCode.OK, capRes.StatusCode);
             using var body = JsonDocument.Parse(await capRes.Content.ReadAsStringAsync());
             Assert.True(body.RootElement.GetProperty("enabled").GetBoolean());
@@ -856,5 +857,31 @@ public sealed class DocumentCaptureControllerHttpTests : IAsyncLifetime
             var captures = await db.DocumentCaptures.IgnoreQueryFilters().CountAsync(row => row.CompanyId == _companyId);
             return (attempts, captures);
         }
+    }
+
+    [Fact]
+    public async Task EnabledFalseAndExtractionHostFalse_StartsCleanly_ReportsDisabledCapabilities_AndRejectsUpload()
+    {
+        using var disabledNonHostFactory = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.UseSetting("DocumentCapture:Enabled", "false");
+            builder.UseSetting("DocumentCapture:ExtractionHost", "false");
+        });
+        using var client = disabledNonHostFactory.CreateClient();
+
+        using (var capReq = NewRequest(HttpMethod.Get, "/api/document-captures/capabilities"))
+        using (var capRes = await client.SendAsync(capReq))
+        {
+            Assert.Equal(HttpStatusCode.OK, capRes.StatusCode);
+            using var body = JsonDocument.Parse(await capRes.Content.ReadAsStringAsync());
+            Assert.False(body.RootElement.GetProperty("enabled").GetBoolean());
+        }
+
+        using var uploadReq = NewRequest(HttpMethod.Post, "/api/document-captures");
+        uploadReq.Content = CreateUploadForm("purchase-invoice", CreatePng(0xFF99AABB), "image/png");
+        using var uploadRes = await client.SendAsync(uploadReq);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, uploadRes.StatusCode);
+        Assert.Equal("1", uploadRes.Headers.RetryAfter?.Delta?.TotalSeconds.ToString("0") ?? uploadRes.Headers.GetValues("Retry-After").FirstOrDefault());
+        Assert.Equal("DOCUMENT_CAPTURE_UNCONFIGURED", await ReadProblemCodeAsync(uploadRes));
     }
 }

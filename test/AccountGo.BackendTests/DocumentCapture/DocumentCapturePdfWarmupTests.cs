@@ -83,16 +83,17 @@ public sealed class DocumentCapturePdfWarmupTests
     }
 
     [Fact]
-    public void OptionsValidate_ExtractionHostFalseRequiresEnabledAndExtractor()
+    public void OptionsValidate_AllowsExtractionHostFalseEvenWhenCaptureDisabled()
     {
         var dev = new Mock<IHostEnvironment>();
         dev.SetupGet(e => e.EnvironmentName).Returns("Development");
 
-        Assert.Throws<InvalidOperationException>(() => DocumentCaptureOptions.Validate(
-            new DocumentCaptureOptions { Enabled = false, ExtractionHost = false, Extractor = "fake" }, dev.Object));
+        // Kill switch: Enabled=false with ExtractionHost=false (forced on V1 by pool var) must never block startup.
+        DocumentCaptureOptions.Validate(
+            new DocumentCaptureOptions { Enabled = false, ExtractionHost = false, Extractor = "" }, dev.Object);
 
-        Assert.Throws<InvalidOperationException>(() => DocumentCaptureOptions.Validate(
-            new DocumentCaptureOptions { Enabled = true, ExtractionHost = false, Extractor = "" }, dev.Object));
+        DocumentCaptureOptions.Validate(
+            new DocumentCaptureOptions { Enabled = false, ExtractionHost = false, Extractor = "fake" }, dev.Object);
 
         DocumentCaptureOptions.Validate(
             new DocumentCaptureOptions { Enabled = true, ExtractionHost = false, Extractor = "fake" }, dev.Object);
