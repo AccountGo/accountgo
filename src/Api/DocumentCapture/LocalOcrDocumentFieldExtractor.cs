@@ -38,6 +38,7 @@ public sealed class DocumentCaptureOcrWorkerOptions
 
 public sealed class LocalOcrDocumentFieldExtractor : IDocumentFieldExtractor, IDisposable
 {
+    internal const string CurrentProviderVersion = CaptureWorkerModels.Version + "+" + DocumentTextFieldParser.RulesVersion;
     internal static readonly TimeSpan GateWait = TimeSpan.FromSeconds(15);
     private readonly DocumentCaptureOcrWorkerOptions _options;
     private readonly string _workerPath;
@@ -147,7 +148,7 @@ public sealed class LocalOcrDocumentFieldExtractor : IDocumentFieldExtractor, ID
             var parsed = DocumentTextFieldParser.Parse(request.Kind, lines);
             var extraction = new DocumentExtractionResult(parsed.FieldsJson, request.Kind, 1,
                 result.Warnings.Concat(parsed.Warnings).Distinct(StringComparer.Ordinal).Take(32).ToArray(),
-                rawText, ProviderName, CaptureWorkerModels.Version);
+                rawText, ProviderName, CurrentProviderVersion);
             outcome = "ok";
             return extraction;
         }

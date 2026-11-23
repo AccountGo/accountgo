@@ -18,6 +18,8 @@ public sealed record ParsedFields(string FieldsJson, IReadOnlyList<string> Warni
 /// </summary>
 public static class DocumentTextFieldParser
 {
+    public const string RulesVersion = "rules-1";
+
     private const int MaxTotalInputChars = 8_000;
     private static readonly TimeSpan DefaultParseDeadline = TimeSpan.FromMilliseconds(500);
     private const RegexOptions Linear = RegexOptions.CultureInvariant | RegexOptions.NonBacktracking;
