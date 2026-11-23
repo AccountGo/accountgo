@@ -119,6 +119,11 @@ public static class DocumentTextFieldParser
         @"^\d{1,3}[.)]?\s+",
         Linear);
 
+    // E1b: reject spliced header/label rows from table line descriptions.
+    private static readonly Regex LineItemDescriptionLabelKeywordRegex = new(
+        @"(?:\b(?:date|invoice|receipt|bill|number|due|total|subtotal|tax|vat|gst|balance|amount|paid|page|tel|phone|email|terms|reference|po|customer|bill\s*to|ship\s*to)\b|\bno\.|#)",
+        LinearI);
+
     private static readonly Regex LegalSuffixRegex = new(
         @"\b(?:ltd\.?|limited|llc|l\.l\.c\.?|inc\.?|incorporated|corp\.?|corporation|llp|pte\.?\s*ltd\.?|pte\.?|sdn\.?\s*bhd\.?|gmbh|co\.?,?\s*ltd\.?|co\.)\b|บริษัท.*จำกัด",
         LinearI);
@@ -704,6 +709,10 @@ public static class DocumentTextFieldParser
             if (desc.Length == 0 || CountLetters(desc) < 2)
                 continue;
 
+            // E1b: reject spliced header/label rows whose description has a label keyword, a date, or a "Label: value" form.
+            if (IsDisqualifiedLineDescription(desc))
+                continue;
+
             if (!decimal.TryParse(m.Groups[2].Value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var qty)
                 || qty <= 0m)
                 continue;
@@ -728,6 +737,21 @@ public static class DocumentTextFieldParser
         }
 
         return (result, sum);
+    }
+
+    private static bool IsDisqualifiedLineDescription(string desc)
+    {
+        if (LineItemDescriptionLabelKeywordRegex.IsMatch(desc))
+            return true;
+
+        var colonIdx = desc.IndexOf(':', StringComparison.Ordinal);
+        if (colonIdx >= 0 && colonIdx < desc.Length - 1 && !string.IsNullOrWhiteSpace(desc[(colonIdx + 1)..]))
+            return true;
+
+        if (DateAndAmountParser.TryExtractDate(desc) is not null)
+            return true;
+
+        return false;
     }
 
     // K2 + L1: strong paid cues only, negations never count, positive amount due always wins;

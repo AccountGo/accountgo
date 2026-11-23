@@ -813,6 +813,30 @@ public sealed class DocumentTextFieldParserTests
         Assert.Empty(noSubtotalWithTax.GetProperty("lines").EnumerateArray().ToList());
     }
 
+    // --- E1b: spliced header row ("Date: 2026-11-20 2 $25.00 $50.00") rejected before sum check ---
+
+    [Fact]
+    public void Parse_Lines_E1b_RejectsSplicedHeaderRowWithLabelDateOrColonBeforeSumCheck()
+    {
+        var lines = new[]
+        {
+            Line("Blue Bean Coffee Supply"),
+            Line("TAX INVOICE"),
+            Line("Invoice No.: S01-1283 $50.00"),
+            Line("Date: 2026-11-20 2 $25.00 $50.00"),
+            Line("Espresso beans 1 $50.00"),
+            Line("Paper cups 2 $25.00 $50.00"),
+            Line("Subtotal: $100.00"),
+            Line("Tax 10%: $10.00"),
+            Line("TOTAL: $110.00"),
+        };
+
+        var root = ParseAndValidate("purchase-invoice", lines, out _);
+        Assert.Empty(root.GetProperty("lines").EnumerateArray().ToList());
+        Assert.Equal("2026-11-20", root.GetProperty("date").GetString());
+        Assert.Equal("110.00", root.GetProperty("sourceTotals").GetProperty("grandTotal").GetString());
+    }
+
     // --- E2: vendor address detection (Unit/Tower/comma+digit) and earliest clean letters-only line ---
 
     [Fact]
