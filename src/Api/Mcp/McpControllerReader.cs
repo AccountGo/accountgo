@@ -66,6 +66,12 @@ namespace Api.Mcp
             };
         }
 
+        public Api.Service.Ai.IAssistantPseudonymService? Pseudonyms =>
+            (_httpContextAccessor.HttpContext?.RequestServices ?? _services).GetService<Api.Service.Ai.IAssistantPseudonymService>();
+
+        public Api.Service.Ai.IMcpCallerSessionContext? CallerSession =>
+            (_httpContextAccessor.HttpContext?.RequestServices ?? _services).GetService<Api.Service.Ai.IMcpCallerSessionContext>();
+
         /// <summary>Runs <paramref name="actionName"/> on <typeparamref name="TController"/> behind its filters.</summary>
         /// <param name="actionName">The C# method name of a GET action, e.g. <c>nameof(SalesController.SalesInvoice)</c>.</param>
         /// <param name="invoke">Calls the action on the controller instance with the tool's arguments.</param>

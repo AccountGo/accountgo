@@ -589,6 +589,62 @@ public sealed class McpDeidentificationTests : IAsyncLifetime
         Assert.Matches(@"- Customer: C-[0-9A-F]{8}", built.CombinedMessage!);
     }
 
+    [Fact]
+    public async Task ToolInputs_AcceptSessionScopedPseudonymTokens_AndRejectUnknownCrossSessionOrWrongKind()
+    {
+        const string sessionA = "sess_input_A";
+        const string sessionB = "sess_input_B";
+
+        var clientsA = await CallMcpToolAsync("search_clients", null, sessionId: sessionA);
+        var customerTokenA = clientsA["data"]![0]!["name"]!.GetValue<string>();
+        Assert.Matches(@"^C-[0-9A-F]{8}$", customerTokenA);
+
+        var vendorsA = await CallMcpToolAsync("search_vendors", null, sessionId: sessionA);
+        var vendorTokenA = vendorsA["data"]![0]!["name"]!.GetValue<string>();
+        Assert.Matches(@"^V-[0-9A-F]{8}$", vendorTokenA);
+
+        var banksA = await CallMcpToolAsync("list_bank_accounts", null, sessionId: sessionA);
+        var bankListA = banksA["data"] as JsonArray ?? banksA["data"]?["items"] as JsonArray ?? banksA["data"]?["accounts"] as JsonArray;
+        var bankTokenA = bankListA![0]!["name"]!.GetValue<string>();
+        Assert.Matches(@"^B-[0-9A-F]{8}$", bankTokenA);
+
+        // Same session: pseudonym tokens resolve and return matching records.
+        var clientRes = await CallMcpToolAsync("get_client", new { clientId = customerTokenA }, sessionId: sessionA);
+        Assert.Equal("Success", clientRes["status"]!.GetValue<string>());
+        Assert.Equal(_customerPublicId, clientRes["data"]!["client"]!["id"]!.GetValue<string>());
+
+        var invoicesByToken = await CallMcpToolAsync("search_invoices", new { clientId = customerTokenA }, sessionId: sessionA);
+        Assert.Equal("Success", invoicesByToken["status"]!.GetValue<string>());
+        Assert.Single(invoicesByToken["data"]!.AsArray());
+
+        var vendorRes = await CallMcpToolAsync("get_vendor", new { vendorId = vendorTokenA }, sessionId: sessionA);
+        Assert.Equal("Success", vendorRes["status"]!.GetValue<string>());
+        Assert.Equal(_vendorPublicId, vendorRes["data"]!["vendor"]!["id"]!.GetValue<string>());
+
+        var billsByToken = await CallMcpToolAsync("search_bills", new { vendorId = vendorTokenA }, sessionId: sessionA);
+        Assert.Equal("Success", billsByToken["status"]!.GetValue<string>());
+        Assert.Single(billsByToken["data"]!.AsArray());
+
+        var bankRes = await CallMcpToolAsync("list_bank_accounts", new { bankId = bankTokenA }, sessionId: sessionA);
+        Assert.Equal("Success", bankRes["status"]!.GetValue<string>());
+
+        // Cross-session token -> InvalidRequest (existing invalid-id response).
+        var crossSession = await CallMcpToolAsync("get_client", new { clientId = customerTokenA }, sessionId: sessionB);
+        Assert.Equal("InvalidRequest", crossSession["status"]!.GetValue<string>());
+
+        // Unknown token -> InvalidRequest.
+        var unknown = await CallMcpToolAsync("get_client", new { clientId = "C-DEADBEEF" }, sessionId: sessionA);
+        Assert.Equal("InvalidRequest", unknown["status"]!.GetValue<string>());
+
+        // Wrong kind (vendor token passed to get_client) -> InvalidRequest.
+        var wrongKind = await CallMcpToolAsync("get_client", new { clientId = vendorTokenA }, sessionId: sessionA);
+        Assert.Equal("InvalidRequest", wrongKind["status"]!.GetValue<string>());
+
+        // Absent sessionId (ephemeral mode) -> token cannot resolve -> InvalidRequest.
+        var noSession = await CallMcpToolAsync("get_client", new { clientId = customerTokenA }, sessionId: null);
+        Assert.Equal("InvalidRequest", noSession["status"]!.GetValue<string>());
+    }
+
     private static void CollectUnclassifiedStringProperties(JsonNode node, HashSet<string> unclassified)
     {
         switch (node)

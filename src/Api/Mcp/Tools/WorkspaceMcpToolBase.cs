@@ -50,12 +50,43 @@ namespace Api.Mcp.Tools
             if (string.IsNullOrWhiteSpace(publicId))
                 return new IdArg(null, null);
 
-            var result = await Reader.Ids.ResolveAsync(publicId.Trim(), prefix, cancellationToken);
+            var candidate = publicId.Trim();
+            if (Api.Service.Ai.AssistantPseudonymService.IsPseudonymToken(candidate))
+            {
+                var expectedKind = prefix switch
+                {
+                    "cus" => Api.Service.Ai.AssistantPseudonymKind.Customer,
+                    "ven" => Api.Service.Ai.AssistantPseudonymKind.Vendor,
+                    "ba" => Api.Service.Ai.AssistantPseudonymKind.BankAccount,
+                    "mem" => Api.Service.Ai.AssistantPseudonymKind.Person,
+                    _ => null,
+                };
+
+                var sessionId = Reader.CallerSession?.SessionId;
+                if (expectedKind is null
+                    || Tenant.CompanyId is not int companyId
+                    || string.IsNullOrWhiteSpace(Tenant.UserId)
+                    || string.IsNullOrWhiteSpace(sessionId)
+                    || Reader.Pseudonyms is null)
+                {
+                    return new IdArg(null, Invalid(kind, $"{paramName} must be an id like '{prefix}_…', as returned by the tools that list these records."));
+                }
+
+                var mapped = await Reader.Pseudonyms.ResolveTokenAsync(companyId, Tenant.UserId, sessionId, candidate, cancellationToken);
+                if (mapped is null || !string.Equals(mapped.Kind, expectedKind, StringComparison.Ordinal))
+                {
+                    return new IdArg(null, Invalid(kind, $"{paramName} must be an id like '{prefix}_…', as returned by the tools that list these records."));
+                }
+
+                candidate = mapped.PublicId;
+            }
+
+            var result = await Reader.Ids.ResolveAsync(candidate, prefix, cancellationToken);
             if (result.Ok)
                 return new IdArg(result.Id, null);
 
             return result.Error == Api.PublicIds.PublicIdLookupError.NotFound
-                ? new IdArg(null, NotFound(kind, $"No record '{publicId.Trim()}' for {paramName} in this workspace."))
+                ? new IdArg(null, NotFound(kind, $"No record '{candidate}' for {paramName} in this workspace."))
                 : new IdArg(null, Invalid(kind, $"{paramName} must be an id like '{prefix}_…', as returned by the tools that list these records."));
         }
 
