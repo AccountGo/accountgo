@@ -63,6 +63,7 @@ public sealed class AssistantDocumentCaptureTests : IAsyncLifetime
             builder.UseSetting("Anter:AgentSlug", "accountgo-assistant");
             builder.UseSetting("PUBLIC_WEB_URL", "https://workspace.example");
             builder.UseSetting("PUBLIC_API_URL", "https://api.example");
+            builder.UseSetting("DocumentCapture:Enabled", "true");
 
             builder.ConfigureServices(services =>
             {
@@ -454,6 +455,77 @@ public sealed class AssistantDocumentCaptureTests : IAsyncLifetime
             "{\"fields\":[{\"label\":\"Vendor\",\"value\":\"Blue Harbor Retail LLC\"},{\"label\":\"Total\",\"value\":\"USD 80.00\"}]}",
             companyName: "Northwind Trading Ltd.");
         Assert.Contains("looksLike: vendor-bill-or-receipt", billBlock, StringComparison.Ordinal);
+
+        // B2: Invoice with payment bank details is NOT bank-details.
+        var invoiceWithBankBlock = AssistantAttachmentMessageBuilder.BuildDelimitedUntrustedBlock(
+            "cap_test04",
+            "{\"fields\":[{\"label\":\"Invoice No\",\"value\":\"INV-2026-01\"},{\"label\":\"Vendor\",\"value\":\"Blue Harbor Retail LLC\"},{\"label\":\"IBAN\",\"value\":\"••••\"},{\"label\":\"Total\",\"value\":\"USD 400.00\"}]}",
+            companyName: "Northwind Trading Ltd.");
+        Assert.Contains("looksLike: vendor-bill-or-receipt", invoiceWithBankBlock, StringComparison.Ordinal);
+
+        // B2: Whole-word bank regexes must not match substrings like Database / Public / Cubic / Abandon.
+        var nonBankSubstrings = AssistantAttachmentMessageBuilder.BuildDelimitedUntrustedBlock(
+            "cap_test05",
+            "{\"fields\":[{\"label\":\"Database Ref\",\"value\":\"DB-1\"},{\"label\":\"Public Note\",\"value\":\"OK\"},{\"label\":\"Cubic Volume\",\"value\":\"12\"},{\"label\":\"Abandon Code\",\"value\":\"N/A\"}]}",
+            companyName: "Northwind Trading Ltd.");
+        Assert.Contains("looksLike: vendor-bill-or-receipt", nonBankSubstrings, StringComparison.Ordinal);
+
+        // B3: Unlabelled workspace company name at top of masked RawText -> sales-invoice.
+        var unlabelledHeaderSales = AssistantAttachmentMessageBuilder.BuildDelimitedUntrustedBlock(
+            "cap_test06",
+            "{\"fields\":[{\"label\":\"Invoice No\",\"value\":\"INV-099\"},{\"label\":\"Total\",\"value\":\"USD 500.00\"}]}",
+            companyName: "Northwind Trading Ltd.",
+            maskedRawText: "Northwind Trading Limited\n123 Harbor Rd\nTAX INVOICE\nBill To:\nBlue Harbor Retail LLC\nTotal: 500.00");
+        Assert.Contains("looksLike: sales-invoice", unlabelledHeaderSales, StringComparison.Ordinal);
+
+        // B3: Workspace name appearing only under Bill To -> vendor-bill-or-receipt.
+        var billToWorkspace = AssistantAttachmentMessageBuilder.BuildDelimitedUntrustedBlock(
+            "cap_test07",
+            "{\"fields\":[{\"label\":\"Invoice No\",\"value\":\"INV-100\"},{\"label\":\"Total\",\"value\":\"USD 120.00\"}]}",
+            companyName: "Northwind Trading Ltd.",
+            maskedRawText: "Blue Harbor Retail LLC\nTAX INVOICE\nBill To:\nNorthwind Trading Ltd.\nTotal: 120.00");
+        Assert.Contains("looksLike: vendor-bill-or-receipt", billToWorkspace, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RunStream_ConcurrentReadyAssistantCapture_AcceptsOnceAndPurgesBlobs()
+    {
+        var (id, pubId) = SeedCapture(
+            _companyIdA,
+            _ownerId,
+            status: "ready",
+            acceptedFieldsJson: null,
+            bytes: new byte[] { 9, 8, 7, 6 });
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            db.SuppressTenantSecurityCheck = true;
+            var cap = await db.DocumentCaptures.IgnoreQueryFilters().SingleAsync(c => c.Id == id);
+            cap.FieldsJson = "{\"fields\":[{\"label\":\"Vendor\",\"value\":\"Harbor Paper Co\"},{\"label\":\"Total\",\"value\":\"USD 55.00\"}]}";
+            await db.SaveChangesAsync();
+        }
+
+        var payload = JsonSerializer.Serialize(new { message = "Record this", captureId = pubId });
+        var responses = await Task.WhenAll(
+            PostRunStreamRawAsync(payload),
+            PostRunStreamRawAsync(payload));
+
+        Assert.Contains(responses, r => r.StatusCode == HttpStatusCode.OK);
+        Assert.All(responses, r => Assert.True(
+            r.StatusCode is HttpStatusCode.OK or HttpStatusCode.Conflict,
+            $"Expected 200 or 409, got {(int)r.StatusCode}"));
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            db.SuppressTenantSecurityCheck = true;
+            var cap = await db.DocumentCaptures.IgnoreQueryFilters().SingleAsync(c => c.Id == id);
+            Assert.Equal("accepted", cap.Status);
+            Assert.NotNull(cap.AcceptedFieldsJson);
+            Assert.NotNull(cap.BytesDeletedAt);
+            Assert.False(await db.DocumentCaptureBlobs.IgnoreQueryFilters().AnyAsync(b => b.CaptureId == id));
+        }
     }
 
     [Fact]

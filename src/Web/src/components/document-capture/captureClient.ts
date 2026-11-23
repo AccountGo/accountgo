@@ -19,11 +19,51 @@ export const ASSISTANT_UPLOAD_ALLOWED_MIME_TYPES = [
 
 const ALLOWED_EXTENSIONS = new Set(['pdf', 'png', 'jpg', 'jpeg', 'webp']);
 
-function generateCaptureIdempotencyKey(): string {
+export function generateCaptureIdempotencyKey(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return `cap_${crypto.randomUUID().replace(/-/g, '')}`;
   }
   return `cap_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 14)}`;
+}
+
+export function buildCaptureUploadFormData(
+  kind: DocumentCaptureKind,
+  file: File,
+  capabilities?: DocumentCaptureCapabilities | null,
+  options?: { force?: boolean },
+): FormData {
+  const form = new FormData();
+  form.append('Kind', kind);
+  form.append('SchemaVersion', String(capabilities?.schemaVersion ?? CURRENT_SCHEMA_VERSION));
+  form.append('File', file);
+  if (options?.force) {
+    form.append('Force', 'true');
+  }
+  return form;
+}
+
+export function postCaptureUpload(
+  fetchImpl: (input: string, init?: RequestInit) => Promise<Response>,
+  kind: DocumentCaptureKind,
+  file: File,
+  capabilities?: DocumentCaptureCapabilities | null,
+  options?: { idempotencyKey?: string; force?: boolean },
+): Promise<Response> {
+  const form = buildCaptureUploadFormData(kind, file, capabilities, { force: options?.force });
+  return fetchImpl('/api/document-captures', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': options?.idempotencyKey ?? generateCaptureIdempotencyKey() },
+    body: form,
+  });
+}
+
+export function getCaptureStatus(
+  fetchImpl: (input: string, init?: RequestInit) => Promise<Response>,
+  captureId: string,
+): Promise<Response> {
+  return fetchImpl(`/api/document-captures/${encodeURIComponent(captureId)}`, {
+    method: 'GET',
+  });
 }
 
 export function validateCaptureUploadFile(
@@ -67,16 +107,7 @@ export async function uploadAndWaitForCapture(
     throw new Error(validationError);
   }
 
-  const form = new FormData();
-  form.append('Kind', kind);
-  form.append('SchemaVersion', String(capabilities?.schemaVersion ?? CURRENT_SCHEMA_VERSION));
-  form.append('File', file);
-
-  const res = await fetchImpl('/api/document-captures', {
-    method: 'POST',
-    headers: { 'Idempotency-Key': generateCaptureIdempotencyKey() },
-    body: form,
-  });
+  const res = await postCaptureUpload(fetchImpl, kind, file, capabilities);
 
   if (!res.ok) {
     const body = await res.json().catch(() => null);
@@ -91,19 +122,26 @@ export async function uploadAndWaitForCapture(
   }
 
   let view: DocumentCaptureView = await res.json();
-  const maxAttempts = options?.maxPollAttempts ?? 15;
+  const maxAttempts = options?.maxPollAttempts ?? 45;
   const pollDelayMs = options?.pollDelayMs ?? 1000;
 
   for (let attempt = 0; attempt < maxAttempts && view.status === 'extracting'; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, pollDelayMs));
-    const statusRes = await fetchImpl(`/api/document-captures/${encodeURIComponent(view.id)}`, {
-      method: 'GET',
-    });
+    const statusRes = await getCaptureStatus(fetchImpl, view.id);
     if (!statusRes.ok) {
       const body = await statusRes.json().catch(() => null);
       throw new Error(describeCaptureError(body?.code, statusRes.status).message);
     }
     view = await statusRes.json();
+  }
+
+  if (view.status === 'failed' || view.status === 'rejected') {
+    throw new Error(describeCaptureError(view.errorCode, 422).message);
+  }
+
+  if (view.status === 'extracting') {
+    await rejectCapture(fetchImpl, view.id).catch(() => {});
+    throw new Error(describeCaptureError('DOCUMENT_PROVIDER_TIMEOUT', 504).message);
   }
 
   return view;

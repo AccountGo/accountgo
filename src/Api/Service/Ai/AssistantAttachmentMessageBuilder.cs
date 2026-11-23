@@ -80,7 +80,8 @@ public static partial class AssistantAttachmentMessageBuilder
         string userMessage,
         CancellationToken cancellationToken,
         IAssistantPseudonymService? pseudonymService = null,
-        string? sessionId = null)
+        string? sessionId = null,
+        DocumentCaptureService? captureService = null)
     {
         var capture = await DocumentCaptureService.LiveCompanyCaptures(db, companyId)
             .SingleOrDefaultAsync(c => c.Id == captureId, cancellationToken)
@@ -98,11 +99,43 @@ public static partial class AssistantAttachmentMessageBuilder
         string acceptedFieldsJson;
         if (string.Equals(capture.Status, "ready", StringComparison.Ordinal))
         {
-            var acceptResult = await AcceptReadyAttachmentAsync(db, companyId, userId, capture, cancellationToken)
-                .ConfigureAwait(false);
-            if (!acceptResult.Succeeded)
-                return acceptResult.Failure!;
-            acceptedFieldsJson = acceptResult.AcceptedFieldsJson!;
+            if (captureService is null || string.IsNullOrWhiteSpace(capture.FieldsJson))
+            {
+                return AssistantAttachmentBuildResult.Fail(
+                    StatusCodes.Status409Conflict,
+                    new { code = "DOCUMENT_STATE_CONFLICT", detail = "Captured attachment has no fields to accept." });
+            }
+
+            try
+            {
+                var accepted = await captureService
+                    .AcceptAsync(captureId, capture.FieldsJson, cancellationToken, purgeBytes: true)
+                    .ConfigureAwait(false);
+                acceptedFieldsJson = accepted.AcceptedFields?.ToString(Newtonsoft.Json.Formatting.None)
+                    ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(acceptedFieldsJson))
+                {
+                    return AssistantAttachmentBuildResult.Fail(
+                        StatusCodes.Status409Conflict,
+                        new { code = "DOCUMENT_STATE_CONFLICT", detail = "The accepted attachment fields could not be read." });
+                }
+            }
+            catch (DocumentCaptureServiceException ex)
+            {
+                return AssistantAttachmentBuildResult.Fail(
+                    ex.StatusCode,
+                    new
+                    {
+                        code = ex.ErrorCode,
+                        detail = "The captured attachment could not be accepted.",
+                    });
+            }
+            catch (JsonException)
+            {
+                return AssistantAttachmentBuildResult.Fail(
+                    StatusCodes.Status409Conflict,
+                    new { code = "DOCUMENT_STATE_CONFLICT", detail = "Captured attachment fields could not be read." });
+            }
         }
         else if (string.Equals(capture.Status, "accepted", StringComparison.Ordinal)
             && !string.IsNullOrWhiteSpace(capture.AcceptedFieldsJson))
@@ -120,7 +153,7 @@ public static partial class AssistantAttachmentMessageBuilder
                 });
         }
 
-        var companyNames = await db.Companies.IgnoreQueryFilters().AsNoTracking()
+        var companyNames = await db.Companies.AsNoTracking()
             .Where(c => c.Id == companyId)
             .Select(c => new { c.Name, c.ShortName })
             .FirstOrDefaultAsync(cancellationToken)
@@ -142,7 +175,8 @@ public static partial class AssistantAttachmentMessageBuilder
                 partyPseudonymizer,
                 cancellationToken,
                 companyNames?.Name,
-                companyNames?.ShortName).ConfigureAwait(false);
+                companyNames?.ShortName,
+                capture.RawText).ConfigureAwait(false);
         }
         catch (JsonException)
         {
@@ -170,76 +204,13 @@ public static partial class AssistantAttachmentMessageBuilder
         return AssistantAttachmentBuildResult.Ok(combined);
     }
 
-    private static async Task<(bool Succeeded, string? AcceptedFieldsJson, AssistantAttachmentBuildResult? Failure)> AcceptReadyAttachmentAsync(
-        ApiDbContext db,
-        int companyId,
-        string userId,
-        Core.Domain.DocumentCapture capture,
-        CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(capture.FieldsJson))
-        {
-            return (false, null, AssistantAttachmentBuildResult.Fail(
-                StatusCodes.Status409Conflict,
-                new { code = "DOCUMENT_STATE_CONFLICT", detail = "Captured attachment has no fields to accept." }));
-        }
-
-        string canonical;
-        try
-        {
-            using var doc = JsonDocument.Parse(capture.FieldsJson);
-            if (!DocumentCaptureFieldSchemas.TryValidateAcceptedFields(AttachmentKind, capture.SchemaVersion, doc.RootElement, out canonical, out _))
-            {
-                return (false, null, AssistantAttachmentBuildResult.Fail(
-                    StatusCodes.Status409Conflict,
-                    new { code = "DOCUMENT_STATE_CONFLICT", detail = "Captured attachment fields are not valid." }));
-            }
-            using var canonicalDoc = JsonDocument.Parse(canonical);
-            canonical = DocumentCaptureMasking.MaskAssistantFields(canonicalDoc.RootElement);
-        }
-        catch (JsonException)
-        {
-            return (false, null, AssistantAttachmentBuildResult.Fail(
-                StatusCodes.Status409Conflict,
-                new { code = "DOCUMENT_STATE_CONFLICT", detail = "Captured attachment fields could not be read." }));
-        }
-
-        var now = DateTime.UtcNow;
-        await using var tx = await db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var updated = await db.DocumentCaptures.IgnoreQueryFilters()
-            .Where(c => c.CompanyId == companyId && c.Id == capture.Id
-                && c.CreatedBy == userId && c.Kind == AttachmentKind && c.Status == "ready")
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(c => c.Status, "accepted")
-                .SetProperty(c => c.AcceptedFieldsJson, canonical)
-                .SetProperty(c => c.AcceptedBy, userId)
-                .SetProperty(c => c.AcceptedAt, now)
-                .SetProperty(c => c.BytesDeletedAt, now), cancellationToken)
-            .ConfigureAwait(false);
-
-        if (updated != 1)
-        {
-            await tx.RollbackAsync(cancellationToken).ConfigureAwait(false);
-            return (false, null, AssistantAttachmentBuildResult.Fail(
-                StatusCodes.Status409Conflict,
-                new { code = "DOCUMENT_ACCEPT_CONFLICT", detail = "This attachment was already accepted or changed state." }));
-        }
-
-        await db.DocumentCaptureBlobs.IgnoreQueryFilters()
-            .Where(b => b.CompanyId == companyId && b.CaptureId == capture.Id)
-            .ExecuteDeleteAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
-        return (true, canonical, null);
-    }
-
     internal static string BuildDelimitedUntrustedBlock(
         string capturePublicId,
         string acceptedFieldsJson,
         string? companyName = null,
-        string? companyShortName = null) =>
-        BuildDelimitedUntrustedBlockAsync(capturePublicId, acceptedFieldsJson, null, CancellationToken.None, companyName, companyShortName)
+        string? companyShortName = null,
+        string? maskedRawText = null) =>
+        BuildDelimitedUntrustedBlockAsync(capturePublicId, acceptedFieldsJson, null, CancellationToken.None, companyName, companyShortName, maskedRawText)
             .GetAwaiter()
             .GetResult();
 
@@ -249,13 +220,14 @@ public static partial class AssistantAttachmentMessageBuilder
         Func<string, string, CancellationToken, Task<string>>? partyPseudonymizer,
         CancellationToken cancellationToken,
         string? companyName = null,
-        string? companyShortName = null)
+        string? companyShortName = null,
+        string? maskedRawText = null)
     {
         using var parsed = JsonDocument.Parse(acceptedFieldsJson);
         var remaskedJson = DocumentCaptureMasking.MaskAssistantFields(parsed.RootElement);
         using var maskedDoc = JsonDocument.Parse(remaskedJson);
 
-        var looksLike = ComputeLooksLikeHint(maskedDoc.RootElement, companyName, companyShortName);
+        var looksLike = ComputeLooksLikeHint(maskedDoc.RootElement, companyName, companyShortName, maskedRawText);
 
         var sb = new StringBuilder();
         sb.AppendLine(BeginDelimiter);
@@ -322,67 +294,129 @@ public static partial class AssistantAttachmentMessageBuilder
     };
 
     /// <summary>
-    /// Deterministic document-type hint (no AI): bank identifier labels -> bank-details;
-    /// issuer/vendor-like value matching workspace company legal or trading name -> sales-invoice;
+    /// Deterministic document-type hint (no AI): bank identifier labels without invoice/total labels -> bank-details;
+    /// issuer/vendor-like value (or unlabelled top-of-document header line) matching workspace company legal or trading name -> sales-invoice;
     /// otherwise -> vendor-bill-or-receipt.
     /// </summary>
-    internal static string ComputeLooksLikeHint(JsonElement maskedRoot, string? companyName, string? companyShortName)
+    internal static string ComputeLooksLikeHint(
+        JsonElement maskedRoot,
+        string? companyName,
+        string? companyShortName,
+        string? maskedRawText = null)
     {
-        if (maskedRoot.ValueKind != JsonValueKind.Object
-            || !maskedRoot.TryGetProperty("fields", out var fields)
-            || fields.ValueKind != JsonValueKind.Array)
-        {
-            return LooksLikeVendorBillOrReceipt;
-        }
-
         var normalizedCompany = NormalizeCompanyName(companyName);
         var normalizedShort = NormalizeCompanyName(companyShortName);
+        var hasBankLabel = false;
+        var hasInvoiceOrTotalLabel = false;
         var matchesWorkspaceIssuer = false;
 
-        foreach (var item in fields.EnumerateArray())
+        if (maskedRoot.ValueKind == JsonValueKind.Object
+            && maskedRoot.TryGetProperty("fields", out var fields)
+            && fields.ValueKind == JsonValueKind.Array)
         {
-            if (item.ValueKind != JsonValueKind.Object)
-                continue;
-            var label = item.TryGetProperty("label", out var l) && l.ValueKind == JsonValueKind.String
-                ? l.GetString()
-                : null;
-            var value = item.TryGetProperty("value", out var v) && v.ValueKind == JsonValueKind.String
-                ? v.GetString()
-                : null;
-            if (string.IsNullOrWhiteSpace(label))
-                continue;
-
-            var lowerLabel = label.Trim().ToLowerInvariant();
-            if (IsBankIdentifierLabel(lowerLabel))
-                return LooksLikeBankDetails;
-
-            if (!matchesWorkspaceIssuer
-                && !string.IsNullOrWhiteSpace(value)
-                && IsIssuerLikeLabel(lowerLabel))
+            foreach (var item in fields.EnumerateArray())
             {
-                var normalizedValue = NormalizeCompanyName(value);
-                if (!string.IsNullOrEmpty(normalizedValue)
-                    && ((!string.IsNullOrEmpty(normalizedCompany) && string.Equals(normalizedValue, normalizedCompany, StringComparison.Ordinal))
-                        || (!string.IsNullOrEmpty(normalizedShort) && string.Equals(normalizedValue, normalizedShort, StringComparison.Ordinal))))
+                if (item.ValueKind != JsonValueKind.Object)
+                    continue;
+                var label = item.TryGetProperty("label", out var l) && l.ValueKind == JsonValueKind.String
+                    ? l.GetString()
+                    : null;
+                var value = item.TryGetProperty("value", out var v) && v.ValueKind == JsonValueKind.String
+                    ? v.GetString()
+                    : null;
+                if (string.IsNullOrWhiteSpace(label))
+                    continue;
+
+                var trimmedLabel = label.Trim();
+                var lowerLabel = trimmedLabel.ToLowerInvariant();
+                if (BankIdentifierLabelRegex().IsMatch(trimmedLabel))
+                    hasBankLabel = true;
+                if (InvoiceOrTotalLabelRegex().IsMatch(trimmedLabel))
+                    hasInvoiceOrTotalLabel = true;
+
+                if (!matchesWorkspaceIssuer
+                    && !string.IsNullOrWhiteSpace(value)
+                    && IsIssuerLikeLabel(lowerLabel))
                 {
-                    matchesWorkspaceIssuer = true;
+                    if (MatchesWorkspaceName(NormalizeCompanyName(value), normalizedCompany, normalizedShort))
+                        matchesWorkspaceIssuer = true;
                 }
             }
+        }
+
+        if (hasBankLabel && !hasInvoiceOrTotalLabel)
+            return LooksLikeBankDetails;
+
+        if (!matchesWorkspaceIssuer && !string.IsNullOrWhiteSpace(maskedRawText))
+        {
+            matchesWorkspaceIssuer = WorkspaceAppearsInDocumentHeader(maskedRawText, normalizedCompany, normalizedShort);
         }
 
         return matchesWorkspaceIssuer ? LooksLikeSalesInvoice : LooksLikeVendorBillOrReceipt;
     }
 
-    private static bool IsBankIdentifierLabel(string lowerLabel) =>
-        lowerLabel.Contains("iban", StringComparison.Ordinal)
-        || lowerLabel.Contains("swift", StringComparison.Ordinal)
-        || lowerLabel.Contains("bic", StringComparison.Ordinal)
-        || lowerLabel.Contains("routing", StringComparison.Ordinal)
-        || lowerLabel.Contains("aba", StringComparison.Ordinal)
-        || lowerLabel.Contains("account number", StringComparison.Ordinal)
-        || lowerLabel.Contains("account no", StringComparison.Ordinal)
-        || lowerLabel.Contains("account #", StringComparison.Ordinal)
-        || lowerLabel.Contains("acct", StringComparison.Ordinal);
+    private static bool MatchesWorkspaceName(string normalizedCandidate, string normalizedCompany, string normalizedShort)
+    {
+        if (string.IsNullOrEmpty(normalizedCandidate))
+            return false;
+        if (!string.IsNullOrEmpty(normalizedCompany) && string.Equals(normalizedCandidate, normalizedCompany, StringComparison.Ordinal))
+            return true;
+        if (!string.IsNullOrEmpty(normalizedShort) && string.Equals(normalizedCandidate, normalizedShort, StringComparison.Ordinal))
+            return true;
+        return false;
+    }
+
+    private static bool WorkspaceAppearsInDocumentHeader(string maskedRawText, string normalizedCompany, string normalizedShort)
+    {
+        if (string.IsNullOrEmpty(normalizedCompany) && string.IsNullOrEmpty(normalizedShort))
+            return false;
+
+        var checkedLines = 0;
+        foreach (var rawLine in maskedRawText.Split('\n'))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0)
+                continue;
+
+            // Stop before buyer/recipient sections so a workspace name under "Bill To" is not treated as the issuer.
+            if (RecipientHeaderRegex().IsMatch(line))
+                break;
+
+            var normalizedLine = NormalizeCompanyName(line);
+            if (MatchesWorkspaceHeaderLine(normalizedLine, normalizedCompany)
+                || MatchesWorkspaceHeaderLine(normalizedLine, normalizedShort))
+            {
+                return true;
+            }
+
+            if (++checkedLines >= 5)
+                break;
+        }
+
+        return false;
+    }
+
+    private static bool MatchesWorkspaceHeaderLine(string normalizedLine, string normalizedTarget)
+    {
+        if (string.IsNullOrEmpty(normalizedLine) || string.IsNullOrEmpty(normalizedTarget))
+            return false;
+        if (string.Equals(normalizedLine, normalizedTarget, StringComparison.Ordinal))
+            return true;
+        return normalizedTarget.Length >= 3
+            && normalizedLine.StartsWith(normalizedTarget + " ", StringComparison.Ordinal);
+    }
+
+    [GeneratedRegex(@"\b(?:iban|swift|bic|routing|aba|acct\.?|account\s*(?:number|no\.?|#))\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking)]
+    private static partial Regex BankIdentifierLabelRegex();
+
+    [GeneratedRegex(@"\b(?:invoice(?:\s*(?:no\.?|number|#))?|total|amount\s+due|subtotal|tax|receipt)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking)]
+    private static partial Regex InvoiceOrTotalLabelRegex();
+
+    [GeneratedRegex(@"^(?:bill\s+to|billed\s+to|sold\s+to|ship\s+to|invoice\s+to|customer|client)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking)]
+    private static partial Regex RecipientHeaderRegex();
 
     private static bool IsIssuerLikeLabel(string lowerLabel) =>
         lowerLabel.Contains("vendor", StringComparison.Ordinal)

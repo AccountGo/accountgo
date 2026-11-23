@@ -513,7 +513,11 @@ public sealed class DocumentCaptureService(
         return views;
     }
 
-    public async Task<DocumentCaptureView> AcceptAsync(int captureId, string fieldsJson, CancellationToken cancellationToken)
+    public async Task<DocumentCaptureView> AcceptAsync(
+        int captureId,
+        string fieldsJson,
+        CancellationToken cancellationToken,
+        bool purgeBytes = false)
     {
         var companyId = tenant.RequireCompanyId();
         if (!await IsCompanyLiveAsync(companyId, cancellationToken).ConfigureAwait(false))
@@ -564,14 +568,27 @@ public sealed class DocumentCaptureService(
             throw new DocumentCaptureServiceException(409, "DOCUMENT_BYTES_UNAVAILABLE");
 
         var now = _timeProvider.GetUtcNow().UtcDateTime;
-        var updated = await db.DocumentCaptures.Where(c => c.CompanyId == companyId && c.Id == captureId && c.Status == "ready")
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(c => c.Status, "accepted")
-                .SetProperty(c => c.AcceptedFieldsJson, canonical)
-                .SetProperty(c => c.AcceptedBy, actorId)
-                .SetProperty(c => c.AcceptedAt, now), cancellationToken).ConfigureAwait(false);
+        var updated = purgeBytes
+            ? await db.DocumentCaptures.Where(c => c.CompanyId == companyId && c.Id == captureId && c.Status == "ready")
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(c => c.Status, "accepted")
+                    .SetProperty(c => c.AcceptedFieldsJson, canonical)
+                    .SetProperty(c => c.AcceptedBy, actorId)
+                    .SetProperty(c => c.AcceptedAt, now)
+                    .SetProperty(c => c.BytesDeletedAt, now), cancellationToken).ConfigureAwait(false)
+            : await db.DocumentCaptures.Where(c => c.CompanyId == companyId && c.Id == captureId && c.Status == "ready")
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(c => c.Status, "accepted")
+                    .SetProperty(c => c.AcceptedFieldsJson, canonical)
+                    .SetProperty(c => c.AcceptedBy, actorId)
+                    .SetProperty(c => c.AcceptedAt, now), cancellationToken).ConfigureAwait(false);
         if (updated != 1)
             throw new DocumentCaptureServiceException(409, "DOCUMENT_ACCEPT_CONFLICT");
+        if (purgeBytes)
+        {
+            await db.DocumentCaptureBlobs.Where(b => b.CompanyId == companyId && b.CaptureId == captureId)
+                .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        }
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         await AuditTransitionAsync("document.capture.accepted", "success", companyId, capture.PublicId, capture.Kind,
             "accepted", capture.ExtractionGeneration, actorId).ConfigureAwait(false);

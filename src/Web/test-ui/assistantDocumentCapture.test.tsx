@@ -201,4 +201,38 @@ describe('AssistantSidepanel and composer attachments (#98)', () => {
       expect.objectContaining({ method: 'POST' }),
     );
   });
+
+  it('throws a user-facing error when extraction ends in failed status', async () => {
+    const adapter = new AssistantAdapter();
+    adapter.setCaptureCapabilities(assistantCaps);
+
+    assistantFetchMock.mockResolvedValueOnce(
+      jsonResponse(makeAssistantCapture({ status: 'failed', errorCode: 'DOCUMENT_UNREADABLE' })),
+    );
+
+    const file = new File(['bad-bytes'], 'blurry.png', { type: 'image/png' });
+    await expect(adapter.uploadFile('sess_1', file)).rejects.toThrow(/read|unreadable|clearer/i);
+  });
+
+  it('rejects stuck extracting capture and throws timeout error after polling exhausts', async () => {
+    const { uploadAndWaitForCapture } = await import('../src/components/document-capture/captureClient');
+    const stuck = makeAssistantCapture({ id: 'cap_stuck01', status: 'extracting' });
+    assistantFetchMock
+      .mockResolvedValueOnce(jsonResponse(stuck))
+      .mockResolvedValueOnce(jsonResponse(stuck))
+      .mockResolvedValueOnce(jsonResponse({ id: 'cap_stuck01', status: 'rejected' }));
+
+    const file = new File(['png-bytes'], 'slow.png', { type: 'image/png' });
+    await expect(
+      uploadAndWaitForCapture(assistantFetchMock, 'assistant-attachment', file, assistantCaps, {
+        maxPollAttempts: 1,
+        pollDelayMs: 1,
+      }),
+    ).rejects.toThrow(/timed out|timeout|too long/i);
+
+    expect(assistantFetchMock).toHaveBeenCalledWith(
+      '/api/document-captures/cap_stuck01/reject',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
 });

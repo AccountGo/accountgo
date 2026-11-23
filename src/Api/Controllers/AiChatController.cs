@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Api.Data;
+using Api.DocumentCaptures;
 using Api.Service.Ai;
 using Core.Domain;
 using Core.Tenancy;
@@ -38,6 +39,7 @@ namespace Api.Controllers
         IAdministrationService administrationService,
         IPlanCatalog plans,
         ApiDbContext db,
+        DocumentCaptureService captureService,
         ILogger<AiChatController> logger) : BaseController
     {
         private readonly IAnterAgentRunnerClient _anterClient = anterClient
@@ -54,6 +56,8 @@ namespace Api.Controllers
             ?? throw new ArgumentNullException(nameof(plans));
         private readonly ApiDbContext _db = db
             ?? throw new ArgumentNullException(nameof(db));
+        private readonly DocumentCaptureService _captureService = captureService
+            ?? throw new ArgumentNullException(nameof(captureService));
         private readonly ILogger<AiChatController> _logger = logger
             ?? throw new ArgumentNullException(nameof(logger));
 
@@ -167,7 +171,7 @@ namespace Api.Controllers
             if (body?.CaptureId is { } captureId)
             {
                 var attached = await AssistantAttachmentMessageBuilder.TryAppendAttachmentAsync(
-                    _db, companyId, userId, captureId, message, cancellationToken, _pseudonymService, body?.SessionId);
+                    _db, companyId, userId, captureId, message, cancellationToken, _pseudonymService, body?.SessionId, _captureService);
                 if (!attached.Succeeded)
                 {
                     Response.StatusCode = attached.ErrorStatusCode;

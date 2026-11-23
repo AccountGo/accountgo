@@ -77,7 +77,6 @@ type UpstreamSession = {
  */
 export class AssistantAdapter implements ChatAdapter {
   private pageContext: AssistantPageContext = {};
-  private pendingCaptureId: string | null = null;
   private captureCapabilities: DocumentCaptureCapabilities | null = null;
   private readonly executionSessions = new Map<string, string>();
 
@@ -104,14 +103,6 @@ export class AssistantAdapter implements ChatAdapter {
 
   setPageContext(context: AssistantPageContext): void {
     this.pageContext = { ...context };
-  }
-
-  setPendingCaptureId(captureId: string | null): void {
-    this.pendingCaptureId = captureId && captureId.trim() ? captureId.trim() : null;
-  }
-
-  getPendingCaptureId(): string | null {
-    return this.pendingCaptureId;
   }
 
   setCaptureCapabilities(capabilities: DocumentCaptureCapabilities | null): void {
@@ -246,7 +237,6 @@ export class AssistantAdapter implements ChatAdapter {
       payload.message,
       sessionId,
       contextVariables,
-      this.pendingCaptureId,
       payload.attachedFileIds,
     );
 

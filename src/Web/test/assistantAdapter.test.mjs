@@ -61,7 +61,7 @@ test('buildRunStreamBody includes optional public captureId string without bytes
     'Summarize attachment',
     'session_2',
     mergeAssistantContextVariables({ pageRoute: '/org/acme/dashboard' }, {}),
-    'cap_0123456789abcdefghjkmnpqrs',
+    ['cap_0123456789abcdefghjkmnpqrs'],
   );
 
   assert.equal(body.captureId, 'cap_0123456789abcdefghjkmnpqrs');
