@@ -61,9 +61,8 @@ export function getCaptureStatus(
   fetchImpl: (input: string, init?: RequestInit) => Promise<Response>,
   captureId: string,
 ): Promise<Response> {
-  return fetchImpl(`/api/document-captures/${encodeURIComponent(captureId)}`, {
-    method: 'GET',
-  });
+  // GET is the default; pass no init so the call shape matches the pre-refactor panel code.
+  return fetchImpl(`/api/document-captures/${encodeURIComponent(captureId)}`);
 }
 
 export function validateCaptureUploadFile(
