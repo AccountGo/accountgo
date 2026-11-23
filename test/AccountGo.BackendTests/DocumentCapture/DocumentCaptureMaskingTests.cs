@@ -84,7 +84,14 @@ public sealed class DocumentCaptureMaskingTests
     public void ParserWarningCodes_AreAllowedAndHaveUserFacingText()
     {
         var repoRoot = FindRepositoryRoot();
-        var warningText = File.ReadAllText(Path.Combine(repoRoot, "src", "Web", "src", "components", "document-capture", "fields.ts"));
+        var source = File.ReadAllText(Path.Combine(repoRoot, "src", "Web", "src", "components", "document-capture", "fields.ts"));
+        const string warningFunction = "export function describeCaptureWarning";
+        var warningStart = source.IndexOf(warningFunction, StringComparison.Ordinal);
+        Assert.True(warningStart >= 0, "describeCaptureWarning was not found in fields.ts.");
+        var warningEnd = source.IndexOf("export function ", warningStart + warningFunction.Length, StringComparison.Ordinal);
+        var warningText = warningEnd < 0 ? source[warningStart..] : source[warningStart..warningEnd];
+        Assert.DoesNotContain("case 'DOCUMENT_TOO_COMPLEX':", warningText, StringComparison.Ordinal);
+
         foreach (var code in Api.DocumentCaptures.Parsing.DocumentTextFieldParser.WarningCodes)
         {
             Assert.Equal(code, DocumentCaptureWarningCodes.Sanitize(code));
