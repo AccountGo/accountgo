@@ -250,7 +250,7 @@ internal static class DateAndAmountParser
             }
         }
 
-        // Pass 3: bare '$' adjacent to an amount on the same line -> omit currency and warn CURRENCY_AMBIGUOUS
+        // Pass 3: bare '$' adjacent to an amount on the same line -> omit currency and warn AMBIGUOUS_CURRENCY
         foreach (var line in lines)
         {
             if (BareDollarBeforeAmountRegex.IsMatch(line) || BareDollarAfterAmountRegex.IsMatch(line))
