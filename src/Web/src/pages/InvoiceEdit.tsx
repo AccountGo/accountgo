@@ -1177,33 +1177,6 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
         );
       })()}
 
-      {/* Server-backed customer matching (M-05 / M-06): never pre-selects fuzzy name or archived matches */}
-      {!customerMatchDismissed && (
-        <PartyMatchPrompt
-          role="client"
-          extractedName={extractedCustomerName}
-          candidates={customerMatchCandidates}
-          autoMatched={autoMatchedCustomer}
-          canManage={canManageClients}
-          selectedPartyId={selectedCustomerId}
-          orgSlug={orgSlug ?? ''}
-          onSelectCandidate={(candidate) => {
-            setSelectedCustomerId(candidate.partyId);
-            setCustomerMatchCandidates([]);
-            setAutoMatchedCustomer(null);
-            setCustomerMatchDismissed(true);
-          }}
-          onCreateNew={(initialName) => {
-            setClientDialog({ initialName });
-          }}
-          onDismiss={() => {
-            setCustomerMatchDismissed(true);
-            setCustomerMatchCandidates([]);
-            setAutoMatchedCustomer(null);
-          }}
-        />
-      )}
-
       {/* Explicit due-date vs payment-term choice */}
       {pendingDueDate && (
         <div role="status" className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-800 dark:text-amber-300">
@@ -1546,6 +1519,32 @@ export const InvoiceEdit: React.FC<InvoiceEditProps> = ({ isEdit = false }) => {
                 <span className="flex-1">Select a client</span>
                 <ChevronsUpDown className="h-4 w-4" />
               </button>
+            )}
+            {/* Server-backed customer matching (M-05 / M-06): rendered directly under the customer field */}
+            {!customerMatchDismissed && (
+              <PartyMatchPrompt
+                role="client"
+                extractedName={extractedCustomerName}
+                candidates={customerMatchCandidates}
+                autoMatched={autoMatchedCustomer}
+                canManage={canManageClients}
+                selectedPartyId={selectedCustomerId}
+                orgSlug={orgSlug ?? ''}
+                onSelectCandidate={(candidate) => {
+                  setSelectedCustomerId(candidate.partyId);
+                  setCustomerMatchCandidates([]);
+                  setAutoMatchedCustomer(null);
+                  setCustomerMatchDismissed(true);
+                }}
+                onCreateNew={(initialName) => {
+                  setClientDialog({ initialName });
+                }}
+                onDismiss={() => {
+                  setCustomerMatchDismissed(true);
+                  setCustomerMatchCandidates([]);
+                  setAutoMatchedCustomer(null);
+                }}
+              />
             )}
           </div>
 

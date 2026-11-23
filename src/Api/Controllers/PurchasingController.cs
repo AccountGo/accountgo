@@ -329,7 +329,7 @@ namespace Api.Controllers
             if (vendor == null)
                 return NotFound(new { message = "Vendor not found." });
 
-            var normalized = Api.DocumentCaptures.Matching.PartyNameNormalizer.Normalize(alias);
+            var normalized = Api.DocumentCaptures.Matching.PartyNameNormalizer.NormalizeForAlias(alias);
             var trimmed = (alias ?? string.Empty).Trim();
             var existing = _db.PartyAliases.FirstOrDefault(a =>
                 a.PartyId == vendor.PartyId

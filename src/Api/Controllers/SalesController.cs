@@ -315,7 +315,7 @@ namespace Api.Controllers
             if (customer == null)
                 return NotFound(new { message = "Client not found." });
 
-            var normalized = Api.DocumentCaptures.Matching.PartyNameNormalizer.Normalize(alias);
+            var normalized = Api.DocumentCaptures.Matching.PartyNameNormalizer.NormalizeForAlias(alias);
             var trimmed = (alias ?? string.Empty).Trim();
             var existing = _db.PartyAliases.FirstOrDefault(a =>
                 a.PartyId == customer.PartyId

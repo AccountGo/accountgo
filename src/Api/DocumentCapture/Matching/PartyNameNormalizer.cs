@@ -54,6 +54,26 @@ public static class PartyNameNormalizer
         "จำกัด",
     ];
 
+    /// <summary>
+    /// Case, accent, punctuation, and whitespace folding WITHOUT legal-suffix stripping.
+    /// Used as the exact lookup and storage key for <c>PartyAliases.NormalizedAlias</c> (M-04) so suffix variants
+    /// such as "Northwind Office Ltd" vs "Northwind Office Limited" can be learned while "Northwind Office Inc"
+    /// never collides with a learned "Ltd" alias.
+    /// </summary>
+    public static string NormalizeForAlias(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return string.Empty;
+
+        var folded = FoldUnicodeAndPunctuation(raw);
+        if (string.IsNullOrEmpty(folded))
+            return string.Empty;
+
+        return folded.Length <= MaxNormalizedLength
+            ? folded
+            : folded[..MaxNormalizedLength].TrimEnd();
+    }
+
     public static string Normalize(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw))

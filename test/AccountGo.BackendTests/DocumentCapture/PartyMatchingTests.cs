@@ -376,16 +376,39 @@ public sealed class PartyMatchingTests(ITestOutputHelper output)
         var co2 = SeedCompany(setupDb, "TenantTwo", "T2");
 
         using var db1 = CreateTenantDb(conn, co1.Id);
-        var vendor1 = SeedVendor(db1, co1.Id, "Northwind Office Limited");
-        var selfMatchCapture = SeedCapture(db1, co1.Id, "purchase-invoice", "{\"vendorName\":\"Northwind Office Ltd\"}");
+        var vendor1 = SeedVendor(db1, co1.Id, "NORTHWIND OFFICE LIMITED");
+        var exactSelfCapture = SeedCapture(db1, co1.Id, "purchase-invoice", "{\"vendorName\":\"Northwind Office Limited\"}");
+        var suffixVariantCapture = SeedCapture(db1, co1.Id, "purchase-invoice", "{\"vendorName\":\"Northwind Office Ltd\"}");
+        var differentSuffixCapture = SeedCapture(db1, co1.Id, "purchase-invoice", "{\"vendorName\":\"Northwind Office Inc\"}");
         var capture1 = SeedCapture(db1, co1.Id, "purchase-invoice", "{\"vendorName\":\"NW Office Supply\"}");
 
-        // R5: saving a capture whose normalized name equals Normalize(party.Name) must NOT create a self-alias
-        PartyMatchingService.RecordAliasesForCaptures(db1, co1.Id, "vendor", vendor1.PartyId!.Value, [selfMatchCapture.Id], "tester@example.test");
+        // R5/R6: saving a capture whose folded alias key equals NormalizeForAlias(party.Name) must NOT create a self-alias
+        PartyMatchingService.RecordAliasesForCaptures(db1, co1.Id, "vendor", vendor1.PartyId!.Value, [exactSelfCapture.Id], "tester@example.test");
         db1.SaveChanges();
         Assert.Empty(db1.PartyAliases.ToList());
 
-        // Before save: no alias match
+        // R6: linking a suffix variant ("Northwind Office Ltd" -> "NORTHWIND OFFICE LIMITED") DOES store an alias
+        PartyMatchingService.RecordAliasesForCaptures(db1, co1.Id, "vendor", vendor1.PartyId!.Value, [suffixVariantCapture.Id], "tester@example.test");
+        db1.SaveChanges();
+        var suffixAlias = Assert.Single(db1.PartyAliases.ToList());
+        Assert.Equal("northwind office ltd", suffixAlias.NormalizedAlias);
+
+        // Rescanning "Northwind Office Ltd" now pre-selects via alias
+        var rescanSuffix = await PartyMatchingService.MatchCaptureAsync(db1, "vendor", suffixVariantCapture.Id, CancellationToken.None);
+        Assert.NotNull(rescanSuffix);
+        var rescanHit = Assert.Single(rescanSuffix!);
+        Assert.Equal(vendor1.PublicId, rescanHit.PartyId);
+        Assert.Equal("alias", rescanHit.Reason);
+        Assert.Equal(1.0, rescanHit.Score);
+
+        // R6: "Northwind Office Inc" does NOT hit the "northwind office ltd" alias (stays fuzzy "name", never pre-selected)
+        var incMatches = await PartyMatchingService.MatchCaptureAsync(db1, "vendor", differentSuffixCapture.Id, CancellationToken.None);
+        Assert.NotNull(incMatches);
+        var incHit = Assert.Single(incMatches!);
+        Assert.Equal(vendor1.PublicId, incHit.PartyId);
+        Assert.Equal("name", incHit.Reason);
+
+        // Before save: no alias match for unrelated trading name
         var before = await PartyMatchingService.MatchCaptureAsync(db1, "vendor", capture1.Id, CancellationToken.None);
         Assert.NotNull(before);
         Assert.Empty(before!);

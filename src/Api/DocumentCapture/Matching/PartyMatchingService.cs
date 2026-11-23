@@ -97,8 +97,9 @@ public static class PartyMatchingService
         var (emails, phoneSuffixes) = ExtractIdentifiers(capture);
         await ExcludeWorkspaceOwnIdentifiersAsync(db, emails, phoneSuffixes, cancellationToken).ConfigureAwait(false);
         var normalizedName = PartyNameNormalizer.Normalize(extractedName);
+        var aliasKey = PartyNameNormalizer.NormalizeForAlias(extractedName);
 
-        if (string.IsNullOrEmpty(normalizedName) && emails.Count == 0 && phoneSuffixes.Count == 0)
+        if (string.IsNullOrEmpty(normalizedName) && string.IsNullOrEmpty(aliasKey) && emails.Count == 0 && phoneSuffixes.Count == 0)
             return Array.Empty<PartyMatchCandidate>();
 
         var sources = await LoadCandidateSourcesAsync(db, normalizedRole, cancellationToken).ConfigureAwait(false);
@@ -106,11 +107,11 @@ public static class PartyMatchingService
             return Array.Empty<PartyMatchCandidate>();
 
         HashSet<int> aliasPartyIds = [];
-        if (!string.IsNullOrEmpty(normalizedName))
+        if (!string.IsNullOrEmpty(aliasKey))
         {
             var matchedAliasIds = await db.PartyAliases
                 .AsNoTracking()
-                .Where(a => a.Role == normalizedRole && a.NormalizedAlias == normalizedName)
+                .Where(a => a.Role == normalizedRole && a.NormalizedAlias == aliasKey)
                 .Select(a => a.PartyId)
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
@@ -184,18 +185,19 @@ public static class PartyMatchingService
         if (createdBy.Length > 256)
             createdBy = createdBy[..256];
 
-        var chosenNormalizedName = PartyNameNormalizer.Normalize(chosenParty.Name);
+        var chosenAliasKey = PartyNameNormalizer.NormalizeForAlias(chosenParty.Name);
         var seenAliases = new HashSet<string>(StringComparer.Ordinal);
         foreach (var capture in captures)
         {
             var extractedName = ExtractPartyName(capture, normalizedRole, preferRawExtracted: true);
-            var normalizedAlias = PartyNameNormalizer.Normalize(extractedName);
+            var normalizedAlias = PartyNameNormalizer.NormalizeForAlias(extractedName);
             if (string.IsNullOrEmpty(normalizedAlias) || !seenAliases.Add(normalizedAlias))
                 continue;
 
-            // R5: skip self-aliases that equal the chosen party's own normalized name.
-            if (!string.IsNullOrEmpty(chosenNormalizedName)
-                && string.Equals(normalizedAlias, chosenNormalizedName, StringComparison.Ordinal))
+            // R5/R6: skip self-aliases that equal the chosen party's own folded alias key (without suffix stripping),
+            // while still learning legal-suffix variants like "Northwind Office Ltd" -> "NORTHWIND OFFICE LIMITED".
+            if (!string.IsNullOrEmpty(chosenAliasKey)
+                && string.Equals(normalizedAlias, chosenAliasKey, StringComparison.Ordinal))
             {
                 continue;
             }

@@ -766,34 +766,6 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
         </div>
       )}
 
-      {/* Server-backed vendor matching (M-05 / M-06): never pre-selects fuzzy name or archived matches */}
-      {!vendorMatchDismissed && (
-        <PartyMatchPrompt
-          role="vendor"
-          extractedName={extractedVendorName}
-          candidates={vendorMatchCandidates}
-          autoMatched={autoMatchedVendor}
-          canManage={canManageVendors}
-          selectedPartyId={vendorId ?? ''}
-          orgSlug={orgSlug ?? ''}
-          onSelectCandidate={(candidate) => {
-            setVendorId(candidate.partyId);
-            setVendorMatchCandidates([]);
-            setAutoMatchedVendor(null);
-            setVendorMatchDismissed(true);
-          }}
-          onCreateNew={(initialName) => {
-            setNewVendorInitialName(initialName);
-            setIsAddingVendor(true);
-          }}
-          onDismiss={() => {
-            setVendorMatchDismissed(true);
-            setVendorMatchCandidates([]);
-            setAutoMatchedVendor(null);
-          }}
-        />
-      )}
-
       {/* Explicit due-date / payment-term choice when a payment term was already selected */}
       {pendingDueDate && (
         <div role="status" className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-800 dark:text-amber-300">
@@ -1082,6 +1054,33 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
             )}
             {vendors.length === 0 && !canManageVendors && (
               <p className="text-xs text-[var(--text-muted)]">There are no vendors yet, and adding one takes the "Create & Edit Vendors" permission.</p>
+            )}
+            {/* Server-backed vendor matching (M-05 / M-06): rendered directly under the vendor field */}
+            {!vendorMatchDismissed && (
+              <PartyMatchPrompt
+                role="vendor"
+                extractedName={extractedVendorName}
+                candidates={vendorMatchCandidates}
+                autoMatched={autoMatchedVendor}
+                canManage={canManageVendors}
+                selectedPartyId={vendorId ?? ''}
+                orgSlug={orgSlug ?? ''}
+                onSelectCandidate={(candidate) => {
+                  setVendorId(candidate.partyId);
+                  setVendorMatchCandidates([]);
+                  setAutoMatchedVendor(null);
+                  setVendorMatchDismissed(true);
+                }}
+                onCreateNew={(initialName) => {
+                  setNewVendorInitialName(initialName);
+                  setIsAddingVendor(true);
+                }}
+                onDismiss={() => {
+                  setVendorMatchDismissed(true);
+                  setVendorMatchCandidates([]);
+                  setAutoMatchedVendor(null);
+                }}
+              />
             )}
           </div>
 
