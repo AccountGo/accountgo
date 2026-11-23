@@ -32,6 +32,7 @@ namespace Api.Controllers
     public class AiChatController(
         IAnterAgentRunnerClient anterClient,
         IMcpCallerAssertionService assertionService,
+        IAssistantPseudonymService pseudonymService,
         ITenantContext tenantContext,
         IAdministrationService administrationService,
         IPlanCatalog plans,
@@ -42,6 +43,8 @@ namespace Api.Controllers
             ?? throw new ArgumentNullException(nameof(anterClient));
         private readonly IMcpCallerAssertionService _assertionService = assertionService
             ?? throw new ArgumentNullException(nameof(assertionService));
+        private readonly IAssistantPseudonymService _pseudonymService = pseudonymService
+            ?? throw new ArgumentNullException(nameof(pseudonymService));
         private readonly ITenantContext _tenantContext = tenantContext
             ?? throw new ArgumentNullException(nameof(tenantContext));
         private readonly IAdministrationService _administrationService = administrationService
@@ -127,7 +130,7 @@ namespace Api.Controllers
             if (body?.CaptureId is { } captureId)
             {
                 var attached = await AssistantAttachmentMessageBuilder.TryAppendAttachmentAsync(
-                    _db, companyId, userId, captureId, message, cancellationToken);
+                    _db, companyId, userId, captureId, message, cancellationToken, _pseudonymService, body?.SessionId);
                 if (!attached.Succeeded)
                 {
                     Response.StatusCode = attached.ErrorStatusCode;

@@ -368,6 +368,16 @@ public static class AccountGoApp
             {
                 options.Stateless = true;
             })
+            .WithRequestFilters(filters =>
+            {
+                filters.AddCallToolFilter(next => async (context, cancellationToken) =>
+                {
+                    var result = await next(context, cancellationToken);
+                    var deidentifier = context.Services?.GetService<Api.Service.Ai.IMcpResponseDeidentifier>()
+                        ?? throw new InvalidOperationException("IMcpResponseDeidentifier is not registered on the MCP pipeline.");
+                    return await deidentifier.DeidentifyAsync(context.Params?.Name, result, cancellationToken);
+                });
+            })
             .WithTools<Api.Mcp.Tools.FinancialMcpTools>()
             .WithTools<Api.Mcp.Tools.WorkspaceMcpTools>()
             .WithTools<Api.Mcp.Tools.SalesMcpTools>()
@@ -376,6 +386,7 @@ public static class AccountGoApp
             .WithTools<Api.Mcp.Tools.ReviewMcpTools>();
         // Assistant data tools read through the same GET actions and filters as the pages.
         builder.Services.AddScoped<Api.Mcp.McpControllerReader>();
+        builder.Services.AddScoped<Api.Service.Ai.IMcpResponseDeidentifier, Api.Service.Ai.McpResponseDeidentifier>();
 
         // AccountGo Assistant → Anter external agent-runner (API key stays server-side)
         builder.Services.Configure<Api.Options.AnterOptions>(builder.Configuration.GetSection(Api.Options.AnterOptions.SectionName));

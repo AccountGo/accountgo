@@ -1,0 +1,647 @@
+// Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
+// SPDX-License-Identifier: AGPL-3.0-only
+
+#nullable enable
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Threading;
+using System.Threading.Tasks;
+using Api.Data;
+using Api.Service;
+using Api.Service.Ai;
+using Core.Domain;
+using Core.Domain.Financials;
+using Core.Domain.Purchases;
+using Core.Domain.Sales;
+using Core.Domain.Security;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using ModelContextProtocol.Server;
+using Xunit;
+
+namespace AccountGo.BackendTests.Ai;
+
+public sealed class McpDeidentificationTests : IAsyncLifetime
+{
+    private const string TestAnterApiKey = "proj_api-key_deid_test_gate_secret";
+    private const string SentinelCustomerName = "Zeloria Holdings Sentinel";
+    private const string SentinelVendorName = "Kestrel Supply Sentinel";
+    private const string SentinelBankName = "Veridian Checking Sentinel";
+    private const string SentinelEmail = "sentinel.pii@example.test";
+    private const string SentinelPhone = "+1-555-867-5309";
+    private const string SentinelAddress = "742 Evergreen Terrace Sentinel";
+    private const string SentinelIban = "DE89370400440532013000";
+    private const string SentinelFreeText = "SECRET FREE TEXT MEMO SENTINEL";
+
+    private readonly string _dbPath = Path.Combine(Path.GetTempPath(), "accountgo_mcp_deid_" + Guid.NewGuid().ToString("N") + ".db");
+    private WebApplicationFactory<Program> _factory = null!;
+    private HttpClient _client = null!;
+    private string _token = null!;
+    private string _userId = null!;
+    private string _slug = null!;
+    private int _companyId;
+    private string _customerPublicId = null!;
+    private string _vendorPublicId = null!;
+    private string _bankPublicId = null!;
+    private string _invoicePublicId = null!;
+    private string _billPublicId = null!;
+    private int _rpcId = 1;
+
+    public async Task InitializeAsync()
+    {
+        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.UseSetting("DatabaseProvider", "Sqlite");
+            builder.UseSetting("ConnectionStrings:SqliteConnection", "Data Source=" + _dbPath);
+            builder.UseSetting("SECRET_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+            builder.UseSetting("Anter:ApiKey", TestAnterApiKey);
+            builder.UseSetting("ANTER_API_KEY", TestAnterApiKey);
+            builder.UseSetting("PUBLIC_WEB_URL", "https://workspace.example");
+            builder.UseSetting("PUBLIC_API_URL", "https://api.example");
+        });
+
+        _client = _factory.CreateClient();
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var user = new ApplicationUser
+            {
+                UserName = "deid-tester@example.com",
+                Email = "deid-tester@example.com",
+                EmailConfirmed = true,
+            };
+            var created = await userManager.CreateAsync(user);
+            Assert.True(created.Succeeded);
+            _userId = user.Id;
+
+            var authService = scope.ServiceProvider.GetRequiredService<IAuthenticationService>();
+            var dto = await authService.CreateToken(user, populateExp: true);
+            _token = dto.AccessToken;
+        }
+
+        _slug = "deid-org-" + Guid.NewGuid().ToString("N")[..8];
+        using (var req = new HttpRequestMessage(HttpMethod.Post, "/api/organizations"))
+        {
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+            req.Content = JsonContent.Create(new { name = "Deid Test Org", slug = _slug });
+            var res = await _client.SendAsync(req);
+            Assert.Equal(HttpStatusCode.Created, res.StatusCode);
+            using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+            _companyId = AccountGo.BackendTests.PublicIds.PublicIdTestHelper.ResolveCompanyId(
+                _factory.Services, doc.RootElement.GetProperty("id").GetString()!);
+        }
+
+        await SeedSentinelDataAsync();
+    }
+
+    private async Task SeedSentinelDataAsync()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var tenant = scope.ServiceProvider.GetRequiredService<Core.Tenancy.ITenantContext>();
+        using var _ = tenant.Impersonate(_companyId, _slug);
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+
+        var ownerMember = await db.CompanyMembers.SingleAsync(m => m.CompanyId == _companyId && m.UserId == _userId);
+        var accountantRole = await db.SecurityRoles.SingleAsync(r => r.Name == "Accountant");
+        db.CompanyMemberSecurityRoles.Add(new CompanyMemberSecurityRole
+        {
+            CompanyMemberId = ownerMember.Id,
+            SecurityRoleId = accountantRole.Id,
+        });
+
+        var customerParty = new Party
+        {
+            CompanyId = _companyId,
+            Name = SentinelCustomerName,
+            Email = SentinelEmail,
+            Phone = SentinelPhone,
+            CompanyStreet = SentinelAddress,
+            PartyType = PartyTypes.Customer,
+            IsActive = true,
+        };
+        var customer = new Customer
+        {
+            CompanyId = _companyId,
+            No = "CUST-9001",
+            Party = customerParty,
+        };
+        db.Customers.Add(customer);
+
+        var vendorParty = new Party
+        {
+            CompanyId = _companyId,
+            Name = SentinelVendorName,
+            Email = SentinelEmail,
+            Phone = SentinelPhone,
+            CompanyStreet = SentinelAddress,
+            PartyType = PartyTypes.Vendor,
+            IsActive = true,
+        };
+        var vendor = new Vendor
+        {
+            CompanyId = _companyId,
+            No = "VEND-9001",
+            Party = vendorParty,
+        };
+        db.Vendors.Add(vendor);
+
+        var bankLedgerAccount = await db.Accounts.IgnoreQueryFilters()
+            .FirstAsync(a => a.CompanyId == _companyId && a.IsCash);
+        bankLedgerAccount.AccountName = SentinelBankName;
+        bankLedgerAccount.Description = SentinelFreeText;
+
+        var bank = new Bank
+        {
+            CompanyId = _companyId,
+            Name = SentinelBankName,
+            BankName = SentinelBankName,
+            Number = SentinelIban,
+            AccountId = bankLedgerAccount.Id,
+            IsActive = true,
+        };
+        db.Banks.Add(bank);
+
+        await db.SaveChangesAsync();
+
+        var revenueAccount = await db.Accounts.IgnoreQueryFilters()
+            .FirstAsync(a => a.CompanyId == _companyId && a.AccountClassId == 4);
+        var expenseAccount = await db.Accounts.IgnoreQueryFilters()
+            .FirstAsync(a => a.CompanyId == _companyId && a.AccountClassId == 5);
+        var item = await db.Items.IgnoreQueryFilters().FirstOrDefaultAsync(i => i.CompanyId == _companyId);
+        if (item is null)
+        {
+            var measurement = await db.Measurements.IgnoreQueryFilters().FirstOrDefaultAsync(m => m.CompanyId == _companyId);
+            if (measurement is null)
+            {
+                measurement = new Core.Domain.Items.Measurement { CompanyId = _companyId, Code = "EA", Description = "Each" };
+                db.Measurements.Add(measurement);
+                await db.SaveChangesAsync();
+            }
+
+            item = new Core.Domain.Items.Item
+            {
+                CompanyId = _companyId,
+                Code = "SVC-001",
+                Description = "Consulting Service",
+                SalesAccountId = revenueAccount.Id,
+                CostOfGoodsSoldAccountId = expenseAccount.Id,
+                SmallestMeasurementId = measurement.Id,
+                SellMeasurementId = measurement.Id,
+                PurchaseMeasurementId = measurement.Id,
+            };
+            db.Items.Add(item);
+            await db.SaveChangesAsync();
+        }
+
+        var invoice = new SalesInvoiceHeader
+        {
+            CompanyId = _companyId,
+            No = "INV-9001",
+            CustomerId = customer.Id,
+            Date = new DateTime(2026, 10, 15, 0, 0, 0, DateTimeKind.Utc),
+            DueDate = new DateTime(2026, 11, 15, 0, 0, 0, DateTimeKind.Utc),
+            Status = SalesInvoiceStatus.Open,
+            ReferenceNo = "REF-9001",
+            Notes = SentinelFreeText,
+            SalesInvoiceLines = new List<SalesInvoiceLine>
+            {
+                new()
+                {
+                    CompanyId = _companyId,
+                    ItemId = item.Id,
+                    MeasurementId = item.SellMeasurementId ?? 1,
+                    Description = SentinelFreeText,
+                    Quantity = 2m,
+                    Amount = 125.50m,
+                }
+            }
+        };
+        db.SalesInvoiceHeaders.Add(invoice);
+
+        var bill = new PurchaseInvoiceHeader
+        {
+            CompanyId = _companyId,
+            No = "BILL-9001",
+            VendorId = vendor.Id,
+            Date = new DateTime(2026, 10, 20, 0, 0, 0, DateTimeKind.Utc),
+            DueDate = new DateTime(2026, 11, 20, 0, 0, 0, DateTimeKind.Utc),
+            Status = PurchaseInvoiceStatus.Open,
+            VendorInvoiceNo = "VINV-9001",
+            ReferenceNo = "BREF-9001",
+            Description = SentinelFreeText,
+            PurchaseInvoiceLines = new List<PurchaseInvoiceLine>
+            {
+                new()
+                {
+                    CompanyId = _companyId,
+                    ItemId = item.Id,
+                    AccountId = expenseAccount.Id,
+                    Description = SentinelFreeText,
+                    Quantity = 1m,
+                    Amount = 88.25m,
+                }
+            }
+        };
+        db.PurchaseInvoiceHeaders.Add(bill);
+
+        await db.SaveChangesAsync();
+
+        _customerPublicId = customer.PublicId;
+        _vendorPublicId = vendor.PublicId;
+        _bankPublicId = bank.PublicId;
+        _invoicePublicId = invoice.PublicId;
+        _billPublicId = bill.PublicId;
+    }
+
+    public Task DisposeAsync()
+    {
+        _client?.Dispose();
+        _factory?.Dispose();
+        foreach (var file in new[] { _dbPath, _dbPath + "-wal", _dbPath + "-shm" })
+        {
+            if (File.Exists(file)) File.Delete(file);
+        }
+        return Task.CompletedTask;
+    }
+
+    private string MintAssertion(string? sessionId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var assertionService = scope.ServiceProvider.GetRequiredService<IMcpCallerAssertionService>();
+        return assertionService.MintAssertion(_userId, _companyId, _slug, sessionId: sessionId);
+    }
+
+    private async Task<JsonNode> CallMcpToolAsync(string toolName, object? arguments = null, string? sessionId = "sess_deid_1")
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/mcp");
+        req.Headers.Add(Api.Middleware.TenantResolutionMiddleware.McpServerKeyHeaderName, TestAnterApiKey);
+        req.Headers.Add(McpCallerAssertionService.HeaderName, MintAssertion(sessionId));
+        req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
+
+        var body = new JsonObject
+        {
+            ["jsonrpc"] = "2.0",
+            ["id"] = Interlocked.Increment(ref _rpcId),
+            ["method"] = "tools/call",
+            ["params"] = new JsonObject
+            {
+                ["name"] = toolName,
+                ["arguments"] = JsonNode.Parse(JsonSerializer.Serialize(arguments ?? new { })),
+            }
+        };
+        req.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
+
+        using var res = await _client.SendAsync(req);
+        var raw = await res.Content.ReadAsStringAsync();
+        Assert.True(res.IsSuccessStatusCode, $"{toolName} -> {(int)res.StatusCode}: {raw}");
+
+        var json = raw.TrimStart().StartsWith('{')
+            ? raw
+            : string.Concat(raw.Split('\n').Where(l => l.StartsWith("data:")).Select(l => l["data:".Length..].Trim()));
+        var rpc = JsonNode.Parse(json)!;
+        Assert.Null(rpc["error"]);
+        var result = rpc["result"]!;
+        Assert.False(result["isError"]?.GetValue<bool>() ?? false, $"{toolName} returned isError: {raw}");
+
+        var text = result["content"]?[0]?["text"]?.GetValue<string>();
+        return text is not null ? JsonNode.Parse(text)! : result["structuredContent"]!;
+    }
+
+    [Fact]
+    public async Task AllRegisteredMcpTools_AreCoveredByCentralCallToolFilter()
+    {
+        // Verify central CallToolFilter is registered on McpServerOptions.
+        var mcpOptions = _factory.Services.GetRequiredService<IOptions<McpServerOptions>>().Value;
+        Assert.NotNull(mcpOptions.Filters.Request.CallToolFilters);
+        Assert.NotEmpty(mcpOptions.Filters.Request.CallToolFilters);
+
+        // Enumerate all tools from /mcp tools/list and verify all 6 tool groups are represented.
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/mcp");
+        req.Headers.Add(Api.Middleware.TenantResolutionMiddleware.McpServerKeyHeaderName, TestAnterApiKey);
+        req.Headers.Add(McpCallerAssertionService.HeaderName, MintAssertion("sess_enum"));
+        req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
+        req.Content = new StringContent("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}", Encoding.UTF8, "application/json");
+
+        using var res = await _client.SendAsync(req);
+        var raw = await res.Content.ReadAsStringAsync();
+        Assert.True(res.IsSuccessStatusCode, raw);
+        var json = raw.TrimStart().StartsWith('{')
+            ? raw
+            : string.Concat(raw.Split('\n').Where(l => l.StartsWith("data:")).Select(l => l["data:".Length..].Trim()));
+        var tools = JsonNode.Parse(json)!["result"]!["tools"]!.AsArray()
+            .Select(t => t!["name"]!.GetValue<string>())
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.True(tools.Count >= 38, $"Expected at least 38 MCP tools, found {tools.Count}");
+        Assert.Contains("search_clients", tools);
+        Assert.Contains("search_vendors", tools);
+        Assert.Contains("list_bank_accounts", tools);
+        Assert.Contains("get_chart_of_accounts", tools);
+        Assert.Contains("get_trial_balance", tools);
+        Assert.Contains("get_members_and_roles", tools);
+    }
+
+    [Fact]
+    public async Task AllMcpTools_LeakTest_And_FieldClassificationContractTest()
+    {
+        var sentinels = new[]
+        {
+            SentinelCustomerName,
+            SentinelVendorName,
+            SentinelBankName,
+            SentinelEmail,
+            SentinelPhone,
+            SentinelAddress,
+            SentinelIban,
+            SentinelFreeText,
+        };
+
+        var calls = new (string Tool, object? Args)[]
+        {
+            ("get_workspace_context", null),
+            ("get_dashboard_summary", null),
+            ("search_clients", null),
+            ("get_client", new { clientId = _customerPublicId }),
+            ("search_invoices", null),
+            ("get_invoice", new { invoiceId = _invoicePublicId }),
+            ("get_receivables_aging", null),
+            ("get_recurring_schedules", null),
+            ("search_vendors", null),
+            ("get_vendor", new { vendorId = _vendorPublicId }),
+            ("search_bills", null),
+            ("get_bill", new { billId = _billPublicId }),
+            ("get_payables_aging", null),
+            ("search_bill_payments", null),
+            ("list_bank_accounts", null),
+            ("list_bank_accounts", new { bankId = _bankPublicId }),
+            ("get_bank_register", new { bankId = _bankPublicId }),
+            ("get_bank_reconciliations", new { bankId = _bankPublicId }),
+            ("get_bank_statement_lines", new { bankId = _bankPublicId }),
+            ("get_chart_of_accounts", null),
+            ("get_trial_balance", null),
+            ("get_balance_sheet", null),
+            ("get_income_statement", null),
+            ("get_cash_flow", null),
+            ("get_general_ledger_transactions", new { take = 25 }),
+            ("search_journal_entries", null),
+            ("get_books_checks", new { fromDate = "2026-01-01", toDate = "2026-12-31" }),
+            ("search_items", null),
+            ("get_tax_rates", null),
+            ("get_linked_entries", null),
+            ("get_fiscal_years", null),
+            ("get_members_and_roles", null),
+            ("get_equity_statement", null),
+            ("get_tax_report", null),
+            ("search_receipts", null),
+            ("get_bank_outstanding_items", new { bankId = _bankPublicId }),
+            ("get_record_history", new { entityType = "SalesInvoiceHeader", entityId = _invoicePublicId }),
+        };
+
+        var unclassifiedProperties = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        string? customerTokenFromClients = null;
+        string? customerTokenFromInvoices = null;
+        string? vendorTokenFromVendors = null;
+        string? bankTokenFromList = null;
+
+        foreach (var (tool, args) in calls)
+        {
+            var payload = await CallMcpToolAsync(tool, args, sessionId: "sess_leak_1");
+            var rawJson = payload.ToJsonString();
+
+            // 1. Leak assertion: zero sentinel strings may appear anywhere.
+            foreach (var sentinel in sentinels)
+            {
+                Assert.DoesNotContain(sentinel, rawJson, StringComparison.OrdinalIgnoreCase);
+            }
+
+            // 2. Contract assertion: every string property emitted must be explicitly classified.
+            CollectUnclassifiedStringProperties(payload, unclassifiedProperties);
+
+            if (tool == "search_clients")
+            {
+                customerTokenFromClients = payload["data"]![0]!["name"]!.GetValue<string>();
+                Assert.Matches(@"^C-[0-9A-F]{8}$", customerTokenFromClients);
+                Assert.Equal(McpFieldClassificationRegistry.MaskedPlaceholder, payload["data"]![0]!["email"]!.GetValue<string>());
+                Assert.Equal(McpFieldClassificationRegistry.MaskedPlaceholder, payload["data"]![0]!["phone"]!.GetValue<string>());
+            }
+            else if (tool == "search_invoices")
+            {
+                customerTokenFromInvoices = payload["data"]![0]!["clientName"]!.GetValue<string>();
+                Assert.Matches(@"^C-[0-9A-F]{8}$", customerTokenFromInvoices);
+            }
+            else if (tool == "search_vendors")
+            {
+                vendorTokenFromVendors = payload["data"]![0]!["name"]!.GetValue<string>();
+                Assert.Matches(@"^V-[0-9A-F]{8}$", vendorTokenFromVendors);
+            }
+            else if (tool == "list_bank_accounts" && args is null)
+            {
+                var bankList = payload["data"] as JsonArray ?? payload["data"]?["items"] as JsonArray ?? payload["data"]?["accounts"] as JsonArray;
+                Assert.True(bankList is not null && bankList.Count > 0, $"Unexpected list_bank_accounts payload: {rawJson}");
+                bankTokenFromList = bankList![0]!["name"]!.GetValue<string>();
+                Assert.Matches(@"^B-[0-9A-F]{8}$", bankTokenFromList);
+            }
+            else if (tool == "get_chart_of_accounts")
+            {
+                var bankAccountRow = payload["accounts"]!.AsArray()
+                    .FirstOrDefault(a => a!["isCash"]?.GetValue<bool>() == true && a["name"]!.GetValue<string>().StartsWith("B-", StringComparison.Ordinal));
+                Assert.NotNull(bankAccountRow);
+                Assert.Equal(bankTokenFromList, bankAccountRow!["name"]!.GetValue<string>());
+            }
+            else if (tool == "get_bill")
+            {
+                var billData = payload["data"];
+                Assert.True(billData is not null, $"get_bill returned null data: {rawJson}");
+                var lineDesc = billData!["lines"]?[0]?["description"]?.GetValue<string>();
+                Assert.True(lineDesc == McpFieldClassificationRegistry.HiddenTextPlaceholder, $"Unexpected get_bill payload: {rawJson}");
+                Assert.Equal(McpFieldClassificationRegistry.MaskedPlaceholder, billData["vendorEmail"]?.GetValue<string>());
+            }
+        }
+
+        // Consistent token across tools within the same session.
+        Assert.NotNull(customerTokenFromClients);
+        Assert.Equal(customerTokenFromClients, customerTokenFromInvoices);
+
+        Assert.True(unclassifiedProperties.Count == 0,
+            "Unclassified MCP string properties found: " + string.Join(", ", unclassifiedProperties.OrderBy(x => x)));
+    }
+
+    [Fact]
+    public async Task UnknownStringField_FailsClosedToMasked()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var deidentifier = scope.ServiceProvider.GetRequiredService<IMcpResponseDeidentifier>();
+        var input = JsonNode.Parse("""{"status":"Success","totallyUnknownNewSecretField":"Sensitive Value 123"}""")!;
+
+        var output = await deidentifier.DeidentifyJsonAsync("search_clients", input);
+        Assert.Equal("Success", output!["status"]!.GetValue<string>());
+        Assert.Equal(McpFieldClassificationRegistry.MaskedPlaceholder, output["totallyUnknownNewSecretField"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task CfoNumericInvariance_AmountsAndTotalsAreIdenticalAfterDeidentification()
+    {
+        var invoiceList = await CallMcpToolAsync("search_invoices", null, sessionId: "sess_cfo_1");
+        var firstInvoice = invoiceList["data"]!.AsArray().Single(i => i!["no"]!.GetValue<string>() == "INV-9001")!;
+        Assert.Equal(251.00m, firstInvoice["total"]!.GetValue<decimal>());
+
+        var billList = await CallMcpToolAsync("search_bills", null, sessionId: "sess_cfo_1");
+        var firstBill = billList["data"]!.AsArray().Single(b => b!["no"]!.GetValue<string>() == "BILL-9001")!;
+        Assert.Equal(88.25m, firstBill["total"]!.GetValue<decimal>());
+
+        // Compare direct raw JSON vs de-identified JSON for TrialBalance & ReceivablesAging numbers.
+        using var scope = _factory.Services.CreateScope();
+        var deidentifier = scope.ServiceProvider.GetRequiredService<IMcpResponseDeidentifier>();
+        var rawFinancial = JsonNode.Parse("""
+        {
+            "organization": "deid-org",
+            "status": "Success",
+            "totalDebit": 12345.67,
+            "totalCredit": 12345.67,
+            "difference": 0.00,
+            "isBalanced": true,
+            "items": [
+                { "accountCode": "1010", "accountName": "Veridian Checking Sentinel", "debit": 12345.67, "credit": 0.00 }
+            ]
+        }
+        """)!;
+        var beforeNumbers = ExtractAllNumbers(rawFinancial);
+        var deidentified = await deidentifier.DeidentifyJsonAsync("get_trial_balance", JsonNode.Parse(rawFinancial.ToJsonString())!);
+        var afterNumbers = ExtractAllNumbers(deidentified!);
+
+        Assert.Equal(beforeNumbers, afterNumbers);
+    }
+
+    [Fact]
+    public async Task AttachmentMessageBuilder_PseudonymizesMatchedVendorConsistentlyWithMcpSession()
+    {
+        const string sessionId = "sess_attach_match_1";
+        var vendorsRes = await CallMcpToolAsync("search_vendors", null, sessionId: sessionId);
+        var expectedVendorToken = vendorsRes["data"]![0]!["name"]!.GetValue<string>();
+        Assert.Matches(@"^V-[0-9A-F]{8}$", expectedVendorToken);
+
+        using var scope = _factory.Services.CreateScope();
+        var tenant = scope.ServiceProvider.GetRequiredService<Core.Tenancy.ITenantContext>();
+        using var _ = tenant.Impersonate(_companyId, _slug);
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        var pseudonymService = scope.ServiceProvider.GetRequiredService<IAssistantPseudonymService>();
+
+        var now = DateTime.UtcNow;
+        var capture = new Core.Domain.DocumentCapture
+        {
+            CompanyId = _companyId,
+            PublicId = "cap_attach01",
+            Kind = "assistant-attachment",
+            SchemaVersion = 1,
+            Status = "accepted",
+            SourceHash = "abc",
+            ContentHash = "def",
+            NormalizationVersion = "v1",
+            ContentType = "application/pdf",
+            ByteCount = 10,
+            PageCount = 1,
+            RequestFingerprint = "fp1",
+            CreatedBy = _userId,
+            CreatedAt = now,
+            AcceptedBy = _userId,
+            AcceptedAt = now,
+            ExpiresAt = now.AddDays(7),
+            AcceptedFieldsJson = $$"""
+            {
+              "fields": [
+                { "label": "Vendor", "value": "{{SentinelVendorName}}" },
+                { "label": "Customer", "value": "Unmatched Prospect Co" },
+                { "label": "Total", "value": "88.25" }
+              ]
+            }
+            """
+        };
+        db.DocumentCaptures.Add(capture);
+        await db.SaveChangesAsync();
+
+        var built = await AssistantAttachmentMessageBuilder.TryAppendAttachmentAsync(
+            db, _companyId, _userId, capture.Id, "Please check this bill", CancellationToken.None, pseudonymService, sessionId);
+
+        Assert.True(built.Succeeded);
+        Assert.NotNull(built.CombinedMessage);
+        Assert.DoesNotContain(SentinelVendorName, built.CombinedMessage!, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Unmatched Prospect Co", built.CombinedMessage!, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains($"- Vendor: {expectedVendorToken}", built.CombinedMessage!);
+        Assert.Contains("- Total: 88.25", built.CombinedMessage!);
+        Assert.Matches(@"- Customer: C-[0-9A-F]{8}", built.CombinedMessage!);
+    }
+
+    private static void CollectUnclassifiedStringProperties(JsonNode node, HashSet<string> unclassified)
+    {
+        switch (node)
+        {
+            case JsonObject obj:
+                foreach (var kvp in obj)
+                {
+                    if (kvp.Value is null) continue;
+                    if (kvp.Value is JsonValue val && val.TryGetValue<string>(out _))
+                    {
+                        if (!McpFieldClassificationRegistry.IsExplicitlyClassified(kvp.Key))
+                        {
+                            unclassified.Add(kvp.Key);
+                        }
+                    }
+                    else
+                    {
+                        CollectUnclassifiedStringProperties(kvp.Value, unclassified);
+                    }
+                }
+                break;
+            case JsonArray arr:
+                foreach (var item in arr)
+                {
+                    if (item is not null) CollectUnclassifiedStringProperties(item, unclassified);
+                }
+                break;
+        }
+    }
+
+    private static List<(string Path, decimal Value)> ExtractAllNumbers(JsonNode node, string path = "$")
+    {
+        var list = new List<(string, decimal)>();
+        switch (node)
+        {
+            case JsonObject obj:
+                foreach (var kvp in obj.OrderBy(k => k.Key, StringComparer.Ordinal))
+                {
+                    if (kvp.Value is not null)
+                        list.AddRange(ExtractAllNumbers(kvp.Value, $"{path}.{kvp.Key}"));
+                }
+                break;
+            case JsonArray arr:
+                for (var i = 0; i < arr.Count; i++)
+                {
+                    if (arr[i] is not null)
+                        list.AddRange(ExtractAllNumbers(arr[i]!, $"{path}[{i}]"));
+                }
+                break;
+            case JsonValue val when val.TryGetValue<decimal>(out var d):
+                list.Add((path, d));
+                break;
+        }
+        return list;
+    }
+}
