@@ -16,7 +16,6 @@ public static class DocumentCaptureWarningCodes
         "FOREIGN_CURRENCY",
         "PRICE_BASIS_UNKNOWN",
         "PAYMENT_STATUS_UNKNOWN",
-        "CURRENCY_AMBIGUOUS",
         "OCR_PARTIAL_PAGES",
         "TOTALS_INCONSISTENT",
         "TOTAL_UNLABELED",

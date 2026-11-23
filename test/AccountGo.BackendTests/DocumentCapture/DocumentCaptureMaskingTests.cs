@@ -76,17 +76,28 @@ public sealed class DocumentCaptureMaskingTests
     public void ProviderWarnings_AreReducedToStableCodes()
     {
         Assert.Equal("LOW_CONFIDENCE", DocumentCaptureWarningCodes.Sanitize("LOW_CONFIDENCE"));
-        Assert.Equal("CURRENCY_AMBIGUOUS", DocumentCaptureWarningCodes.Sanitize("CURRENCY_AMBIGUOUS"));
+        Assert.Equal("AMBIGUOUS_CURRENCY", DocumentCaptureWarningCodes.Sanitize("AMBIGUOUS_CURRENCY"));
         Assert.Equal("REVIEW_REQUIRED", DocumentCaptureWarningCodes.Sanitize("Routing number 021000021"));
     }
 
     [Fact]
     public void ParserWarningCodes_AreAllowedAndHaveUserFacingText()
     {
+        var repoRoot = FindRepositoryRoot();
+        var warningText = File.ReadAllText(Path.Combine(repoRoot, "src", "Web", "src", "components", "document-capture", "fields.ts"));
         foreach (var code in Api.DocumentCaptures.Parsing.DocumentTextFieldParser.WarningCodes)
         {
             Assert.Equal(code, DocumentCaptureWarningCodes.Sanitize(code));
             Assert.NotEqual("REVIEW_REQUIRED", DocumentCaptureWarningCodes.Sanitize(code));
+            Assert.Contains($"case '{code}':", warningText, StringComparison.Ordinal);
         }
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "AGENTS.md")))
+            directory = directory.Parent;
+        return directory?.FullName ?? throw new DirectoryNotFoundException("Repository root was not found.");
     }
 }
