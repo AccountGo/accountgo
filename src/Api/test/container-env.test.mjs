@@ -54,11 +54,17 @@ test("buildContainerEnvVars forces ExtractionHost per pool when DOCUMENT_CAPTURE
   assert.equal(v2PaidVars.DOCUMENTCAPTURE__EXTRACTIONHOST, undefined);
 });
 
-test("buildContainerEnvVars leaves ExtractionHost untouched when DOCUMENT_CAPTURE_EXTRACTION_POOL is unset", () => {
-  const vars = buildContainerEnvVars(
-    { DatabaseProvider: "Postgres", DocumentCapture__Enabled: "true" },
-    8001,
-    "v1"
-  );
-  assert.equal(vars.DocumentCapture__ExtractionHost, undefined);
+test("buildContainerEnvVars always forces ExtractionHost=false when DOCUMENT_CAPTURE_EXTRACTION_POOL is unset", () => {
+  const baseEnv = {
+    DatabaseProvider: "Postgres",
+    DocumentCapture__Enabled: "true",
+    DocumentCapture__ExtractionHost: "true",
+    DOCUMENTCAPTURE__EXTRACTIONHOST: "true",
+  };
+
+  for (const pool of ["v1", "free", "paid"]) {
+    const vars = buildContainerEnvVars(baseEnv, 8001, pool);
+    assert.equal(vars.DocumentCapture__ExtractionHost, "false", pool);
+    assert.equal(vars.DOCUMENTCAPTURE__EXTRACTIONHOST, undefined, pool);
+  }
 });

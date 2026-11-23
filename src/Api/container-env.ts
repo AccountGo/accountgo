@@ -48,14 +48,14 @@ export function buildContainerEnvVars(
     typeof env.DOCUMENT_CAPTURE_EXTRACTION_POOL === "string"
       ? env.DOCUMENT_CAPTURE_EXTRACTION_POOL.trim().toLowerCase()
       : "";
-  if (capturePool === "paid") {
-    // Strip any case-variant ops setting so V1 and V2 free can never inherit ExtractionHost=true.
-    for (const key of Object.keys(envVars)) {
-      if (key.toLowerCase() === "documentcapture__extractionhost") {
-        delete envVars[key];
-      }
+  // Always strip any case-variant ops setting so V1 lite and V2 free can never inherit ExtractionHost=true,
+  // even if ops clears DOCUMENT_CAPTURE_EXTRACTION_POOL while capture is enabled.
+  for (const key of Object.keys(envVars)) {
+    if (key.toLowerCase() === "documentcapture__extractionhost") {
+      delete envVars[key];
     }
-    envVars.DocumentCapture__ExtractionHost = pool === "paid" ? "true" : "false";
   }
+  envVars.DocumentCapture__ExtractionHost =
+    pool === "paid" && capturePool === "paid" ? "true" : "false";
   return envVars;
 }

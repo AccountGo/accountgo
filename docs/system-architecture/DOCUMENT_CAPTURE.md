@@ -100,10 +100,15 @@ capture uploads run on the V2 `paid` pool at `standard-1`:
   (`capabilities`, metadata, evidence bytes, `accept`, `reject`, `links`) stay
   on their existing route so normal browsing does not keep a `standard-1`
   container awake.
-- While `DOCUMENT_CAPTURE_EXTRACTION_POOL=paid` is set, the Worker enforces
-  `DocumentCapture__ExtractionHost=false` on the V1 `lite` container (and any
-  V2 `free` pool container) and `DocumentCapture__ExtractionHost=true` on the
-  V2 `paid` pool container, overriding any ops-provided value.
+- The Cloudflare Worker always forces `DocumentCapture__ExtractionHost=false`
+  on the V1 `lite` container and any V2 `free` pool container, overriding any
+  ops-provided value (including case variants). The V2 `paid` pool gets
+  `DocumentCapture__ExtractionHost=true` only when
+  `DOCUMENT_CAPTURE_EXTRACTION_POOL=paid`; otherwise all pools fail safe to
+  `false` so clearing the pool var while capture is enabled never runs OCR on
+  V1 `lite` (uploads fail safe with a retryable 503). Self-hosted
+  (non-Cloudflare) installations do not run `worker.ts` and keep the default
+  `DocumentCapture:ExtractionHost=true`.
 - On an instance with `DocumentCapture:ExtractionHost=false`, `POST /api/document-captures`
   returns `503 DOCUMENT_CAPTURE_UNCONFIGURED` with `Retry-After: 1` before any
   reservation, quota attempt, media preparation, or worker start, and
