@@ -340,7 +340,7 @@ public sealed class AssistantDocumentCaptureTests : IAsyncLifetime
 
         var res = await PostRunStreamRawAsync(JsonSerializer.Serialize(new { message = "Hello", captureId = pubId }));
 
-        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, res.StatusCode);
         Assert.Empty(_anterHandler.Requests);
     }
 
@@ -352,22 +352,108 @@ public sealed class AssistantDocumentCaptureTests : IAsyncLifetime
 
         var res = await PostRunStreamRawAsync(JsonSerializer.Serialize(new { message = "Hello", captureId = pubId }));
 
-        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, res.StatusCode);
         Assert.Empty(_anterHandler.Requests);
     }
 
     [Fact]
     public async Task RunStream_UnacceptedOrMissingAcceptedFields_IsRefused409()
     {
-        var (_, readyPubId) = SeedCapture(_companyIdA, _ownerId, status: "ready");
+        var (_, rejectedPubId) = SeedCapture(_companyIdA, _ownerId, status: "rejected", acceptedFieldsJson: null);
         var (_, emptyAcceptedPubId) = SeedCapture(_companyIdA, _ownerId, status: "accepted", acceptedFieldsJson: null);
 
-        var resReady = await PostRunStreamRawAsync(JsonSerializer.Serialize(new { message = "Hello", captureId = readyPubId }));
+        var resRejected = await PostRunStreamRawAsync(JsonSerializer.Serialize(new { message = "Hello", captureId = rejectedPubId }));
         var resEmpty = await PostRunStreamRawAsync(JsonSerializer.Serialize(new { message = "Hello", captureId = emptyAcceptedPubId }));
 
-        Assert.Equal(HttpStatusCode.Conflict, resReady.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, resRejected.StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, resEmpty.StatusCode);
         Assert.Empty(_anterHandler.Requests);
+    }
+
+    [Fact]
+    public async Task RunStream_ReadyAssistantCapture_AcceptsPurgesBytesBuildsBlockAndAllowsResend()
+    {
+        var (id, pubId) = SeedCapture(
+            _companyIdA,
+            _ownerId,
+            status: "ready",
+            acceptedFieldsJson: null,
+            bytes: new byte[] { 1, 2, 3, 4 });
+
+        // Ensure FieldsJson is populated on the ready capture (as extraction leaves it).
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            db.SuppressTenantSecurityCheck = true;
+            var cap = await db.DocumentCaptures.IgnoreQueryFilters().SingleAsync(c => c.Id == id);
+            cap.FieldsJson = "{\"fields\":[{\"label\":\"Vendor\",\"value\":\"Northwind Office Ltd\"},{\"label\":\"Account\",\"value\":\"123456789012\"}]}";
+            await db.SaveChangesAsync();
+        }
+
+        var res = await PostRunStreamRawAsync(JsonSerializer.Serialize(new { message = "Summarize this", captureId = pubId }));
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+
+        // Verify capture was atomically accepted and bytes were purged.
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            db.SuppressTenantSecurityCheck = true;
+            var cap = await db.DocumentCaptures.IgnoreQueryFilters().SingleAsync(c => c.Id == id);
+            Assert.Equal("accepted", cap.Status);
+            Assert.NotNull(cap.AcceptedFieldsJson);
+            Assert.DoesNotContain("123456789012", cap.AcceptedFieldsJson, StringComparison.Ordinal);
+            Assert.NotNull(cap.BytesDeletedAt);
+            Assert.False(await db.DocumentCaptureBlobs.IgnoreQueryFilters().AnyAsync(b => b.CaptureId == id));
+        }
+
+        Assert.True(_anterHandler.Requests.TryDequeue(out var upstream));
+        using var bodyDoc = JsonDocument.Parse(upstream!.Body);
+        var sentMessage = bodyDoc.RootElement.GetProperty("message").GetString()!;
+        Assert.Contains("looksLike: vendor-bill-or-receipt", sentMessage, StringComparison.Ordinal);
+        Assert.Contains("••••", sentMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("123456789012", sentMessage, StringComparison.Ordinal);
+
+        // Re-sending the now-accepted capture succeeds (reuse behaviour preserved).
+        var resend = await PostRunStreamRawAsync(JsonSerializer.Serialize(new { message = "Follow-up", captureId = pubId }));
+        Assert.Equal(HttpStatusCode.OK, resend.StatusCode);
+    }
+
+    [Fact]
+    public async Task RunStream_MultipleAttachments_IsRefused400()
+    {
+        var (_, pub1) = SeedCapture(_companyIdA, _ownerId, status: "accepted");
+        var (_, pub2) = SeedCapture(_companyIdA, _ownerId, status: "accepted");
+
+        var res = await PostRunStreamRawAsync(JsonSerializer.Serialize(new
+        {
+            message = "Two attachments",
+            attachedFileIds = new[] { pub1, pub2 },
+        }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+        Assert.Empty(_anterHandler.Requests);
+    }
+
+    [Fact]
+    public void LooksLikeHint_DetectsBankDetailsSalesInvoiceAndVendorBillOrReceipt()
+    {
+        var bankBlock = AssistantAttachmentMessageBuilder.BuildDelimitedUntrustedBlock(
+            "cap_test01",
+            "{\"fields\":[{\"label\":\"IBAN\",\"value\":\"••••\"},{\"label\":\"Bank\",\"value\":\"First Test Bank\"}]}",
+            companyName: "Northwind Trading Ltd");
+        Assert.Contains("looksLike: bank-details", bankBlock, StringComparison.Ordinal);
+
+        var salesBlock = AssistantAttachmentMessageBuilder.BuildDelimitedUntrustedBlock(
+            "cap_test02",
+            "{\"fields\":[{\"label\":\"Issuer\",\"value\":\"Northwind Trading Limited\"},{\"label\":\"Total\",\"value\":\"USD 250.00\"}]}",
+            companyName: "Northwind Trading Ltd.");
+        Assert.Contains("looksLike: sales-invoice", salesBlock, StringComparison.Ordinal);
+
+        var billBlock = AssistantAttachmentMessageBuilder.BuildDelimitedUntrustedBlock(
+            "cap_test03",
+            "{\"fields\":[{\"label\":\"Vendor\",\"value\":\"Blue Harbor Retail LLC\"},{\"label\":\"Total\",\"value\":\"USD 80.00\"}]}",
+            companyName: "Northwind Trading Ltd.");
+        Assert.Contains("looksLike: vendor-bill-or-receipt", billBlock, StringComparison.Ordinal);
     }
 
     [Fact]

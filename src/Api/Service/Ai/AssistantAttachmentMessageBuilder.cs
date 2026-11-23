@@ -86,35 +86,45 @@ public static partial class AssistantAttachmentMessageBuilder
             .SingleOrDefaultAsync(c => c.Id == captureId, cancellationToken)
             .ConfigureAwait(false);
 
-        if (capture is null || !string.Equals(capture.CreatedBy, userId, StringComparison.Ordinal))
+        if (capture is null
+            || !string.Equals(capture.CreatedBy, userId, StringComparison.Ordinal)
+            || !string.Equals(capture.Kind, AttachmentKind, StringComparison.Ordinal))
         {
             return AssistantAttachmentBuildResult.Fail(
                 StatusCodes.Status404NotFound,
                 new { message = PublicIdErrorCodes.NotFoundMessage, code = PublicIdErrorCodes.UnknownId });
         }
 
-        if (!string.Equals(capture.Kind, AttachmentKind, StringComparison.Ordinal))
+        string acceptedFieldsJson;
+        if (string.Equals(capture.Status, "ready", StringComparison.Ordinal))
         {
-            return AssistantAttachmentBuildResult.Fail(
-                StatusCodes.Status400BadRequest,
-                new
-                {
-                    code = "DOCUMENT_ATTACHMENT_INVALID",
-                    detail = "Only accepted assistant attachments may be attached to chat messages.",
-                });
+            var acceptResult = await AcceptReadyAttachmentAsync(db, companyId, userId, capture, cancellationToken)
+                .ConfigureAwait(false);
+            if (!acceptResult.Succeeded)
+                return acceptResult.Failure!;
+            acceptedFieldsJson = acceptResult.AcceptedFieldsJson!;
         }
-
-        if (!string.Equals(capture.Status, "accepted", StringComparison.Ordinal)
-            || string.IsNullOrWhiteSpace(capture.AcceptedFieldsJson))
+        else if (string.Equals(capture.Status, "accepted", StringComparison.Ordinal)
+            && !string.IsNullOrWhiteSpace(capture.AcceptedFieldsJson))
+        {
+            acceptedFieldsJson = capture.AcceptedFieldsJson;
+        }
+        else
         {
             return AssistantAttachmentBuildResult.Fail(
                 StatusCodes.Status409Conflict,
                 new
                 {
                     code = "DOCUMENT_STATE_CONFLICT",
-                    detail = "Accept the captured attachment fields before sending them to the assistant.",
+                    detail = "The captured attachment is not ready to be sent to the assistant.",
                 });
         }
+
+        var companyNames = await db.Companies.IgnoreQueryFilters().AsNoTracking()
+            .Where(c => c.Id == companyId)
+            .Select(c => new { c.Name, c.ShortName })
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
 
         string block;
         try
@@ -128,9 +138,11 @@ public static partial class AssistantAttachmentMessageBuilder
 
             block = await BuildDelimitedUntrustedBlockAsync(
                 capture.PublicId,
-                capture.AcceptedFieldsJson,
+                acceptedFieldsJson,
                 partyPseudonymizer,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken,
+                companyNames?.Name,
+                companyNames?.ShortName).ConfigureAwait(false);
         }
         catch (JsonException)
         {
@@ -158,8 +170,76 @@ public static partial class AssistantAttachmentMessageBuilder
         return AssistantAttachmentBuildResult.Ok(combined);
     }
 
-    internal static string BuildDelimitedUntrustedBlock(string capturePublicId, string acceptedFieldsJson) =>
-        BuildDelimitedUntrustedBlockAsync(capturePublicId, acceptedFieldsJson, null, CancellationToken.None)
+    private static async Task<(bool Succeeded, string? AcceptedFieldsJson, AssistantAttachmentBuildResult? Failure)> AcceptReadyAttachmentAsync(
+        ApiDbContext db,
+        int companyId,
+        string userId,
+        Core.Domain.DocumentCapture capture,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(capture.FieldsJson))
+        {
+            return (false, null, AssistantAttachmentBuildResult.Fail(
+                StatusCodes.Status409Conflict,
+                new { code = "DOCUMENT_STATE_CONFLICT", detail = "Captured attachment has no fields to accept." }));
+        }
+
+        string canonical;
+        try
+        {
+            using var doc = JsonDocument.Parse(capture.FieldsJson);
+            if (!DocumentCaptureFieldSchemas.TryValidateAcceptedFields(AttachmentKind, capture.SchemaVersion, doc.RootElement, out canonical, out _))
+            {
+                return (false, null, AssistantAttachmentBuildResult.Fail(
+                    StatusCodes.Status409Conflict,
+                    new { code = "DOCUMENT_STATE_CONFLICT", detail = "Captured attachment fields are not valid." }));
+            }
+            using var canonicalDoc = JsonDocument.Parse(canonical);
+            canonical = DocumentCaptureMasking.MaskAssistantFields(canonicalDoc.RootElement);
+        }
+        catch (JsonException)
+        {
+            return (false, null, AssistantAttachmentBuildResult.Fail(
+                StatusCodes.Status409Conflict,
+                new { code = "DOCUMENT_STATE_CONFLICT", detail = "Captured attachment fields could not be read." }));
+        }
+
+        var now = DateTime.UtcNow;
+        await using var tx = await db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var updated = await db.DocumentCaptures.IgnoreQueryFilters()
+            .Where(c => c.CompanyId == companyId && c.Id == capture.Id
+                && c.CreatedBy == userId && c.Kind == AttachmentKind && c.Status == "ready")
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(c => c.Status, "accepted")
+                .SetProperty(c => c.AcceptedFieldsJson, canonical)
+                .SetProperty(c => c.AcceptedBy, userId)
+                .SetProperty(c => c.AcceptedAt, now)
+                .SetProperty(c => c.BytesDeletedAt, now), cancellationToken)
+            .ConfigureAwait(false);
+
+        if (updated != 1)
+        {
+            await tx.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            return (false, null, AssistantAttachmentBuildResult.Fail(
+                StatusCodes.Status409Conflict,
+                new { code = "DOCUMENT_ACCEPT_CONFLICT", detail = "This attachment was already accepted or changed state." }));
+        }
+
+        await db.DocumentCaptureBlobs.IgnoreQueryFilters()
+            .Where(b => b.CompanyId == companyId && b.CaptureId == capture.Id)
+            .ExecuteDeleteAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return (true, canonical, null);
+    }
+
+    internal static string BuildDelimitedUntrustedBlock(
+        string capturePublicId,
+        string acceptedFieldsJson,
+        string? companyName = null,
+        string? companyShortName = null) =>
+        BuildDelimitedUntrustedBlockAsync(capturePublicId, acceptedFieldsJson, null, CancellationToken.None, companyName, companyShortName)
             .GetAwaiter()
             .GetResult();
 
@@ -167,15 +247,20 @@ public static partial class AssistantAttachmentMessageBuilder
         string capturePublicId,
         string acceptedFieldsJson,
         Func<string, string, CancellationToken, Task<string>>? partyPseudonymizer,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? companyName = null,
+        string? companyShortName = null)
     {
         using var parsed = JsonDocument.Parse(acceptedFieldsJson);
         var remaskedJson = DocumentCaptureMasking.MaskAssistantFields(parsed.RootElement);
         using var maskedDoc = JsonDocument.Parse(remaskedJson);
 
+        var looksLike = ComputeLooksLikeHint(maskedDoc.RootElement, companyName, companyShortName);
+
         var sb = new StringBuilder();
         sb.AppendLine(BeginDelimiter);
         sb.Append("Attachment ID: ").AppendLine(SanitizeFieldText(capturePublicId, MaxLabelLength));
+        sb.Append("looksLike: ").AppendLine(looksLike);
 
         var wroteField = false;
         if (maskedDoc.RootElement.ValueKind == JsonValueKind.Object
@@ -224,6 +309,152 @@ public static partial class AssistantAttachmentMessageBuilder
 
         sb.Append(EndDelimiter);
         return sb.ToString();
+    }
+
+    public const string LooksLikeBankDetails = "bank-details";
+    public const string LooksLikeSalesInvoice = "sales-invoice";
+    public const string LooksLikeVendorBillOrReceipt = "vendor-bill-or-receipt";
+
+    private static readonly HashSet<string> LegalSuffixTokens = new(StringComparer.Ordinal)
+    {
+        "ltd", "limited", "inc", "incorporated", "llc", "llp", "corp", "corporation",
+        "co", "company", "pte", "gmbh", "plc", "sa", "bv", "pty", "bhd", "sdn",
+    };
+
+    /// <summary>
+    /// Deterministic document-type hint (no AI): bank identifier labels -> bank-details;
+    /// issuer/vendor-like value matching workspace company legal or trading name -> sales-invoice;
+    /// otherwise -> vendor-bill-or-receipt.
+    /// </summary>
+    internal static string ComputeLooksLikeHint(JsonElement maskedRoot, string? companyName, string? companyShortName)
+    {
+        if (maskedRoot.ValueKind != JsonValueKind.Object
+            || !maskedRoot.TryGetProperty("fields", out var fields)
+            || fields.ValueKind != JsonValueKind.Array)
+        {
+            return LooksLikeVendorBillOrReceipt;
+        }
+
+        var normalizedCompany = NormalizeCompanyName(companyName);
+        var normalizedShort = NormalizeCompanyName(companyShortName);
+        var matchesWorkspaceIssuer = false;
+
+        foreach (var item in fields.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object)
+                continue;
+            var label = item.TryGetProperty("label", out var l) && l.ValueKind == JsonValueKind.String
+                ? l.GetString()
+                : null;
+            var value = item.TryGetProperty("value", out var v) && v.ValueKind == JsonValueKind.String
+                ? v.GetString()
+                : null;
+            if (string.IsNullOrWhiteSpace(label))
+                continue;
+
+            var lowerLabel = label.Trim().ToLowerInvariant();
+            if (IsBankIdentifierLabel(lowerLabel))
+                return LooksLikeBankDetails;
+
+            if (!matchesWorkspaceIssuer
+                && !string.IsNullOrWhiteSpace(value)
+                && IsIssuerLikeLabel(lowerLabel))
+            {
+                var normalizedValue = NormalizeCompanyName(value);
+                if (!string.IsNullOrEmpty(normalizedValue)
+                    && ((!string.IsNullOrEmpty(normalizedCompany) && string.Equals(normalizedValue, normalizedCompany, StringComparison.Ordinal))
+                        || (!string.IsNullOrEmpty(normalizedShort) && string.Equals(normalizedValue, normalizedShort, StringComparison.Ordinal))))
+                {
+                    matchesWorkspaceIssuer = true;
+                }
+            }
+        }
+
+        return matchesWorkspaceIssuer ? LooksLikeSalesInvoice : LooksLikeVendorBillOrReceipt;
+    }
+
+    private static bool IsBankIdentifierLabel(string lowerLabel) =>
+        lowerLabel.Contains("iban", StringComparison.Ordinal)
+        || lowerLabel.Contains("swift", StringComparison.Ordinal)
+        || lowerLabel.Contains("bic", StringComparison.Ordinal)
+        || lowerLabel.Contains("routing", StringComparison.Ordinal)
+        || lowerLabel.Contains("aba", StringComparison.Ordinal)
+        || lowerLabel.Contains("account number", StringComparison.Ordinal)
+        || lowerLabel.Contains("account no", StringComparison.Ordinal)
+        || lowerLabel.Contains("account #", StringComparison.Ordinal)
+        || lowerLabel.Contains("acct", StringComparison.Ordinal);
+
+    private static bool IsIssuerLikeLabel(string lowerLabel) =>
+        lowerLabel.Contains("vendor", StringComparison.Ordinal)
+        || lowerLabel.Contains("supplier", StringComparison.Ordinal)
+        || lowerLabel.Contains("merchant", StringComparison.Ordinal)
+        || lowerLabel.Contains("issuer", StringComparison.Ordinal)
+        || lowerLabel.Contains("seller", StringComparison.Ordinal)
+        || lowerLabel.Contains("billed by", StringComparison.Ordinal)
+        || lowerLabel == "from"
+        || lowerLabel == "company"
+        || lowerLabel == "company name";
+
+    private static string NormalizeCompanyName(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return string.Empty;
+
+        var decomposed = raw.Normalize(NormalizationForm.FormKD);
+        var noLatinMarks = new StringBuilder(decomposed.Length);
+        foreach (var ch in decomposed)
+        {
+            if (ch is (>= '\u0300' and <= '\u036F') or (>= '\u1AB0' and <= '\u1AFF') or (>= '\u1DC0' and <= '\u1DFF'))
+                continue;
+            noLatinMarks.Append(ch);
+        }
+
+        var recomposed = noLatinMarks.ToString()
+            .Replace("\u0E4D\u0E32", "\u0E33", StringComparison.Ordinal)
+            .Normalize(NormalizationForm.FormC);
+
+        var sb = new StringBuilder(recomposed.Length);
+        var prevSpace = true;
+        foreach (var ch in recomposed)
+        {
+            var cat = System.Globalization.CharUnicodeInfo.GetUnicodeCategory(ch);
+            if (char.IsLetterOrDigit(ch) || cat is System.Globalization.UnicodeCategory.NonSpacingMark or System.Globalization.UnicodeCategory.SpacingCombiningMark)
+            {
+                sb.Append(char.ToLowerInvariant(ch));
+                prevSpace = false;
+            }
+            else if (!prevSpace)
+            {
+                sb.Append(' ');
+                prevSpace = true;
+            }
+        }
+
+        var folded = sb.ToString().Trim();
+        if (string.IsNullOrEmpty(folded))
+            return string.Empty;
+
+        var tokens = folded.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
+        var changed = true;
+        while (changed && tokens.Count > 0)
+        {
+            changed = false;
+            if (tokens[0] == "บริษัท")
+            {
+                tokens.RemoveAt(0);
+                changed = true;
+                continue;
+            }
+            var last = tokens[^1];
+            if (LegalSuffixTokens.Contains(last) || last is "จำกัด" or "มหาชน")
+            {
+                tokens.RemoveAt(tokens.Count - 1);
+                changed = true;
+            }
+        }
+
+        var stripped = string.Join(' ', tokens);
+        return string.IsNullOrEmpty(stripped) ? folded : stripped;
     }
 
     internal static string? TryClassifyPartyLabel(string label)

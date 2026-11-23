@@ -1,5 +1,6 @@
 import type {
   ChatAdapter,
+  ChatSessionFileRef,
   ListParams,
   MessagePayload,
   SendMessageOptions,
@@ -7,6 +8,14 @@ import type {
   SessionWithMessages,
   ResumeState,
 } from '@anter/ai-chat-sdk';
+import type {
+  AssistantCaptureFields,
+  DocumentCaptureCapabilities,
+} from '../components/document-capture/fields';
+import {
+  rejectCapture,
+  uploadAndWaitForCapture,
+} from '../components/document-capture/captureClient';
 import { assistantFetch, assistantFetchJson, assistantFetchStream } from './assistantFetch';
 import {
   AssistantPageContext,
@@ -69,6 +78,7 @@ type UpstreamSession = {
 export class AssistantAdapter implements ChatAdapter {
   private pageContext: AssistantPageContext = {};
   private pendingCaptureId: string | null = null;
+  private captureCapabilities: DocumentCaptureCapabilities | null = null;
   private readonly executionSessions = new Map<string, string>();
 
   private async lookupPseudonymNames(
@@ -102,6 +112,38 @@ export class AssistantAdapter implements ChatAdapter {
 
   getPendingCaptureId(): string | null {
     return this.pendingCaptureId;
+  }
+
+  setCaptureCapabilities(capabilities: DocumentCaptureCapabilities | null): void {
+    this.captureCapabilities = capabilities;
+  }
+
+  async uploadFile(_sessionId: string, file: File): Promise<ChatSessionFileRef> {
+    const view = await uploadAndWaitForCapture(
+      assistantFetch,
+      'assistant-attachment',
+      file,
+      this.captureCapabilities,
+    );
+
+    const fieldsObj = (view.acceptedFields ?? view.fields) as AssistantCaptureFields | null;
+    const fieldCount = Array.isArray(fieldsObj?.fields) ? fieldsObj.fields.length : 0;
+    const fieldLabel = fieldCount === 1 ? '1 field' : `${fieldCount} fields`;
+
+    // Workaround for #98 G2: the SDK chip has no click/preview callback, so surface the extracted field count in fileName.
+    return {
+      id: view.id,
+      fileName: `${file.name} · ${fieldLabel}`,
+      mimeType: file.type || view.contentType || 'application/octet-stream',
+      size: file.size,
+      status: view.status === 'ready' || view.status === 'accepted' ? 'processed' : 'error',
+      downloadUrl: '',
+      createdAt: view.createdAt,
+    };
+  }
+
+  async deleteSessionFile(_sessionId: string, fileId: string): Promise<void> {
+    await rejectCapture(assistantFetch, fileId);
   }
 
   async createSession(): Promise<string> {
@@ -200,7 +242,13 @@ export class AssistantAdapter implements ChatAdapter {
     );
 
     // Tenant ids are applied server-side from ITenantContext — do not send them here.
-    const body = buildRunStreamBody(payload.message, sessionId, contextVariables, this.pendingCaptureId);
+    const body = buildRunStreamBody(
+      payload.message,
+      sessionId,
+      contextVariables,
+      this.pendingCaptureId,
+      payload.attachedFileIds,
+    );
 
     const stream = await assistantFetchStream('/api/ai/chat/run-stream', {
       method: 'POST',

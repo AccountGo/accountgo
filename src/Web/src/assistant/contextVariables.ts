@@ -45,6 +45,7 @@ export function buildRunStreamBody(
   sessionId: string | undefined,
   contextVariables: Record<string, string>,
   captureId?: string | null,
+  attachedFileIds?: readonly string[],
 ): Record<string, unknown> {
   const cvs = { ...contextVariables };
   if (sessionId) {
@@ -57,7 +58,12 @@ export function buildRunStreamBody(
   if (sessionId) {
     body.sessionId = sessionId;
   }
-  if (typeof captureId === 'string' && captureId.trim()) {
+  const cleanAttached = (attachedFileIds ?? []).map((id) => id.trim()).filter(Boolean);
+  if (cleanAttached.length > 1) {
+    body.attachedFileIds = cleanAttached;
+  } else if (cleanAttached.length === 1) {
+    body.captureId = cleanAttached[0];
+  } else if (typeof captureId === 'string' && captureId.trim()) {
     body.captureId = captureId.trim();
   }
   return body;

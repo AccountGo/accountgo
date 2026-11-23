@@ -64,6 +64,7 @@ namespace Api.Controllers
             public Dictionary<string, string>? ContextVariables { get; set; }
             [PublicId("cap")]
             public int? CaptureId { get; set; }
+            public List<string>? AttachedFileIds { get; set; }
             [Newtonsoft.Json.JsonExtensionData]
             public Dictionary<string, object?>? AdditionalProperties { get; set; }
         }
@@ -88,6 +89,25 @@ namespace Api.Controllers
 
         private string? CurrentUserId =>
             User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
+
+        private static bool HasMultipleAttachments(RunStreamRequest? body)
+        {
+            if (body is null)
+                return false;
+            var extraCount = body.AttachedFileIds?.Count(id => !string.IsNullOrWhiteSpace(id)) ?? 0;
+            if (extraCount > 1)
+                return true;
+            if (body.CaptureId.HasValue && extraCount >= 1)
+                return true;
+            if (body.AdditionalProperties is not null
+                && body.AdditionalProperties.TryGetValue("captureIds", out var rawIds)
+                && rawIds is Newtonsoft.Json.Linq.JArray arr
+                && arr.Count > 1)
+            {
+                return true;
+            }
+            return false;
+        }
 
         [HttpPost("run-stream")]
         [RequestSizeLimit(AnterRunStreamBody.MaxRequestBodyBytes)]
@@ -130,6 +150,15 @@ namespace Api.Controllers
                 Response.StatusCode = StatusCodes.Status400BadRequest;
                 await Response.WriteAsJsonAsync(
                     new { code = "DOCUMENT_ATTACHMENT_INVALID", detail = "Client-supplied attachment fields or bytes are not allowed." },
+                    cancellationToken);
+                return;
+            }
+
+            if (HasMultipleAttachments(body))
+            {
+                Response.StatusCode = StatusCodes.Status400BadRequest;
+                await Response.WriteAsJsonAsync(
+                    new { code = "DOCUMENT_ATTACHMENT_LIMIT", detail = "At most one document attachment can be sent per message." },
                     cancellationToken);
                 return;
             }
