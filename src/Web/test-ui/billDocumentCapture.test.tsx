@@ -144,6 +144,8 @@ function setupBillEditMocks(
     existingDraft?: any;
     linkedCaptures?: DocumentCaptureView[];
     saveBillConflictOnce?: any;
+    taxRegime?: 'None' | 'SalesTax' | 'VatGst';
+    taxes?: Array<{ id: string; taxCode: string; taxName: string; rate: number; isActive: boolean }>;
   }
 ) {
   let saveBillCalls = 0;
@@ -162,7 +164,10 @@ function setupBillEditMocks(
       return jsonRes([{ id: 'acct_50200', code: '50200', name: 'Purchase A/C', group: 'Expense' }]);
     }
     if (url === '/api/Tax/Taxes') {
-      return jsonRes({ taxes: [{ id: 'tax_10', taxCode: 'VAT10', taxName: 'VAT 10%', rate: 10, isActive: true }] });
+      return jsonRes({ taxes: options?.taxes ?? [{ id: 'tax_10', taxCode: 'VAT10', taxName: 'VAT 10%', rate: 10, isActive: true }] });
+    }
+    if (url === '/api/organizations/current/accounting-policy') {
+      return options?.taxRegime ? jsonRes({ taxRegime: options.taxRegime }) : jsonRes({}, 403);
     }
     if (url === '/api/Catalog/Items') return jsonRes([]);
     if (url === '/api/document-captures/capabilities') {
@@ -739,5 +744,95 @@ describe('BillEdit & BillDetail document capture integration', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Keep existing lines/i }));
     expect(await screen.findByText(/Captured source review/i)).toBeTruthy();
+  });
+
+  describe('scanned tax by tax regime (rules T-09, T-10)', () => {
+    const scannedBill = (priceBasis: 'exclusive' | 'inclusive' = 'exclusive') =>
+      makeCapture({
+        kind: 'purchase-invoice',
+        fields: {
+          vendorName: 'Acme Supply',
+          vendorInvoiceNo: 'SUP-77',
+          date: '2026-11-10',
+          currency: 'USD',
+          lines: [
+            { description: 'Paper', quantity: '1', unitAmount: priceBasis === 'inclusive' ? '262.01' : '244.48' },
+            { description: 'Toner', quantity: '1', unitAmount: priceBasis === 'inclusive' ? '179.08' : '162.99' },
+          ],
+          sourceTotals: { subtotal: '407.47', taxTotal: '33.62', grandTotal: '441.09', priceBasis },
+        },
+      });
+    const vat8 = [{ id: 'tax_825', taxCode: 'VAT825', taxName: 'Sales VAT 8.25%', rate: 8.25, isActive: true }];
+
+    it('VatGst with one matching rate sets it on every line and shows the chip', async () => {
+      setupBillEditMocks(() => scannedBill(), { taxRegime: 'VatGst', taxes: vat8 });
+      renderWithRouter('/org/acme/purchases/new');
+      await scanAndAccept();
+
+      await waitFor(() => expect(screen.getByText(/Tax rate from scan: Sales VAT 8.25%/i)).toBeTruthy());
+      expect(screen.getByText(/input tax Sales VAT 8.25% 8.25% \(recoverable\)/i)).toBeTruthy();
+      expect((screen.getByLabelText('Line 1 tax') as HTMLSelectElement).value).toBe('tax_825');
+      expect((screen.getByLabelText('Line 2 tax') as HTMLSelectElement).value).toBe('tax_825');
+      expect((screen.getByLabelText('Line 1 unit cost') as HTMLInputElement).value).toBe('244.48');
+    });
+
+    it('VatGst with inclusive prices converts the lines to net so the bill reproduces the document total', async () => {
+      const counters = setupBillEditMocks(() => scannedBill('inclusive'), { taxRegime: 'VatGst', taxes: vat8 });
+      renderWithRouter('/org/acme/purchases/new');
+      await scanAndAccept();
+
+      await waitFor(() => expect(screen.getByText(/Tax rate from scan/i)).toBeTruthy());
+      expect(screen.queryByText(/Source amounts include tax/i)).toBeNull();
+      expect(screen.getByText(/Matches source total/i)).toBeTruthy();
+      expect(counters.getSaveBillCalls()).toBe(0);
+    });
+
+    it('VatGst with no matching rate leaves the lines untaxed, asks for a rate, and blocks acknowledging the missing tax', async () => {
+      setupBillEditMocks(() => scannedBill(), {
+        taxRegime: 'VatGst',
+        taxes: [{ id: 'tax_10', taxCode: 'VAT10', taxName: 'VAT 10%', rate: 10, isActive: true }],
+      });
+      renderWithRouter('/org/acme/purchases/new');
+      await scanAndAccept();
+
+      await waitFor(() => expect(screen.getByText(/This document charges 33.62 tax. Choose a tax rate/i)).toBeTruthy());
+      expect((screen.getByLabelText('Line 1 tax') as HTMLSelectElement).value).toBe('');
+      expect(screen.getAllByText(/Tax of 33.62 on the document isn't on this bill/i).length).toBeGreaterThan(0);
+      expect(screen.queryByLabelText(/Acknowledge difference/i)).toBeNull();
+    });
+
+    it('SalesTax spreads the tax over the line costs, adds a note, and the bill matches the document', async () => {
+      setupBillEditMocks(() => scannedBill(), { taxRegime: 'SalesTax' });
+      renderWithRouter('/org/acme/purchases/new');
+      await scanAndAccept();
+
+      await waitFor(() => expect(screen.getByText(/added to line costs \(not recoverable\)/i)).toBeTruthy());
+      expect((screen.getByLabelText('Line 1 tax') as HTMLSelectElement).value).toBe('');
+      expect(screen.getByText(/Matches source total/i)).toBeTruthy();
+      expect((screen.getByLabelText(/Notes/i) as HTMLTextAreaElement).value).toContain(
+        'Includes 33.62 tax from the scanned document (not recoverable).'
+      );
+      expect(screen.queryByText(/isn't set up for tax/i)).toBeNull();
+    });
+
+    it('None spreads the tax the same way and warns that the workspace is not set up for tax', async () => {
+      setupBillEditMocks(() => scannedBill(), { taxRegime: 'None' });
+      renderWithRouter('/org/acme/purchases/new');
+      await scanAndAccept();
+
+      await waitFor(() => expect(screen.getByText(/This document charges tax but your workspace isn't set up for tax/i)).toBeTruthy());
+      expect(screen.getByText(/Matches source total/i)).toBeTruthy();
+      expect(screen.queryByLabelText(/Acknowledge difference/i)).toBeNull();
+    });
+
+    it('still lets the user acknowledge a difference that is not the missing tax', async () => {
+      setupBillEditMocks(() => scannedBill(), { taxRegime: 'SalesTax' });
+      renderWithRouter('/org/acme/purchases/new');
+      await scanAndAccept();
+
+      await waitFor(() => expect(screen.getByText(/Matches source total/i)).toBeTruthy());
+      fireEvent.change(screen.getByLabelText('Line 1 unit cost'), { target: { value: '300' } });
+      await waitFor(() => expect(screen.getByLabelText(/Acknowledge difference/i)).toBeTruthy());
+    });
   });
 });

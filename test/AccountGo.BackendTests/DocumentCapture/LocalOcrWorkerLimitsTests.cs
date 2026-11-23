@@ -152,7 +152,7 @@ public sealed class LocalOcrWorkerLimitsTests
         worker.Complete();
         var result = await resultTask;
 
-        Assert.Equal("ocr-1+d5de5df3+20b69451+rules-2", result.ProviderVersion);
+        Assert.Equal("ocr-1+d5de5df3+20b69451+rules-3", result.ProviderVersion);
         Assert.Equal(LocalOcrDocumentFieldExtractor.CurrentProviderVersion, result.ProviderVersion);
         Assert.True(result.ProviderVersion.Length <= 100);
     }

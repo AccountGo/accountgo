@@ -235,6 +235,116 @@ public sealed class PurchasingBillCaptureReviewTests : MultiTenancyPhase3TestBas
         Assert.Contains("22", audit);
     }
 
+    private const string ScannedTaxBillFields =
+        """{"date":"2026-11-10","sourceTotals":{"subtotal":"407.47","taxTotal":"33.62","grandTotal":"441.09","priceBasis":"exclusive"}}""";
+
+    private static List<Dto.DocumentCapture.CaptureReviewContext> Review(int captureId, decimal form, bool acknowledged) =>
+    [
+        new Dto.DocumentCapture.CaptureReviewContext
+        {
+            CaptureId = captureId,
+            SourceGrandTotal = 441.09m,
+            FormTotal = form,
+            DiscrepancyAcknowledged = acknowledged,
+        }
+    ];
+
+    [Fact]
+    [Trait("Rule", "T-09")]
+    [Trait("Rule", "T-10")]
+    public async Task SaveBill_Approve_ScannedTaxAsRecoverableRate_PostsPayableExpenseAndInputTax()
+    {
+        int vat = 0;
+        WithDb(db =>
+        {
+            var tax = new Tax { TaxCode = "VAT825", TaxName = "VAT 8.25%", Rate = 8.25m, IsActive = true, PurchasingAccountId = AccountIdIn(db, "20300") };
+            db.Taxes.Add(tax);
+            db.SaveChanges();
+            vat = tax.Id;
+        });
+        var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Registered Supplier" });
+        var (captureId, _) = SeedCapture(acceptedFieldsJson: ScannedTaxBillFields);
+
+        var bill = NewBill(vendor.Id, ("Paper", 1m, 244.48m, null), ("Toner", 1m, 162.99m, null));
+        foreach (var line in bill.Lines) line.TaxId = vat;
+        bill.Status = "Open";
+        bill.CaptureReviews = Review(captureId, 441.09m, acknowledged: false);
+
+        var approved = await SaveBillOk(bill);
+        Assert.Equal(441.09m, approved.Total);
+
+        var entry = Ledger(BillLedgerId(approved.Id));
+        Assert.Contains(entry, l => l.DrCr == DrOrCrSide.Cr && l.AccountId == AccountId("20110") && l.Amount == 441.09m);
+        Assert.Contains(entry, l => l.DrCr == DrOrCrSide.Dr && l.AccountId == AccountId("50200") && l.Amount == 407.47m);
+        Assert.Contains(entry, l => l.DrCr == DrOrCrSide.Dr && l.AccountId == AccountId("20300") && l.Amount == 33.62m);
+    }
+
+    [Fact]
+    [Trait("Rule", "T-10")]
+    public async Task SaveBill_Approve_ScannedTaxSpreadIntoLineCosts_PostsPayableAndExpenseWithNoTaxAccount()
+    {
+        var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Unregistered Buyer Supplier" });
+        var (captureId, _) = SeedCapture(acceptedFieldsJson: ScannedTaxBillFields);
+
+        // 33.62 spread pro rata over 244.48 and 162.99: shares 20.17 and 13.45.
+        var bill = NewBill(vendor.Id, ("Paper", 1m, 264.65m, null), ("Toner", 1m, 176.44m, null));
+        bill.Status = "Open";
+        bill.CaptureReviews = Review(captureId, 441.09m, acknowledged: false);
+
+        var approved = await SaveBillOk(bill);
+        Assert.Equal(441.09m, approved.Total);
+
+        var entry = Ledger(BillLedgerId(approved.Id));
+        Assert.Contains(entry, l => l.DrCr == DrOrCrSide.Cr && l.AccountId == AccountId("20110") && l.Amount == 441.09m);
+        Assert.Contains(entry, l => l.DrCr == DrOrCrSide.Dr && l.AccountId == AccountId("50200") && l.Amount == 441.09m);
+        Assert.DoesNotContain(entry, l => l.AccountId == AccountId("20300"));
+    }
+
+    [Fact]
+    [Trait("Rule", "T-11")]
+    public async Task SaveBill_Approve_RefusesAcknowledgingTheDocumentsMissingTax_With400CaptureTaxNotApplied()
+    {
+        var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Tax Dropped Supplier" });
+        var (captureId, capturePublicId) = SeedCapture(acceptedFieldsJson: ScannedTaxBillFields);
+
+        var bill = NewBill(vendor.Id, ("Paper", 1m, 244.48m, null), ("Toner", 1m, 162.99m, null));
+        bill.Status = "Open";
+        bill.CaptureReviews = Review(captureId, 407.47m, acknowledged: true);
+
+        var refused = await SaveBill(bill);
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        using (var doc = JsonDocument.Parse(await refused.Content.ReadAsStringAsync()))
+        {
+            Assert.Equal("CAPTURE_TAX_NOT_APPLIED", doc.RootElement.GetProperty("code").GetString());
+            Assert.Equal(capturePublicId, doc.RootElement.GetProperty("captureId").GetString());
+            Assert.Equal(33.62m, doc.RootElement.GetProperty("taxTotal").GetDecimal());
+        }
+        Assert.Empty(ReadDiscrepancyAuditMetadata());
+
+        // A draft can still be saved while the tax is being sorted out.
+        bill.Status = "Draft";
+        var draft = await SaveBillOk(bill);
+        Assert.Equal("Draft", draft.Status);
+    }
+
+    [Fact]
+    [Trait("Rule", "T-11")]
+    public async Task SaveBill_Approve_StillAllowsAcknowledgingADifferenceThatIsNotTheDocumentsTax()
+    {
+        var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Discounting Supplier" });
+        var (captureId, _) = SeedCapture(acceptedFieldsJson: ScannedTaxBillFields);
+
+        // The user priced the bill 20.00 lower than the paper (a discount), with the tax in the costs: 421.09 vs 441.09.
+        var bill = NewBill(vendor.Id, ("Paper", 1m, 250m, null), ("Toner", 1m, 171.09m, null));
+        bill.Status = "Open";
+        bill.CaptureReviews = Review(captureId, 421.09m, acknowledged: true);
+
+        var approved = await SaveBillOk(bill);
+        Assert.True(approved.Approved);
+        Assert.Equal(421.09m, approved.Total);
+        Assert.Single(ReadDiscrepancyAuditMetadata());
+    }
+
     [Fact]
     public async Task SaveBill_Approve_MatchingTotals_SucceedsAndWritesNoDiscrepancyAuditEvent()
     {
