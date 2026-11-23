@@ -10,6 +10,7 @@ using Api.Filters;
 using Api.Service;
 using Core.Authorization;
 using Core.Domain;
+using Core.Domain.Security;
 using Core.Entitlements;
 using Core.Tenancy;
 using Microsoft.AspNetCore.Authorization;
@@ -1100,10 +1101,8 @@ namespace Api.Controllers
                 && totalFunctionalRoles == 0 && callerMember?.Role == CompanyMemberRole.Owner
                 && callerMember.Status == CompanyMemberStatus.Active && company.CreatedByUserId == UserId;
 
-            var ownerCanManageOwnAccess = callerMember?.Role == CompanyMemberRole.Owner
-                && callerMember.Status == CompanyMemberStatus.Active
-                && !await _db.CompanyMembers.AnyAsync(m => m.CompanyId == companyId
-                    && m.Status == CompanyMemberStatus.Active && m.UserId != UserId);
+            var ownerCanManageOwnAccess = IsOwner
+                && ContractAVerifier.VerifySolePristineOwner(_db, companyId, UserId, "self-grant").Allowed;
 
             return Ok(new
             {
@@ -1116,15 +1115,90 @@ namespace Api.Controllers
             });
         }
 
+        private static readonly string[] FinancialAccessSetupOperations =
+        {
+            AccessOperationCatalog.FinancialsAccountsView,
+            AccessOperationCatalog.FinancialsJournalView,
+            AccessOperationCatalog.FinancialsJournalCreate,
+            AccessOperationCatalog.FinancialsJournalPost,
+            AccessOperationCatalog.BankingAccountsView,
+            AccessOperationCatalog.BankingAccountsManage,
+            AccessOperationCatalog.BankingReconcile,
+            AccessOperationCatalog.SalesInvoicesView,
+            AccessOperationCatalog.SalesInvoicesCreate,
+            AccessOperationCatalog.SalesInvoicesPost,
+            AccessOperationCatalog.PurchasesBillsView,
+            AccessOperationCatalog.PurchasesBillsCreate,
+            AccessOperationCatalog.PurchasesBillsPost,
+            AccessOperationCatalog.ReportsView
+        };
+
+        [HttpGet("owner-access-setup/full-access")]
+        [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+        public IActionResult FullAccessSetupStatus()
+        {
+            var companyId = _tenant.RequireCompanyId();
+            var owner = IsOwner
+                ? ContractAVerifier.VerifySolePristineOwner(_db, companyId, UserId, "self-grant").OwnerMember
+                : null;
+            var roleId = owner == null ? null : FindFullAccessRoleId();
+            var needsAccess = roleId.HasValue
+                && !owner.SecurityRoles.Any(r => r.SecurityRoleId == roleId.Value)
+                && MissingEnabledFinancialAccess(companyId, owner, roleId.Value);
+            var finishSetup = needsAccess && HasPendingSignupSetup(companyId, owner);
+            return Ok(new { eligible = needsAccess && !finishSetup, finishSetup });
+        }
+
+        [HttpPost("owner-access-setup/full-access")]
+        public IActionResult GrantOwnerFullAccess() => ApplyOwnerAccessSetup(new List<int>(), grantFullAccess: true);
+
+        private int? FindFullAccessRoleId() => _db.SecurityRoles
+            .Where(r => r.Name == WorkspaceAccessProfileKeys.FullWorkspaceAccessV1 && !r.SysAdmin)
+            .Select(r => (int?)r.Id)
+            .SingleOrDefault();
+
+        private bool HasPendingSignupSetup(int companyId, CompanyMember owner) =>
+            OperatingPolicy?.GetSummary(companyId, owner.Id, owner.UserId).PendingSignupContinuation == true;
+
+        private bool MissingEnabledFinancialAccess(int companyId, CompanyMember owner, int fullAccessRoleId)
+        {
+            var entitlements = _entitlements ?? HttpContext?.RequestServices?.GetService<IEntitlementService>();
+            if (entitlements == null)
+                return false;
+
+            var currentRoleIds = owner.SecurityRoles.Select(r => r.SecurityRoleId).ToArray();
+            var grantPermissions = _db.SecurityRolePermissions
+                .Where(p => p.SecurityRoleId == fullAccessRoleId || currentRoleIds.Contains(p.SecurityRoleId))
+                .Select(p => new { p.SecurityRoleId, p.SecurityPermission.Name })
+                .ToList();
+            var currentPermissions = grantPermissions.Where(p => p.SecurityRoleId != fullAccessRoleId)
+                .Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var permissionsAfterGrant = grantPermissions.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            return FinancialAccessSetupOperations.Any(operation =>
+                AccessOperationCatalog.TryGet(operation, out var policy)
+                && policy != null
+                && !HasRequiredPermissions(policy, currentPermissions)
+                && HasRequiredPermissions(policy, permissionsAfterGrant)
+                && entitlements.Evaluate(companyId,
+                    new EntitlementAction.Module(policy.RequiredModulesAny, policy.ModuleAccess)).Allowed);
+        }
+
+        private static bool HasRequiredPermissions(AccessOperationPolicy policy, IReadOnlySet<string> permissions) =>
+            policy.RequiredPermissionsAll.All(permissions.Contains)
+            && (policy.RequiredPermissionsAny.Count == 0 || policy.RequiredPermissionsAny.Any(permissions.Contains));
+
         [HttpPost("owner-access-setup")]
-        public IActionResult OwnerAccessSetup([FromBody] SetupWorkspaceAccessModel model)
+        public IActionResult OwnerAccessSetup([FromBody] SetupWorkspaceAccessModel model) =>
+            ApplyOwnerAccessSetup(model?.SecurityRoleIds?.Distinct().OrderBy(id => id).ToList() ?? new List<int>());
+
+        private IActionResult ApplyOwnerAccessSetup(List<int> ids, bool grantFullAccess = false)
         {
             var companyId = _tenant.RequireCompanyId();
             var actor = UserId;
             if (string.IsNullOrWhiteSpace(actor))
                 return Problem(statusCode: 401, title: "Unauthenticated");
-            var ids = model?.SecurityRoleIds?.Distinct().OrderBy(id => id).ToList() ?? new List<int>();
-            if (ids.Count == 0 || !ValidSecurityRoles(_db, ids))
+            if (!grantFullAccess && (ids.Count == 0 || !ValidSecurityRoles(_db, ids)))
                 return Problem(statusCode: 400, title: "Select valid functional roles.");
 
             var transaction = _policyTransaction ?? HttpContext?.RequestServices?.GetService<IWorkspacePolicyTransaction>();
@@ -1134,15 +1208,39 @@ namespace Api.Controllers
             object ownerSetupAudit = null;
             var result = transaction.Execute<IActionResult>(companyId, guard =>
             {
-                var verification = ContractAVerifier.Verify(_db, companyId, actor, ids);
+                var verification = grantFullAccess
+                    ? ContractAVerifier.VerifySolePristineOwner(_db, companyId, actor, "self-grant")
+                    : ContractAVerifier.Verify(_db, companyId, actor, ids);
                 if (!verification.Allowed)
                     return Problem(statusCode: 403, title: verification.Title, detail: verification.Detail);
 
                 var owner = verification.OwnerMember!;
                 var current = owner.SecurityRoles.Select(r => r.SecurityRoleId).ToHashSet();
+                if (grantFullAccess)
+                {
+                    var roleId = FindFullAccessRoleId();
+                    if (!roleId.HasValue)
+                        return Problem(statusCode: 503, title: "Full workspace access setup is unavailable.");
+                    if (current.Contains(roleId.Value))
+                        return Ok(new RolesAssignedResponse(new List<int>()));
+                    if (HasPendingSignupSetup(companyId, owner) || !MissingEnabledFinancialAccess(companyId, owner, roleId.Value))
+                        return Problem(statusCode: 403, title: "Self-service access setup is no longer available.");
+                    ids.Add(roleId.Value);
+                }
+
                 var additions = ids.Where(id => !current.Contains(id)).ToList();
                 foreach (var id in additions)
-                    _db.CompanyMemberSecurityRoles.Add(new CompanyMemberSecurityRole { CompanyMemberId = owner.Id, SecurityRoleId = id });
+                {
+                    _db.CompanyMemberSecurityRoles.Add(new CompanyMemberSecurityRole
+                    {
+                        CompanyMemberId = owner.Id,
+                        SecurityRoleId = id,
+                        GrantOrigin = grantFullAccess ? WorkspaceMemberGrantOrigin.Recovery : WorkspaceMemberGrantOrigin.LegacyExplicit,
+                        GrantedAtUtc = grantFullAccess ? DateTime.UtcNow : null,
+                        GrantedByUserId = grantFullAccess ? actor : null,
+                        AccessProfileVersion = grantFullAccess ? WorkspaceAccessProfileKeys.FullWorkspaceAccessProfileVersion : null
+                    });
+                }
                 if (additions.Count > 0)
                 {
                     _db.AuditLogs.Add(new Core.Domain.Auditing.AuditLog
@@ -1156,7 +1254,7 @@ namespace Api.Controllers
                     guard.AdvanceRevision();
                     ownerSetupAudit = new
                     {
-                        source = "owner_access_setup",
+                        source = grantFullAccess ? "dashboard_owner_full_access_setup" : "owner_access_setup",
                         targetMemberId = owner.Id,
                         targetUserId = owner.UserId,
                         role = owner.Role.ToString(),
@@ -1166,12 +1264,11 @@ namespace Api.Controllers
                 }
                 return Ok(new RolesAssignedResponse(additions));
             });
-            if (result is OkObjectResult)
+            if (result is OkObjectResult && ownerSetupAudit != null)
             {
-                if (ownerSetupAudit != null)
-                    AuditEvent("member.role.change", "success", ownerSetupAudit);
                 AccessAuthorizationService.BumpGlobalSecurityRevision();
                 AuthService.InvalidateContextCache();
+                AuditEvent("member.role.change", "success", ownerSetupAudit);
             }
             return result;
         }

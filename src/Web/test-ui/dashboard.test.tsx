@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { Dashboard } from '../src/pages/Dashboard';
@@ -25,6 +25,7 @@ const { authFetch, hasModule, hasPermission, outlet } = vi.hoisted(() => {
         operatingPolicy: { purpose: 'Business' },
       },
       user: { name: 'Pat', email: 'pat@example.com' },
+      updateCurrentOrg: vi.fn(),
       hasModule: hasModuleFn,
       hasPermission: hasPermissionFn,
     },
@@ -92,6 +93,7 @@ function summaryPayload(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   authFetch.mockReset();
+  outlet.updateCurrentOrg.mockClear();
   hasModule.mockImplementation(
     (module: string) => module === 'financials' || module === 'sales' || module === 'purchases',
   );
@@ -126,6 +128,7 @@ function renderDashboard() {
   const view = render(<DashboardHarness bumpRef={bumpRef} />);
   return {
     ...view,
+    refresh: () => act(() => bumpRef.current?.()),
     switchWorkspace(next: Partial<typeof outlet.currentOrg> & { slug: string; name: string; id: string }) {
       outlet.currentOrg = { ...outlet.currentOrg, ...next };
       act(() => {
@@ -134,6 +137,112 @@ function renderDashboard() {
     },
   };
 }
+
+it('offers an eligible owner access and refreshes dashboard data after confirmation', async () => {
+  outlet.currentOrg.role = 'Owner';
+  let granted = false;
+  authFetch.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path.endsWith('/owner-access-setup/full-access')) {
+      if (init?.method === 'POST') {
+        granted = true;
+        return new Response('{}');
+      }
+      return Response.json({ eligible: !granted });
+    }
+    if (path === '/api/organizations/current') {
+      return Response.json({ permissions: ['financials.journal.view'] });
+    }
+    if (path === '/api/Dashboard/Summary' && granted) {
+      return Response.json(summaryPayload({ capabilities: { ...summaryPayload().capabilities, financials: true } }));
+    }
+    return Response.json(summaryPayload());
+  });
+
+  renderDashboard();
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Give me full workspace access' }));
+  const dialog = await screen.findByRole('alertdialog');
+  expect(granted).toBe(false);
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Give me full workspace access' }));
+
+  expect(await screen.findByText('Full workspace access granted.')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Give me full workspace access' })).toBeNull();
+  await waitFor(() => expect(outlet.updateCurrentOrg).toHaveBeenCalledWith({ permissions: ['financials.journal.view'] }));
+  expect(await screen.findByText('General Ledger Accounts')).toBeTruthy();
+});
+
+it('keeps self-service access hidden when the server rejects owner eligibility', async () => {
+  outlet.currentOrg.role = 'Owner';
+  authFetch.mockImplementation(async (path: string) => Response.json(
+    path.endsWith('/owner-access-setup/full-access') ? { eligible: false } : summaryPayload(),
+  ));
+
+  renderDashboard();
+
+  await screen.findByText('Invoicing workspace');
+  await waitFor(() => expect(authFetch).toHaveBeenCalledWith(
+    '/api/organizations/current/owner-access-setup/full-access', expect.any(Object),
+  ));
+  expect(screen.queryByRole('button', { name: 'Give me full workspace access' })).toBeNull();
+});
+
+it('applies refreshed permissions through the current workspace updater after a rerender', async () => {
+  outlet.currentOrg.role = 'Owner';
+  const previousUpdater = outlet.updateCurrentOrg;
+  let completeGrant!: (response: Response) => void;
+  const pendingGrant = new Promise<Response>((resolve) => { completeGrant = resolve; });
+  authFetch.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path.endsWith('/owner-access-setup/full-access')) {
+      return init?.method === 'POST' ? pendingGrant : Response.json({ eligible: true });
+    }
+    if (path === '/api/organizations/current') return Response.json({ permissions: ['sales.invoices.post'] });
+    return Response.json(summaryPayload());
+  });
+
+  const dashboard = renderDashboard();
+  fireEvent.click(await screen.findByRole('button', { name: 'Give me full workspace access' }));
+  const dialog = await screen.findByRole('alertdialog');
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Give me full workspace access' }));
+  outlet.updateCurrentOrg = vi.fn();
+
+  try {
+    dashboard.refresh();
+    await act(async () => completeGrant(Response.json({})));
+    expect(await screen.findByText('Full workspace access granted.')).toBeTruthy();
+    expect(outlet.updateCurrentOrg).toHaveBeenCalledWith({ permissions: ['sales.invoices.post'] });
+    expect(previousUpdater).not.toHaveBeenCalled();
+  } finally {
+    outlet.updateCurrentOrg = previousUpdater;
+  }
+});
+
+it('discards an old workspace grant response after switching workspaces', async () => {
+  outlet.currentOrg.role = 'Owner';
+  let completeGrant!: (response: Response) => void;
+  const pendingGrant = new Promise<Response>((resolve) => { completeGrant = resolve; });
+  authFetch.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path.endsWith('/owner-access-setup/full-access')) {
+      const slug = new Headers(init?.headers).get('X-AccountGo-Org');
+      if (init?.method === 'POST' && slug === 'acme') return pendingGrant;
+      return Response.json({ eligible: slug === 'acme' });
+    }
+    return Response.json(summaryPayload());
+  });
+
+  const dashboard = renderDashboard();
+  fireEvent.click(await screen.findByRole('button', { name: 'Give me full workspace access' }));
+  const dialog = await screen.findByRole('alertdialog');
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Give me full workspace access' }));
+  expect(await within(dialog).findByRole('button', { name: 'Working…' })).toBeTruthy();
+
+  dashboard.switchWorkspace({ id: '2', slug: 'other', name: 'Other' });
+  await act(async () => completeGrant(Response.json({})));
+
+  expect(await screen.findByRole('heading', { name: 'Other' })).toBeTruthy();
+  expect(screen.queryByRole('alertdialog')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Give me full workspace access' })).toBeNull();
+  expect(outlet.updateCurrentOrg).not.toHaveBeenCalled();
+});
 
 it('renders the server invoicing surface even when the workspace has financials module', async () => {
   authFetch.mockResolvedValue(

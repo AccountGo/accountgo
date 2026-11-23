@@ -13,6 +13,8 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ### Added
 
+- Eligible sole workspace owners can set up missing financial access directly from the dashboard.
+
 - Self-hosted installations can opt in to reading uploaded documents locally and review the extracted details before saving.
 
 ### Changed
@@ -20,6 +22,8 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - Rejected document scans and scans left unused for 24 hours are now deleted, including the extracted details.
 
 ### Fixed
+
+- Switching workspaces no longer counts canceled requests as service outages or failed saves.
 
 - Notices and banners now use readable colours in the dark theme when the device itself is in light mode.
 
