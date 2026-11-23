@@ -397,6 +397,8 @@ public static class AccountGoApp
         });
         builder.Services.AddSingleton<Api.Service.Ai.IMcpCallerAssertionService, Api.Service.Ai.McpCallerAssertionService>();
         builder.Services.AddScoped<Api.Service.Ai.IMcpCallerSessionContext, Api.Service.Ai.McpCallerSessionContext>();
+        builder.Services.AddSingleton<Api.Service.Ai.IAssistantPseudonymKeyProvider, Api.Service.Ai.AssistantPseudonymKeyProvider>();
+        builder.Services.AddScoped<Api.Service.Ai.IAssistantPseudonymService, Api.Service.Ai.AssistantPseudonymService>();
         builder.Services.AddScoped<Api.Service.Ai.AssistantPseudonymRetentionService>();
         builder.Services.AddHostedService<Api.Service.Ai.AssistantPseudonymRetentionWorker>();
         builder.Services.AddHttpClient<Api.Service.Ai.IAnterAgentRunnerClient, Api.Service.Ai.AnterAgentRunnerClient>(client =>
