@@ -815,6 +815,36 @@ describe('BillEdit & BillDetail document capture integration', () => {
       expect(screen.queryByText(/isn't set up for tax/i)).toBeNull();
     });
 
+    it('spreads tax over a multi-quantity line with unit costs shown to the cent', async () => {
+      setupBillEditMocks(
+        () =>
+          makeCapture({
+            kind: 'purchase-invoice',
+            fields: {
+              vendorName: 'Acme Supply',
+              date: '2026-11-10',
+              currency: 'USD',
+              lines: [
+                { description: 'Toner', quantity: '3', unitAmount: '89.99' },
+                { description: 'Paper', quantity: '1', unitAmount: '140.00' },
+              ],
+              sourceTotals: { subtotal: '409.97', taxTotal: '33.82', grandTotal: '443.79', priceBasis: 'exclusive' },
+            },
+          }),
+        { taxRegime: 'SalesTax' }
+      );
+      renderWithRouter('/org/acme/purchases/new');
+      await scanAndAccept();
+
+      await waitFor(() => expect(screen.getByText(/Matches source total/i)).toBeTruthy());
+      const toner = (screen.getByLabelText('Line 1 unit cost') as HTMLInputElement).value;
+      const paper = (screen.getByLabelText('Line 2 unit cost') as HTMLInputElement).value;
+      expect(toner).toMatch(/^\d+(\.\d{1,2})?$/);
+      expect(paper).toMatch(/^\d+(\.\d{1,2})?$/);
+      expect(toner).toBe('97.41');
+      expect(paper).toBe('151.56');
+    });
+
     it('None spreads the tax the same way and warns that the workspace is not set up for tax', async () => {
       setupBillEditMocks(() => scannedBill(), { taxRegime: 'None' });
       renderWithRouter('/org/acme/purchases/new');

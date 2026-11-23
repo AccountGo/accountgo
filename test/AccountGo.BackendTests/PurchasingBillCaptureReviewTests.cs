@@ -301,6 +301,38 @@ public sealed class PurchasingBillCaptureReviewTests : MultiTenancyPhase3TestBas
     }
 
     [Fact]
+    [Trait("Rule", "T-10")]
+    public async Task SaveBill_Approve_ScannedTaxSpreadOverMultiQuantityLine_PostsPayableEqualToDocumentTotal()
+    {
+        var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Multi Quantity Supplier" });
+        var (captureId, _) = SeedCapture(
+            acceptedFieldsJson: """{"date":"2026-11-10","sourceTotals":{"subtotal":"409.97","taxTotal":"33.82","grandTotal":"443.79","priceBasis":"exclusive"}}""");
+
+        // Toner 3 x 89.99 + 22.27 share, Paper 1 x 140.00 + 11.55 share, with unit amounts held to the cent: 3 x 97.41 + 151.56.
+        var bill = NewBill(vendor.Id, ("Toner", 3m, 97.41m, null), ("Paper", 1m, 151.56m, null));
+        bill.Status = "Open";
+        bill.CaptureReviews =
+        [
+            new Dto.DocumentCapture.CaptureReviewContext
+            {
+                CaptureId = captureId,
+                SourceGrandTotal = 443.79m,
+                FormTotal = 443.79m,
+                DiscrepancyAcknowledged = false,
+            }
+        ];
+
+        var approved = await SaveBillOk(bill);
+        Assert.Equal(443.79m, approved.Total);
+        Assert.Equal(97.41m, approved.Lines[0].Amount);
+
+        var entry = Ledger(BillLedgerId(approved.Id));
+        Assert.Contains(entry, l => l.DrCr == DrOrCrSide.Cr && l.AccountId == AccountId("20110") && l.Amount == 443.79m);
+        Assert.Contains(entry, l => l.DrCr == DrOrCrSide.Dr && l.AccountId == AccountId("50200") && l.Amount == 443.79m);
+        Assert.Empty(ReadDiscrepancyAuditMetadata());
+    }
+
+    [Fact]
     [Trait("Rule", "T-11")]
     public async Task SaveBill_Approve_RefusesAcknowledgingTheDocumentsMissingTax_With400CaptureTaxNotApplied()
     {

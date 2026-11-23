@@ -1236,14 +1236,6 @@ export function matchCaptureTaxRate<T extends CaptureTaxCandidate>(
 
 const roundCents = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
 
-/** The unit amount that makes quantity x unit x (1 - discount%) round to `lineTotal`, or null when the line can't carry it. */
-function unitAmountForLineTotal(lineTotal: number, quantity: number, discountPct: number): number | null {
-  const factor = quantity * (1 - discountPct / 100);
-  if (!(factor > 0)) return null;
-  const unit = Math.round((lineTotal / factor) * 1e6) / 1e6;
-  return roundCents(quantity * unit * (1 - discountPct / 100)) === roundCents(lineTotal) ? unit : null;
-}
-
 export interface CaptureTaxLine {
   quantity: number;
   /** Unit amount; null when the scan had no usable amount. */
@@ -1253,10 +1245,56 @@ export interface CaptureTaxLine {
 
 const lineNet = (l: CaptureTaxLine) => roundCents(l.quantity * (l.amount ?? 0) * (1 - l.discount / 100));
 
+/** Unit amounts are stored to the cent (decimal(18, 2)), so every unit amount returned here has at most 2 decimals. */
+const unitFor = (target: number, l: CaptureTaxLine) => {
+  const factor = l.quantity * (1 - l.discount / 100);
+  return factor > 0 ? roundCents(target / factor) : null;
+};
+
+/** A line whose unit amount carries cents exactly: quantity 1 and no discount. */
+const carriesCentsExactly = (l: CaptureTaxLine) => l.quantity === 1 && l.discount === 0;
+
+/**
+ * Turns per-line target totals into 2-decimal unit amounts. Lines that can't hit their target exactly (quantity above 1 or a
+ * discount) leave a residual of a few cents; the given line (quantity 1, no discount) absorbs it. `accept` checks the result,
+ * and `carrierShift` lets the caller try neighbouring cent shifts on the carrier. Returns null when no result is accepted.
+ */
+function unitsForTargets(
+  lines: readonly CaptureTaxLine[],
+  targets: readonly number[],
+  carrier: number | null,
+  accept: (achievedNets: number[]) => boolean,
+  carrierShifts: readonly number[] = [0]
+): number[] | null {
+  const units: number[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const unit = i === carrier ? 0 : unitFor(targets[i], lines[i]);
+    if (unit === null) return null;
+    units.push(unit);
+  }
+  const achievedOthers = lines.reduce((sum, l, i) => (i === carrier ? sum : sum + lineNet({ ...l, amount: units[i] })), 0);
+  const targetTotal = targets.reduce((a, b) => a + b, 0);
+  for (const shift of carrier === null ? [0] : carrierShifts) {
+    if (carrier !== null) units[carrier] = roundCents(targetTotal - achievedOthers + shift / 100);
+    const nets = lines.map((l, i) => lineNet({ ...l, amount: units[i] }));
+    if (accept(nets)) return [...units];
+  }
+  return null;
+}
+
+const carrierLine = (lines: readonly CaptureTaxLine[], nets: readonly number[]): number | null => {
+  let best: number | null = null;
+  lines.forEach((l, i) => {
+    if (carriesCentsExactly(l) && (best === null || nets[i] >= nets[best])) best = i;
+  });
+  return best;
+};
+
 /**
  * Rule T-10 (SalesTax and None): spreads the document's tax over the lines in proportion to each line's net amount, so the
- * tax becomes part of the cost. Each share is rounded to the cent and the leftover cent goes to the largest line, so the lines
- * add up to net + taxTotal exactly. Returns the new unit amounts, or null when the lines can't carry the tax.
+ * tax becomes part of the cost. Each share is rounded to the cent and the leftover cent goes to the largest line. Unit amounts
+ * have at most 2 decimals; cents a multi-quantity or discounted line can't carry land on the largest line with quantity 1 and no
+ * discount. Returns the new unit amounts, or null when the lines can't carry the tax exactly.
  */
 export function spreadTaxIntoLineCosts(lines: readonly CaptureTaxLine[], taxTotal: number): number[] | null {
   if (!(taxTotal > 0) || lines.length === 0 || lines.some((l) => l.amount === null)) return null;
@@ -1272,19 +1310,15 @@ export function spreadTaxIntoLineCosts(lines: readonly CaptureTaxLine[], taxTota
   });
   shares[largest] = roundCents(shares[largest] + leftover);
 
-  const units: number[] = [];
-  for (let i = 0; i < lines.length; i++) {
-    const unit = unitAmountForLineTotal(roundCents(nets[i] + shares[i]), lines[i].quantity, lines[i].discount);
-    if (unit === null) return null;
-    units.push(unit);
-  }
-  return units;
+  const targets = nets.map((n, i) => roundCents(n + shares[i]));
+  const want = roundCents(netSum + taxTotal);
+  return unitsForTargets(lines, targets, carrierLine(lines, nets), (achieved) => roundCents(achieved.reduce((a, b) => a + b, 0)) === want);
 }
 
 /**
  * Rule T-10 (VatGst, inclusive prices): converts each line's gross amount to net at the matched rate. The editor adds tax on
- * top per line (rounded to the cent), so the last line absorbs any rounding cents until the net lines plus that tax equal the
- * document's grand total. Returns the new unit amounts, or null when no cent adjustment reproduces the grand total.
+ * top per line (rounded to the cent), so a line with quantity 1 and no discount absorbs rounding cents until the net lines plus
+ * that tax equal the document's grand total. Unit amounts have at most 2 decimals. Returns null when no result reproduces it.
  */
 export function convertInclusiveLinesToNet(
   lines: readonly CaptureTaxLine[],
@@ -1292,27 +1326,19 @@ export function convertInclusiveLinesToNet(
   grandTotal: number
 ): number[] | null {
   if (lines.length === 0 || lines.some((l) => l.amount === null) || !(ratePct > 0)) return null;
-  const nets = lines.map((l) => roundCents(lineNet(l) / (1 + ratePct / 100)));
-  const last = lines.length - 1;
-  const base = nets[last];
-  for (const cents of [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5]) {
-    nets[last] = roundCents(base + cents / 100);
-    const total = nets.reduce((sum, n) => sum + n + roundCents((n * ratePct) / 100), 0);
-    if (roundCents(total) === roundCents(grandTotal)) {
-      const units: number[] = [];
-      for (let i = 0; i < lines.length; i++) {
-        const unit = unitAmountForLineTotal(nets[i], lines[i].quantity, lines[i].discount);
-        if (unit === null) return null;
-        units.push(unit);
-      }
-      return units;
-    }
-  }
-  return null;
+  const targets = lines.map((l) => roundCents(lineNet(l) / (1 + ratePct / 100)));
+  const want = roundCents(grandTotal);
+  return unitsForTargets(
+    lines,
+    targets,
+    carrierLine(lines, targets),
+    (achieved) => roundCents(achieved.reduce((sum, n) => sum + n + roundCents((n * ratePct) / 100), 0)) === want,
+    [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5]
+  );
 }
 
 export type CaptureTaxTreatment =
-  | { kind: 'tax-rate'; tax: CaptureTaxCandidate; taxTotal: number }
+  | { kind: 'tax-rate'; tax: CaptureTaxCandidate; taxTotal: number; /** Bill tax minus document tax when per-line rounding makes them differ, else 0. */ roundingDifference: number }
   | { kind: 'added-to-cost'; taxTotal: number; unregistered: boolean }
   | { kind: 'needs-rate'; taxTotal: number; ambiguous: boolean }
   | { kind: 'unresolved'; taxTotal: number }
@@ -1352,7 +1378,11 @@ export function planCaptureTax<T extends CaptureTaxCandidate>(
         // Can't reproduce the grand total exactly: leave the amounts alone and let the reconciliation gate speak.
         return { treatment: { kind: 'needs-rate', taxTotal, ambiguous: false }, unitAmounts: null, taxId: '' };
       }
-      return { treatment: { kind: 'tax-rate', tax: match.tax, taxTotal }, unitAmounts, taxId: match.tax.id };
+      // The editor rounds tax per line, so the bill's tax can differ from the document's by a cent or two.
+      const finalLines = lines.map((l, i) => ({ ...l, amount: unitAmounts ? unitAmounts[i] : l.amount }));
+      const billTax = finalLines.reduce((sum, l) => sum + roundCents((lineNet(l) * match.tax.rate) / 100), 0);
+      const roundingDifference = roundCents(billTax - taxTotal);
+      return { treatment: { kind: 'tax-rate', tax: match.tax, taxTotal, roundingDifference }, unitAmounts, taxId: match.tax.id };
     }
     return {
       treatment: { kind: 'needs-rate', taxTotal, ambiguous: match.kind === 'ambiguous' },
@@ -1386,8 +1416,12 @@ export function isTaxOnlyDifference(
 /** One line for the review panel saying where the document's tax went. */
 export function describeCaptureTaxTreatment(treatment: CaptureTaxTreatment): string | null {
   switch (treatment.kind) {
-    case 'tax-rate':
-      return `Tax ${treatment.taxTotal.toFixed(2)} → input tax ${treatment.tax.taxName} ${treatment.tax.rate}% (recoverable)`;
+    case 'tax-rate': {
+      const base = `Tax ${treatment.taxTotal.toFixed(2)} → input tax ${treatment.tax.taxName} ${treatment.tax.rate}% (recoverable)`;
+      return treatment.roundingDifference === 0
+        ? base
+        : `${base}. Tax on the bill differs from the document by ${Math.abs(treatment.roundingDifference).toFixed(2)} (rounding)`;
+    }
     case 'added-to-cost':
       return `Tax ${treatment.taxTotal.toFixed(2)} → added to line costs (not recoverable)`;
     case 'needs-rate':

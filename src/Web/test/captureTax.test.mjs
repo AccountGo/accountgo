@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   convertInclusiveLinesToNet,
+  describeCaptureTaxTreatment,
   isTaxOnlyDifference,
   matchCaptureTaxRate,
   planCaptureTax,
@@ -82,16 +83,89 @@ test('T-10 puts the leftover cent on the largest line', () => {
   );
 });
 
-test('T-10 keeps quantity and discount and still reproduces the total', () => {
+const decimals = (n) => (String(n).split('.')[1] ?? '').length;
+const sumTotals = (lines, units) => lines.reduce((s, l, i) => s + cents(lineTotal(l, units[i])), 0);
+
+test('T-10 returns unit amounts with at most 2 decimals and still reproduces the total (quantities 3, 5, 1)', () => {
+  const lines = [
+    { quantity: 3, amount: 89.99, discount: 0 },
+    { quantity: 5, amount: 12.4, discount: 0 },
+    { quantity: 1, amount: 140.0, discount: 0 },
+  ];
+  const net = sumTotals(lines, lines.map((l) => l.amount));
+  const units = spreadTaxIntoLineCosts(lines, 66.55);
+  assert.ok(units);
+  for (const u of units) assert.ok(decimals(u) <= 2, `unit ${u} has more than 2 decimals`);
+  assert.equal(sumTotals(lines, units), net + 6655);
+});
+
+test('T-10 keeps a discounted line and puts the residual cents on the quantity-1 line', () => {
   const lines = [
     { quantity: 3, amount: 19.99, discount: 10 },
     { quantity: 7, amount: 4.35, discount: 0 },
+    { quantity: 1, amount: 25.0, discount: 0 },
   ];
-  const net = lines.reduce((s, l) => s + cents(lineTotal(l, l.amount)), 0);
+  const net = sumTotals(lines, lines.map((l) => l.amount));
   const units = spreadTaxIntoLineCosts(lines, 9.17);
   assert.ok(units);
-  const total = lines.reduce((s, l, i) => s + cents(lineTotal(l, units[i])), 0);
-  assert.equal(total, net + 917);
+  for (const u of units) assert.ok(decimals(u) <= 2);
+  assert.equal(sumTotals(lines, units), net + 917);
+});
+
+test('T-10 returns null when residual cents have no quantity-1 line to land on', () => {
+  const lines = [
+    { quantity: 3, amount: 10.0, discount: 0 },
+    { quantity: 3, amount: 10.01, discount: 0 },
+  ];
+  assert.equal(spreadTaxIntoLineCosts(lines, 1.0), null);
+  assert.equal(planCaptureTax('SalesTax', { subtotal: '60.03', taxTotal: '1.00', grandTotal: '61.03' }, [], lines, []).treatment.kind, 'unresolved');
+});
+
+test('T-10 returns the original amounts when no line needs the tax split unevenly (exact division)', () => {
+  const lines = [{ quantity: 2, amount: 50.0, discount: 0 }];
+  const units = spreadTaxIntoLineCosts(lines, 10);
+  assert.deepEqual(units, [55]);
+});
+
+test('T-10 inclusive conversion returns 2-decimal units for multi-quantity lines', () => {
+  const lines = [
+    { quantity: 3, amount: 35.69, discount: 0 },
+    { quantity: 5, amount: 10.7, discount: 0 },
+    { quantity: 1, amount: 21.4, discount: 0 },
+  ];
+  const grand = sumTotals(lines, lines.map((l) => l.amount)) / 100;
+  const units = convertInclusiveLinesToNet(lines, 7, grand);
+  assert.ok(units);
+  for (const u of units) assert.ok(decimals(u) <= 2);
+  const total = lines.reduce((s, l, i) => {
+    const net = lineTotal(l, units[i]);
+    return s + cents(net) + cents(Math.round(net * 7) / 100);
+  }, 0);
+  assert.equal(total, cents(grand));
+});
+
+test('T-10 inclusive conversion returns null without a quantity-1 line when cents cannot be absorbed', () => {
+  const lines = [
+    { quantity: 3, amount: 35.69, discount: 0 },
+    { quantity: 3, amount: 10.7, discount: 0 },
+  ];
+  const r = convertInclusiveLinesToNet(lines, 7, 139.17);
+  if (r !== null) for (const u of r) assert.ok(decimals(u) <= 2);
+});
+
+test('R2 a single-rate apply reports per-line tax rounding that differs from the document tax', () => {
+  // Three lines of 3.33 at 10%: per-line tax 0.33 x 3 = 0.99, the document says 1.00.
+  const lines = [3.33, 3.33, 3.33].map((a) => ({ quantity: 1, amount: a, discount: 0 }));
+  const plan = planCaptureTax('VatGst', { subtotal: '9.99', taxTotal: '1.00', grandTotal: '10.99', priceBasis: 'exclusive' }, [], lines, [tax('t', 10)]);
+  assert.equal(plan.treatment.kind, 'tax-rate');
+  assert.equal(plan.treatment.roundingDifference, -0.01);
+  assert.match(describeCaptureTaxTreatment(plan.treatment), /differs from the document by 0\.01 \(rounding\)/);
+  // The 0.01 shortfall must not look like the missing tax.
+  assert.equal(isTaxOnlyDifference({ taxTotal: '1.00' }, -0.01), false);
+
+  const exact = planCaptureTax('VatGst', { subtotal: '100.00', taxTotal: '7.00', grandTotal: '107.00', priceBasis: 'exclusive' }, [], [{ quantity: 1, amount: 100, discount: 0 }], [tax('a', 7)]);
+  assert.equal(exact.treatment.roundingDifference, 0);
+  assert.doesNotMatch(describeCaptureTaxTreatment(exact.treatment), /rounding/);
 });
 
 test('T-10 refuses to spread over lines with no usable amount', () => {
