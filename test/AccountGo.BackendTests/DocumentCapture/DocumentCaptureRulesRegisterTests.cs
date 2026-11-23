@@ -78,7 +78,24 @@ public sealed class DocumentCaptureRulesRegisterTests
             $"Test(s) reference Rule trait(s) not present in register: {string.Join(", ", unregisteredTraits)}");
     }
 
-    private static List<(string Id, string Status)> ParseRegisterRows(string markdown)
+    [Theory]
+    [InlineData("| `V-01` | `vendorName` | Missing columns | `active` |")]
+    [InlineData("| `V-01` | `vendorName` | Extra | pipe | in | row | test | `active` |")]
+    public void ParseRegisterRows_RejectsMalformedTableRowWithWrongColumnCount(string malformedRow)
+    {
+        var markdown = $"""
+            ## Rules register
+
+            | ID | field | rule | why | code location | test(s) | status |
+            |---|---|---|---|---|---|---|
+            {malformedRow}
+            """;
+
+        var ex = Assert.Throws<FormatException>(() => ParseRegisterRows(markdown));
+        Assert.Contains("expected 7 columns", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static List<(string Id, string Status)> ParseRegisterRows(string markdown)
     {
         var results = new List<(string Id, string Status)>();
         var inRegisterSection = false;
@@ -96,15 +113,22 @@ public sealed class DocumentCaptureRulesRegisterTests
                 continue;
 
             var cells = line.Trim('|').Split('|').Select(c => c.Trim()).ToArray();
-            if (cells.Length < 7)
-                continue;
+            if (cells.Length > 0)
+            {
+                var first = cells[0].Trim('`', ' ');
+                if (first.Equals("ID", StringComparison.OrdinalIgnoreCase)
+                    || (first.Length > 0 && first.All(ch => ch == '-' || ch == ':')))
+                {
+                    continue;
+                }
+            }
+
+            if (cells.Length != 7)
+                throw new FormatException($"Malformed register table row (expected 7 columns, found {cells.Length}): {line}");
 
             var id = cells[0].Trim('`', ' ');
-            if (id.Equals("ID", StringComparison.OrdinalIgnoreCase) || id.All(ch => ch == '-'))
-                continue;
-
             if (!RuleIdPattern.IsMatch(id))
-                Assert.Fail($"Unexpected rule ID format '{id}' in register row: {line}");
+                throw new FormatException($"Unexpected rule ID format '{id}' in register row: {line}");
 
             var status = cells[6].Trim('`', ' ');
             results.Add((id, status));

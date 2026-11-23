@@ -11,10 +11,11 @@ using System.Text.Json;
 using Api.DocumentCaptures;
 using Api.DocumentCaptures.Parsing;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AccountGo.BackendTests.DocumentCapture;
 
-public sealed class DocumentTextFieldParserTests
+public sealed class DocumentTextFieldParserTests(ITestOutputHelper output)
 {
     private static TextLine Line(string text, int page = 1, float y0 = 0, float y1 = 16) =>
         new(page, text, 0, y0, 400, y1, TextLineSource.Ocr);
@@ -1314,6 +1315,10 @@ public sealed class DocumentTextFieldParserTests
                 && st.TryGetProperty("grandTotal", out var gt)
                 && gt.GetString() == total) totalHits++;
         }
+
+        output.WriteLine($"Clean text vendor: {vendorHits}/{entries.Count} match.");
+        output.WriteLine($"Clean text date: {dateHits}/{entries.Count} match.");
+        output.WriteLine($"Clean text total: {totalHits}/{entries.Count} match.");
 
         Assert.Equal(18, vendorHits);
         Assert.Equal(18, dateHits);

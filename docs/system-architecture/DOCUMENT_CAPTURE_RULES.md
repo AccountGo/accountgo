@@ -92,11 +92,13 @@ None recorded for `rules-1`. Any parser bug discovered during review or testing 
 
 ## Benchmark
 
-Run locally via `./scripts/capture-benchmark.sh` against the synthetic OCR accuracy gate (`LocalOcrSyntheticTests.EnglishImageOcrMeetsSyntheticFieldAccuracyFloor`).
+Run locally via `./scripts/capture-benchmark.sh` against both the local OCR synthetic gate (`LocalOcrSyntheticTests.EnglishImageOcrMeetsSyntheticFieldAccuracyFloor`, 65 images: 13 English fixtures × 5 variants) and the 18-fixture clean-text synthetic set (`DocumentTextFieldParserTests.Parse_SyntheticTruthCleanText_Scores18Of18OnVendorDateAndTotalWithNoTotalsInconsistent`, English + Thai).
+
+The benchmark measures `vendor`, `date`, and `total` only. `N-`, `C-`, `L-`, `P-`, `B-`, and `A-` rules are covered by unit tests only and have no accuracy benchmark yet.
 
 | rules version | date | synthetic field accuracy (per field and overall) | notes |
 |---|---|---|---|
-| `rules-1` | 2026-11-23 | vendor 65/65 (100.0%), date 65/65 (100.0%), total 65/65 (100.0%), overall 195/195 (100.0%) | Local OCR synthetic gate (65 images: 13 EN fixtures x 5 variants) |
+| `rules-1` | 2026-11-23 | OCR (65): vendor 65/65 (100.0%), date 65/65 (100.0%), total 65/65 (100.0%), overall 195/195 (100.0%); clean text (18): vendor 18/18 (100.0%), date 18/18 (100.0%), total 18/18 (100.0%), overall 54/54 (100.0%) | Local OCR synthetic gate (13 EN x 5 variants) + 18 clean-text fixtures (EN+TH) |
 
 **Future benchmark sets:** SROIE and CORD (not yet integrated; no external benchmark datasets are stored in this repository).
 
@@ -104,4 +106,4 @@ Run locally via `./scripts/capture-benchmark.sh` against the synthetic OCR accur
 
 | date | rule ID(s) | summary | PR |
 |---|---|---|---|
-| 2026-11-23 | all | Register created from rules as of `f50d0f9e` | PR #… |
+| 2026-11-23 | all | Register created from rules as of `f50d0f9e` | PR #576 |
