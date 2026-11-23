@@ -28,8 +28,7 @@ public sealed class DocumentCapturesController(
     ITenantContext tenant,
     IEntitlementService entitlements,
     IOptions<DocumentCaptureOptions> options,
-    IDocumentFieldExtractor extractor,
-    ApiDbContext? db = null) : ControllerBase
+    IDocumentFieldExtractor extractor) : ControllerBase
 {
     private const int UploadBodyLimit = DocumentCaptureImageLimits.MaxInputBytes + 64 * 1024;
     private const int AcceptBodyLimit = 256 * 1024;
@@ -227,13 +226,21 @@ public sealed class DocumentCapturesController(
         if (!tenant.Permissions.Contains(requiredPermission))
             return RequirePermissionAttribute.Denied(requiredPermission);
 
-        var effectiveDb = db ?? HttpContext.RequestServices.GetRequiredService<ApiDbContext>();
-        var candidates = await PartyMatchingService.MatchCaptureAsync(effectiveDb, normalizedRole, captureId, cancellationToken)
-            .ConfigureAwait(false);
-        if (candidates is null)
-            return new NotFoundObjectResult(new { message = PublicIdErrorCodes.NotFoundMessage, code = PublicIdErrorCodes.UnknownId });
-
-        return Ok(candidates);
+        try
+        {
+            var candidates = await captures.MatchPartyAsync(normalizedRole, captureId, cancellationToken)
+                .ConfigureAwait(false);
+            return Ok(candidates);
+        }
+        catch (DocumentCaptureServiceException ex)
+        {
+            return ServiceProblem(ex);
+        }
+        catch (DocumentCaptureAdmissionBusyException)
+        {
+            Response.Headers.RetryAfter = "1";
+            return ErrorProblem(503, "DOCUMENT_BUSY");
+        }
     }
 
     [HttpGet("linked/{targetType}/{targetId}")]

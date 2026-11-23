@@ -29,6 +29,7 @@ public static class PartyMatchingService
 
     public const string ReasonIdentifier = "identifier";
     public const string ReasonAlias = "alias";
+    public const string ReasonExact = "exact";
     public const string ReasonName = "name";
 
     private const string MaskMarker = "••••";
@@ -75,8 +76,26 @@ public static class PartyMatchingService
         if (capture is null)
             return null;
 
+        return await MatchCaptureAsync(db, capture, normalizedRole, cancellationToken).ConfigureAwait(false);
+    }
+
+    public static async Task<IReadOnlyList<PartyMatchCandidate>> MatchCaptureAsync(
+        ApiDbContext db,
+        DocumentCapture capture,
+        string normalizedRole,
+        CancellationToken cancellationToken)
+    {
+        if (capture.FieldsWipedAt is not null
+            || capture.RejectedAt is not null
+            || string.Equals(capture.Status, "rejected", StringComparison.Ordinal))
+        {
+            return Array.Empty<PartyMatchCandidate>();
+        }
+
         var extractedName = ExtractPartyName(capture, normalizedRole);
+        var rawExtractedName = extractedName?.Trim() ?? string.Empty;
         var (emails, phoneSuffixes) = ExtractIdentifiers(capture);
+        await ExcludeWorkspaceOwnIdentifiersAsync(db, emails, phoneSuffixes, cancellationToken).ConfigureAwait(false);
         var normalizedName = PartyNameNormalizer.Normalize(extractedName);
 
         if (string.IsNullOrEmpty(normalizedName) && emails.Count == 0 && phoneSuffixes.Count == 0)
@@ -98,7 +117,32 @@ public static class PartyMatchingService
             aliasPartyIds = matchedAliasIds.ToHashSet();
         }
 
-        return RankCandidates(sources, normalizedName, emails, phoneSuffixes, aliasPartyIds);
+        return RankCandidates(sources, rawExtractedName, normalizedName, emails, phoneSuffixes, aliasPartyIds);
+    }
+
+    private static async Task ExcludeWorkspaceOwnIdentifiersAsync(
+        ApiDbContext db,
+        HashSet<string> emails,
+        HashSet<string> phoneSuffixes,
+        CancellationToken cancellationToken)
+    {
+        if (emails.Count == 0 && phoneSuffixes.Count == 0)
+            return;
+
+        var settings = await db.CompanySettings
+            .AsNoTracking()
+            .Select(s => new { s.BusinessEmail, s.BusinessPhone })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        foreach (var s in settings)
+        {
+            if (!string.IsNullOrWhiteSpace(s.BusinessEmail))
+                emails.Remove(s.BusinessEmail.Trim());
+            var phoneSuffix = ExtractPhoneLast8(s.BusinessPhone);
+            if (phoneSuffix is not null)
+                phoneSuffixes.Remove(phoneSuffix);
+        }
     }
 
     /// <summary>
@@ -140,6 +184,7 @@ public static class PartyMatchingService
         if (createdBy.Length > 256)
             createdBy = createdBy[..256];
 
+        var chosenNormalizedName = PartyNameNormalizer.Normalize(chosenParty.Name);
         var seenAliases = new HashSet<string>(StringComparer.Ordinal);
         foreach (var capture in captures)
         {
@@ -147,6 +192,13 @@ public static class PartyMatchingService
             var normalizedAlias = PartyNameNormalizer.Normalize(extractedName);
             if (string.IsNullOrEmpty(normalizedAlias) || !seenAliases.Add(normalizedAlias))
                 continue;
+
+            // R5: skip self-aliases that equal the chosen party's own normalized name.
+            if (!string.IsNullOrEmpty(chosenNormalizedName)
+                && string.Equals(normalizedAlias, chosenNormalizedName, StringComparison.Ordinal))
+            {
+                continue;
+            }
 
             var (emails, phoneSuffixes) = ExtractIdentifiers(capture);
             if (MatchesIdentifier(chosenParty.Email, chosenParty.Phone, chosenParty.Fax, emails, phoneSuffixes))
@@ -414,6 +466,7 @@ public static class PartyMatchingService
 
     private static IReadOnlyList<PartyMatchCandidate> RankCandidates(
         List<CandidateSource> sources,
+        string rawExtractedName,
         string normalizedExtractedName,
         HashSet<string> extractedEmails,
         HashSet<string> extractedPhoneSuffixes,
@@ -435,13 +488,21 @@ public static class PartyMatchingService
                 continue;
             }
 
+            // M-07: raw trimmed case-insensitive equality (no legal-suffix stripping) ranks between alias and name.
+            if (!string.IsNullOrEmpty(rawExtractedName)
+                && string.Equals(rawExtractedName, s.Name.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                scored.Add((new PartyMatchCandidate(s.PublicId, s.Name, ReasonExact, 1.0, s.Archived), 2, s.LastUsedAt));
+                continue;
+            }
+
             if (!string.IsNullOrEmpty(normalizedExtractedName))
             {
                 var normalizedParty = PartyNameNormalizer.Normalize(s.Name);
                 var score = PartyNameMatcher.ScoreNormalized(normalizedExtractedName, normalizedParty);
                 if (score >= PartyNameMatcher.MatchThreshold)
                 {
-                    scored.Add((new PartyMatchCandidate(s.PublicId, s.Name, ReasonName, score, s.Archived), 2, s.LastUsedAt));
+                    scored.Add((new PartyMatchCandidate(s.PublicId, s.Name, ReasonName, score, s.Archived), 3, s.LastUsedAt));
                 }
             }
         }

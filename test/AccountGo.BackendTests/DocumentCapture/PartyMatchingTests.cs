@@ -8,6 +8,7 @@ using Api.Controllers;
 using Api.Data;
 using Api.DocumentCaptures;
 using Api.DocumentCaptures.Matching;
+using Api.PublicIds;
 using Core.Domain;
 using Core.Domain.Purchases;
 using Core.Domain.Sales;
@@ -18,6 +19,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
@@ -342,6 +344,24 @@ public sealed class PartyMatchingTests(ITestOutputHelper output)
         Assert.NotNull(maskedMatches);
         Assert.Empty(maskedMatches!);
         Assert.NotEqual(maskedParty.PublicId, emailMatches[0].PartyId);
+
+        // R4: workspace's own email/phone are excluded from extracted identifiers
+        db.CompanySettings.Add(new CompanySetting
+        {
+            CompanyId = company.Id,
+            BusinessEmail = "ap@ourworkspace.test",
+            BusinessPhone = "+1 (415) 555-9999",
+        });
+        var sharingOwnDetails = SeedVendor(db, company.Id, "Own Contact Sharing Vendor", email: "ap@ourworkspace.test", phone: "415-555-9999");
+        db.SaveChanges();
+
+        var ownDetailsCapture = SeedCapture(
+            db, company.Id, "purchase-invoice",
+            "{\"vendorName\":\"Unmatched Issuer Name\"}",
+            rawText: "Bill To: Our Workspace\nEmail: ap@ourworkspace.test\nTel: 415-555-9999\nTotal: USD 20.00");
+        var ownDetailsMatches = await PartyMatchingService.MatchCaptureAsync(db, "vendor", ownDetailsCapture.Id, CancellationToken.None);
+        Assert.NotNull(ownDetailsMatches);
+        Assert.DoesNotContain(ownDetailsMatches!, m => m.PartyId == sharingOwnDetails.PublicId);
     }
 
     [Fact]
@@ -357,7 +377,13 @@ public sealed class PartyMatchingTests(ITestOutputHelper output)
 
         using var db1 = CreateTenantDb(conn, co1.Id);
         var vendor1 = SeedVendor(db1, co1.Id, "Northwind Office Limited");
+        var selfMatchCapture = SeedCapture(db1, co1.Id, "purchase-invoice", "{\"vendorName\":\"Northwind Office Ltd\"}");
         var capture1 = SeedCapture(db1, co1.Id, "purchase-invoice", "{\"vendorName\":\"NW Office Supply\"}");
+
+        // R5: saving a capture whose normalized name equals Normalize(party.Name) must NOT create a self-alias
+        PartyMatchingService.RecordAliasesForCaptures(db1, co1.Id, "vendor", vendor1.PartyId!.Value, [selfMatchCapture.Id], "tester@example.test");
+        db1.SaveChanges();
+        Assert.Empty(db1.PartyAliases.ToList());
 
         // Before save: no alias match
         var before = await PartyMatchingService.MatchCaptureAsync(db1, "vendor", capture1.Id, CancellationToken.None);
@@ -423,46 +449,116 @@ public sealed class PartyMatchingTests(ITestOutputHelper output)
         SeedVendor(db1, co1.Id, "Northwind Office LLC");
         SeedVendor(db1, co1.Id, "Northwind Office Corp");
         var captureCo1 = SeedCapture(db1, co1.Id, "purchase-invoice", "{\"vendorName\":\"Northwind Office\"}");
+        var salesCaptureCo1 = SeedCapture(db1, co1.Id, "sales-invoice", "{\"customerName\":\"Northwind Office\"}");
+        var rejectedCaptureCo1 = SeedCapture(db1, co1.Id, "purchase-invoice", "{\"vendorName\":\"Northwind Office\"}");
+        rejectedCaptureCo1.Status = "rejected";
+        rejectedCaptureCo1.RejectedAt = DateTime.UtcNow;
+        var wipedCaptureCo1 = SeedCapture(db1, co1.Id, "purchase-invoice", "{\"vendorName\":\"Northwind Office\"}");
+        wipedCaptureCo1.FieldsWipedAt = DateTime.UtcNow;
+        db1.SaveChanges();
 
         using var db2 = CreateTenantDb(conn, co2.Id);
         var captureCo2 = SeedCapture(db2, co2.Id, "purchase-invoice", "{\"vendorName\":\"Northwind Office\"}");
 
-        DocumentCapturesController BuildController(ApiDbContext ctx, int companyId, params string[] perms)
+        DocumentCapturesController BuildController(ApiDbContext ctx, int companyId, bool moduleEntitled, params string[] perms)
         {
             var tenant = new FixedTenantContext(companyId, perms);
-            var opts = Options.Create(new DocumentCaptureOptions());
+            var opts = Options.Create(new DocumentCaptureOptions { Enabled = true });
             var extractor = new Mock<IDocumentFieldExtractor>();
             var entitlements = new Mock<IEntitlementService>();
-            var controller = new DocumentCapturesController(null!, tenant, entitlements.Object, opts, extractor.Object, ctx)
+            entitlements.SetupGet(e => e.Options).Returns(new EntitlementsOptions());
+            entitlements.Setup(e => e.Evaluate(companyId, It.IsAny<EntitlementAction>()))
+                .Returns(moduleEntitled
+                    ? new EntitlementDecision(true, null, null)
+                    : new EntitlementDecision(false, "MODULE_NOT_INCLUDED", "Module disabled", RequiredModule: "purchases"));
+            var admissionLock = new Mock<IDocumentCaptureAdmissionLock>();
+            var publicIds = new Mock<IPublicIdResolver>();
+            var service = new DocumentCaptureService(
+                ctx, admissionLock.Object, extractor.Object, entitlements.Object, publicIds.Object,
+                tenant, opts, NullLogger<DocumentCaptureService>.Instance);
+
+            return new DocumentCapturesController(service, tenant, entitlements.Object, opts, extractor.Object)
             {
                 ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
             };
-            return controller;
         }
 
         // Missing vendor view permission -> 403
-        var noPermController = BuildController(db1, co1.Id, SystemPermissions.SalesCustomersView);
-        var deniedVendor = await noPermController.MatchParty("vendor", captureCo1.Id, CancellationToken.None);
-        var deniedObj = Assert.IsType<ObjectResult>(deniedVendor);
-        Assert.Equal(StatusCodes.Status403Forbidden, deniedObj.StatusCode);
+        var noPermController = BuildController(db1, co1.Id, true, SystemPermissions.SalesCustomersView, SystemPermissions.PurchasesBillsView);
+        Assert.Equal(StatusCodes.Status403Forbidden,
+            Assert.IsType<ObjectResult>(await noPermController.MatchParty("vendor", captureCo1.Id, CancellationToken.None)).StatusCode);
 
         // Missing customer view permission -> 403
-        var vendorOnlyController = BuildController(db1, co1.Id, SystemPermissions.PurchasesVendorsView);
-        var deniedCustomer = await vendorOnlyController.MatchParty("customer", captureCo1.Id, CancellationToken.None);
-        Assert.Equal(StatusCodes.Status403Forbidden, Assert.IsType<ObjectResult>(deniedCustomer).StatusCode);
+        var vendorOnlyController = BuildController(db1, co1.Id, true, SystemPermissions.PurchasesVendorsView, SystemPermissions.PurchasesBillsView);
+        Assert.Equal(StatusCodes.Status403Forbidden,
+            Assert.IsType<ObjectResult>(await vendorOnlyController.MatchParty("customer", salesCaptureCo1.Id, CancellationToken.None)).StatusCode);
+
+        // R1: Missing capture read permission (AuthorizeRead requires PurchasesBillsView) -> 403
+        var missingBillsPermController = BuildController(db1, co1.Id, true, SystemPermissions.PurchasesVendorsView);
+        Assert.Equal(StatusCodes.Status403Forbidden,
+            Assert.IsType<ObjectResult>(await missingBillsPermController.MatchParty("vendor", captureCo1.Id, CancellationToken.None)).StatusCode);
+
+        // R1: Missing module entitlement -> 403
+        var noModuleController = BuildController(db1, co1.Id, false, SystemPermissions.PurchasesVendorsView, SystemPermissions.PurchasesBillsView);
+        Assert.Equal(StatusCodes.Status403Forbidden,
+            Assert.IsType<ObjectResult>(await noModuleController.MatchParty("vendor", captureCo1.Id, CancellationToken.None)).StatusCode);
+
+        // R1: Role/kind mismatch (vendor on sales-invoice) -> 404
+        var fullController = BuildController(db1, co1.Id, true,
+            SystemPermissions.PurchasesVendorsView, SystemPermissions.PurchasesBillsView,
+            SystemPermissions.SalesCustomersView, SystemPermissions.SalesInvoicesView);
+        Assert.IsType<NotFoundObjectResult>(await fullController.MatchParty("vendor", salesCaptureCo1.Id, CancellationToken.None));
+        Assert.IsType<NotFoundObjectResult>(await fullController.MatchParty("customer", captureCo1.Id, CancellationToken.None));
 
         // Another tenant's capture -> 404
-        var crossTenant = await vendorOnlyController.MatchParty("vendor", captureCo2.Id, CancellationToken.None);
-        Assert.IsType<NotFoundObjectResult>(crossTenant);
+        Assert.IsType<NotFoundObjectResult>(await fullController.MatchParty("vendor", captureCo2.Id, CancellationToken.None));
 
         // Invalid role -> 400
-        var badRole = await vendorOnlyController.MatchParty("bank", captureCo1.Id, CancellationToken.None);
-        Assert.IsType<BadRequestObjectResult>(badRole);
+        Assert.IsType<BadRequestObjectResult>(await fullController.MatchParty("bank", captureCo1.Id, CancellationToken.None));
+
+        // R1: Rejected or wiped captures -> empty list
+        var rejectedRes = Assert.IsType<OkObjectResult>(await fullController.MatchParty("vendor", rejectedCaptureCo1.Id, CancellationToken.None));
+        Assert.Empty(Assert.IsAssignableFrom<IReadOnlyList<PartyMatchCandidate>>(rejectedRes.Value));
+        var wipedRes = Assert.IsType<OkObjectResult>(await fullController.MatchParty("vendor", wipedCaptureCo1.Id, CancellationToken.None));
+        Assert.Empty(Assert.IsAssignableFrom<IReadOnlyList<PartyMatchCandidate>>(wipedRes.Value));
 
         // Authorized same-tenant -> 200 with at most 3 candidates (never full party list of 4)
-        var okResult = Assert.IsType<OkObjectResult>(await vendorOnlyController.MatchParty("vendor", captureCo1.Id, CancellationToken.None));
+        var okResult = Assert.IsType<OkObjectResult>(await fullController.MatchParty("vendor", captureCo1.Id, CancellationToken.None));
         var candidates = Assert.IsAssignableFrom<IReadOnlyList<PartyMatchCandidate>>(okResult.Value);
         Assert.Equal(3, candidates.Count);
+    }
+
+    [Fact]
+    [Trait("Rule", "M-07")]
+    public async Task ExactMatch_M07_PreselectsRawExactNotNormalizedSuffixMatch()
+    {
+        using var conn = new SqliteConnection("Data Source=:memory:");
+        conn.Open();
+        using var setupDb = CreateTenantDb(conn, 1);
+        setupDb.Database.EnsureCreated();
+        var co = SeedCompany(setupDb, "ExactCo", "EXCO");
+
+        using var db = CreateTenantDb(conn, co.Id);
+        var acmeLtd = SeedVendor(db, co.Id, "Acme Ltd");
+        var acmeInc = SeedVendor(db, co.Id, "Acme Inc");
+
+        // Raw trimmed case-insensitive equality -> exact (ranked above normalized-equal Acme Inc which stays "name")
+        var exactCapture = SeedCapture(db, co.Id, "purchase-invoice", "{\"vendorName\":\"  ACME LTD  \"}");
+        var exactMatches = await PartyMatchingService.MatchCaptureAsync(db, "vendor", exactCapture.Id, CancellationToken.None);
+        Assert.NotNull(exactMatches);
+        Assert.Equal(2, exactMatches!.Count);
+        Assert.Equal(acmeLtd.PublicId, exactMatches[0].PartyId);
+        Assert.Equal("exact", exactMatches[0].Reason);
+        Assert.Equal(1.0, exactMatches[0].Score);
+        Assert.Equal(acmeInc.PublicId, exactMatches[1].PartyId);
+        Assert.Equal("name", exactMatches[1].Reason);
+
+        // Normalized-equal ("Acme LLC") but raw-different from both "Acme Ltd" and "Acme Inc" -> both stay "name"
+        var suffixOnlyCapture = SeedCapture(db, co.Id, "purchase-invoice", "{\"vendorName\":\"Acme LLC\"}");
+        var suffixMatches = await PartyMatchingService.MatchCaptureAsync(db, "vendor", suffixOnlyCapture.Id, CancellationToken.None);
+        Assert.NotNull(suffixMatches);
+        Assert.Equal(2, suffixMatches!.Count);
+        Assert.All(suffixMatches!, m => Assert.Equal("name", m.Reason));
     }
 
     [Fact]

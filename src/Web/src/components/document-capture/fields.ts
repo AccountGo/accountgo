@@ -942,7 +942,7 @@ export function evaluateFinancialApplyGates(
   };
 }
 
-export type PartyMatchReason = 'alias' | 'identifier' | 'name';
+export type PartyMatchReason = 'alias' | 'identifier' | 'exact' | 'name';
 
 export interface PartyMatchCandidate {
   partyId: string;
@@ -958,6 +958,8 @@ export function describePartyMatchReason(reason: PartyMatchReason): string {
       return 'matched before';
     case 'identifier':
       return 'same email/phone';
+    case 'exact':
+      return 'exact name';
     case 'name':
     default:
       return 'similar name';
@@ -965,14 +967,14 @@ export function describePartyMatchReason(reason: PartyMatchReason): string {
 }
 
 /**
- * Only a single non-archived alias or identifier candidate may be pre-selected.
- * Name-only candidates and archived parties are never pre-selected (M-05, M-06).
+ * Only a single non-archived alias, identifier, or exact-name candidate may be pre-selected.
+ * Fuzzy/normalized name-only candidates and archived parties are never pre-selected (M-05, M-06, M-07).
  */
 export function resolveAutoPreselectCandidate(
   candidates: readonly PartyMatchCandidate[]
 ): PartyMatchCandidate | null {
   const strong = candidates.filter(
-    (c) => !c.archived && (c.reason === 'alias' || c.reason === 'identifier')
+    (c) => !c.archived && (c.reason === 'alias' || c.reason === 'identifier' || c.reason === 'exact')
   );
   return strong.length === 1 ? strong[0] : null;
 }
@@ -996,7 +998,10 @@ export async function fetchPartyMatchCandidates(
           item &&
           typeof item.partyId === 'string' &&
           typeof item.name === 'string' &&
-          (item.reason === 'alias' || item.reason === 'identifier' || item.reason === 'name') &&
+          (item.reason === 'alias' ||
+            item.reason === 'identifier' ||
+            item.reason === 'exact' ||
+            item.reason === 'name') &&
           typeof item.score === 'number' &&
           typeof item.archived === 'boolean'
       )

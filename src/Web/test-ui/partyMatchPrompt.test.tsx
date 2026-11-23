@@ -22,7 +22,7 @@ describe('resolveAutoPreselectCandidate (M-05 / M-06)', () => {
     expect(resolveAutoPreselectCandidate(candidates)).toBeNull();
   });
 
-  it('pre-selects a single non-archived alias or identifier match', () => {
+  it('pre-selects a single non-archived alias, identifier, or exact match', () => {
     const aliasOnly: PartyMatchCandidate[] = [
       { partyId: 'ven_1', name: 'Northwind Office Limited', reason: 'alias', score: 1.0, archived: false },
     ];
@@ -32,13 +32,23 @@ describe('resolveAutoPreselectCandidate (M-05 / M-06)', () => {
       { partyId: 'cus_1', name: 'Blue Harbor Retail LLC', reason: 'identifier', score: 1.0, archived: false },
     ];
     expect(resolveAutoPreselectCandidate(identifierOnly)?.partyId).toBe('cus_1');
+
+    const exactOnly: PartyMatchCandidate[] = [
+      { partyId: 'ven_2', name: 'Acme Ltd', reason: 'exact', score: 1.0, archived: false },
+    ];
+    expect(resolveAutoPreselectCandidate(exactOnly)?.partyId).toBe('ven_2');
   });
 
-  it('never pre-selects an archived party even on alias or identifier hit', () => {
+  it('never pre-selects an archived party even on alias, identifier, or exact hit', () => {
     const archivedAlias: PartyMatchCandidate[] = [
       { partyId: 'ven_9', name: 'Legacy Supply Ltd', reason: 'alias', score: 1.0, archived: true },
     ];
     expect(resolveAutoPreselectCandidate(archivedAlias)).toBeNull();
+
+    const archivedExact: PartyMatchCandidate[] = [
+      { partyId: 'ven_10', name: 'Legacy Supply Ltd', reason: 'exact', score: 1.0, archived: true },
+    ];
+    expect(resolveAutoPreselectCandidate(archivedExact)).toBeNull();
   });
 
   it('never pre-selects when multiple strong candidates match', () => {

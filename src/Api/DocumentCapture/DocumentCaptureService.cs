@@ -285,6 +285,49 @@ public sealed class DocumentCaptureService(
         return null;
     }
 
+    public async Task<IReadOnlyList<Api.DocumentCaptures.Matching.PartyMatchCandidate>> MatchPartyAsync(
+        string role,
+        int captureId,
+        CancellationToken cancellationToken)
+    {
+        var normalizedRole = Api.DocumentCaptures.Matching.PartyMatchingService.NormalizeRole(role);
+        if (normalizedRole is null)
+            throw new DocumentCaptureServiceException(400, "DOCUMENT_MATCH_ROLE_INVALID");
+
+        var companyId = tenant.RequireCompanyId();
+        if (!await IsCompanyLiveAsync(companyId, cancellationToken).ConfigureAwait(false))
+            throw new DocumentCaptureServiceException(404, "DOCUMENT_NOT_FOUND");
+
+        var capture = await db.DocumentCaptures.AsNoTracking()
+            .SingleOrDefaultAsync(c => c.CompanyId == companyId && c.Id == captureId
+                && db.Companies.IgnoreQueryFilters().Any(company => company.Id == companyId && company.DeletedAt == null), cancellationToken)
+            .ConfigureAwait(false);
+        if (capture is null)
+            throw new DocumentCaptureServiceException(404, "DOCUMENT_NOT_FOUND");
+
+        EnsureCreatorAccess(capture);
+        var access = DocumentCaptureAccessPolicy.AuthorizeRead(entitlements, companyId, tenant.Permissions, capture.Kind);
+        if (access != DocumentCaptureAccessFailure.None)
+            throw AccessFailure(access, capture.Kind, companyId);
+
+        var kindMatchesRole = normalizedRole == Api.DocumentCaptures.Matching.PartyMatchingService.RoleVendor
+            ? capture.Kind is "purchase-invoice" or "expense-receipt"
+            : capture.Kind == "sales-invoice";
+        if (!kindMatchesRole)
+            throw new DocumentCaptureServiceException(404, "DOCUMENT_NOT_FOUND");
+
+        if (capture.FieldsWipedAt is not null
+            || capture.RejectedAt is not null
+            || string.Equals(capture.Status, "rejected", StringComparison.Ordinal))
+        {
+            return Array.Empty<Api.DocumentCaptures.Matching.PartyMatchCandidate>();
+        }
+
+        return await Api.DocumentCaptures.Matching.PartyMatchingService
+            .MatchCaptureAsync(db, capture, normalizedRole, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     public async Task<DocumentCaptureView> GetAsync(int captureId, CancellationToken cancellationToken)
     {
         var companyId = tenant.RequireCompanyId();
