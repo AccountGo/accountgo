@@ -2,19 +2,24 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { AssistantSidepanel } from '../src/assistant/AssistantSidepanel';
-import { assistantAdapter } from '../src/assistant/AssistantAdapter';
+import { AssistantAdapter } from '../src/assistant/AssistantAdapter';
 import {
   DocumentCaptureCapabilities,
   DocumentCaptureView,
   validateAssistantFieldsForAccept,
 } from '../src/components/document-capture/fields';
 
-const authFetch = vi.fn();
+const { assistantFetchMock, assistantFetchStreamMock } = vi.hoisted(() => ({
+  assistantFetchMock: vi.fn(),
+  assistantFetchStreamMock: vi.fn(),
+}));
 
-vi.mock('../src/auth/AuthContext', () => ({
-  useAuth: () => ({ authFetch }),
+vi.mock('../src/assistant/assistantFetch', () => ({
+  assistantFetch: assistantFetchMock,
+  assistantFetchJson: vi.fn(),
+  assistantFetchStream: assistantFetchStreamMock,
 }));
 
 vi.mock('../src/assistant/AssistantProvider', () => ({
@@ -65,7 +70,7 @@ function makeAssistantCapture(overrides: Partial<DocumentCaptureView> = {}): Doc
     pageCount: 1,
     fields: {
       fields: [
-        { label: 'Vendor', value: 'Acme Co', confidence: 0.62, box: { page: 1, x: 0.1, y: 0.1, width: 0.2, height: 0.1 } },
+        { label: 'Vendor', value: 'Acme Co', confidence: 0.62, box: null },
         { label: 'Account', value: '••••', confidence: null, box: null },
       ],
     },
@@ -88,26 +93,15 @@ function makeAssistantCapture(overrides: Partial<DocumentCaptureView> = {}): Doc
   };
 }
 
-let originalCreateObjectURL: typeof URL.createObjectURL;
-let originalRevokeObjectURL: typeof URL.revokeObjectURL;
-
 beforeEach(() => {
   vi.clearAllMocks();
-  assistantAdapter.setPendingCaptureId(null);
-  originalCreateObjectURL = URL.createObjectURL;
-  originalRevokeObjectURL = URL.revokeObjectURL;
-  URL.createObjectURL = vi.fn(() => 'blob:asst-preview-1');
-  URL.revokeObjectURL = vi.fn();
 });
 
 afterEach(() => {
   cleanup();
-  assistantAdapter.setPendingCaptureId(null);
-  URL.createObjectURL = originalCreateObjectURL;
-  URL.revokeObjectURL = originalRevokeObjectURL;
 });
 
-describe('AssistantSidepanel document capture integration (PR 5)', () => {
+describe('AssistantSidepanel and composer attachments (#98)', () => {
   it('validates assistant-attachment field limits and allows null confidence and box', () => {
     const valid = validateAssistantFieldsForAccept([
       { id: 1, label: 'Memo', value: 'Masked ••••', confidence: null, box: null },
@@ -122,124 +116,123 @@ describe('AssistantSidepanel document capture integration (PR 5)', () => {
     expect(tooLong.errors).toHaveLength(2);
   });
 
-  it('hides attach document control when capabilities disable assistant-attachment', async () => {
-    authFetch.mockResolvedValueOnce(jsonResponse({ ...assistantCaps, kinds: ['expense-receipt'] }));
-
+  it('removes the header attachment bar while keeping the privacy notice and ChatSidepanel', () => {
     render(<AssistantSidepanel orgSlug="acme" />);
 
-    await waitFor(() => expect(authFetch).toHaveBeenCalledWith('/api/document-captures/capabilities'));
     expect(screen.getByText('Names and personal details are hidden from the AI.')).toBeTruthy();
+    expect(screen.getByTestId('mock-chat-sidepanel')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Attach document/i })).toBeNull();
   });
 
-  it('fetches plain capabilities on AssistantSidepanel load and sends warmup=1 only when DocumentCapturePanel opens', async () => {
-    authFetch.mockResolvedValue(jsonResponse(assistantCaps));
+  it('rejects unsupported file types and oversized files in uploadFile before making any request', async () => {
+    const adapter = new AssistantAdapter();
+    adapter.setCaptureCapabilities(assistantCaps);
 
-    render(<AssistantSidepanel orgSlug="acme" />);
+    const badType = new File(['hello'], 'notes.txt', { type: 'text/plain' });
+    await expect(adapter.uploadFile('sess_1', badType)).rejects.toThrow(/PDF, PNG, JPEG, or WebP/i);
+    expect(assistantFetchMock).not.toHaveBeenCalled();
 
-    const attachBtn = await screen.findByRole('button', { name: /Attach document/i });
-    const beforeOpenUrls = authFetch.mock.calls.map(([url]) => url);
-    expect(beforeOpenUrls).toContain('/api/document-captures/capabilities');
-    expect(beforeOpenUrls).not.toContain('/api/document-captures/capabilities?warmup=1');
-
-    fireEvent.click(attachBtn);
-    await screen.findByRole('button', { name: /Choose image or PDF/i });
-
-    const capCalls = authFetch.mock.calls.filter(([url]) => url === '/api/document-captures/capabilities');
-    expect(capCalls).toHaveLength(1);
-    const warmupCalls = authFetch.mock.calls.filter(([url]) => url === '/api/document-captures/capabilities?warmup=1');
-    expect(warmupCalls).toHaveLength(1);
+    const oversized = new File([new Uint8Array(10)], 'huge.pdf', { type: 'application/pdf' });
+    Object.defineProperty(oversized, 'size', { value: 9 * 1024 * 1024 });
+    await expect(adapter.uploadFile('sess_1', oversized)).rejects.toThrow(/8 MB|limit/i);
+    expect(assistantFetchMock).not.toHaveBeenCalled();
   });
 
-  it('accepts masked assistant fields, sets public captureId on AssistantAdapter, and shows attached chip', async () => {
+  it('uploads via capture API, polls if extracting, and returns ChatSessionFileRef with empty downloadUrl and field count', async () => {
+    const adapter = new AssistantAdapter();
+    adapter.setCaptureCapabilities(assistantCaps);
+
     const ready = makeAssistantCapture();
-    const accepted = makeAssistantCapture({
-      status: 'accepted',
-      acceptedFields: ready.fields,
-      acceptedAt: '2026-05-01T10:01:00Z',
-    });
+    assistantFetchMock.mockResolvedValueOnce(jsonResponse(ready));
 
-    authFetch.mockImplementation(async (url: string) => {
-      if (url === '/api/document-captures/capabilities') return jsonResponse(assistantCaps);
-      if (url === '/api/document-captures') return jsonResponse(ready);
-      if (url === '/api/document-captures/cap_asst001/accept') return jsonResponse(accepted);
-      return jsonResponse({});
-    });
+    const file = new File(['png-bytes'], 'receipt.png', { type: 'image/png' });
+    const ref = await adapter.uploadFile('sess_1', file);
 
-    render(<AssistantSidepanel orgSlug="acme" />);
-
-    fireEvent.click(await screen.findByRole('button', { name: /Attach document/i }));
-    const file = new File(['png'], 'note.png', { type: 'image/png' });
-    fireEvent.change(screen.getByLabelText('Upload image or PDF'), { target: { files: [file] } });
-
-    expect(await screen.findByText('Check this')).toBeTruthy();
-    expect(screen.getByText('p.1')).toBeTruthy();
-
-    fireEvent.click(screen.getByRole('button', { name: /Accept & apply to draft/i }));
-
-    await screen.findByText(/Attached cap_asst001 \(2 masked fields\)/i);
-    expect(assistantAdapter.getPendingCaptureId()).toBe('cap_asst001');
+    expect(assistantFetchMock).toHaveBeenCalledWith(
+      '/api/document-captures',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(ref.id).toBe('cap_asst001');
+    expect(ref.fileName).toBe('receipt.png · 2 fields');
+    expect(ref.status).toBe('processed');
+    expect(ref.downloadUrl).toBe('');
   });
 
-  it('allows explicit reuse of an accepted assistant attachment after detaching it', async () => {
-    const ready = makeAssistantCapture();
-    const accepted = makeAssistantCapture({
-      status: 'accepted',
-      acceptedFields: ready.fields,
-      acceptedAt: '2026-05-01T10:01:00Z',
+  it('passes attachedFileIds to run-stream as captureId for one file and attachedFileIds for multiple', async () => {
+    const adapter = new AssistantAdapter();
+    const emptyStream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.close();
+      },
+    });
+    assistantFetchStreamMock.mockResolvedValue(emptyStream);
+
+    await adapter.sendMessage({
+      sessionId: 'sess_1',
+      message: 'What is this?',
+      attachedFileIds: ['cap_asst001'],
     });
 
-    authFetch.mockImplementation(async (url: string) => {
-      if (url === '/api/document-captures/capabilities') return jsonResponse(assistantCaps);
-      if (url === '/api/document-captures') return jsonResponse(ready);
-      if (url === '/api/document-captures/cap_asst001/accept') return jsonResponse(accepted);
-      return jsonResponse({});
+    const firstCallInit = assistantFetchStreamMock.mock.calls[0][1] as RequestInit;
+    const firstBody = JSON.parse(String(firstCallInit.body));
+    expect(firstBody.captureId).toBe('cap_asst001');
+    expect(firstBody.attachedFileIds).toBeUndefined();
+
+    await adapter.sendMessage({
+      sessionId: 'sess_1',
+      message: 'Two files',
+      attachedFileIds: ['cap_asst001', 'cap_asst002'],
     });
 
-    render(<AssistantSidepanel orgSlug="acme" />);
-
-    fireEvent.click(await screen.findByRole('button', { name: /Attach document/i }));
-    fireEvent.change(screen.getByLabelText('Upload image or PDF'), {
-      target: { files: [new File(['png'], 'note.png', { type: 'image/png' })] },
-    });
-    fireEvent.click(await screen.findByRole('button', { name: /Accept & apply to draft/i }));
-    await screen.findByText(/Attached cap_asst001/i);
-
-    fireEvent.click(screen.getByRole('button', { name: /Remove attachment/i }));
-    expect(assistantAdapter.getPendingCaptureId()).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: /Reuse cap_asst001/i }));
-    expect(assistantAdapter.getPendingCaptureId()).toBe('cap_asst001');
-    expect(screen.getByText(/Attached cap_asst001/i)).toBeTruthy();
+    const secondCallInit = assistantFetchStreamMock.mock.calls[1][1] as RequestInit;
+    const secondBody = JSON.parse(String(secondCallInit.body));
+    expect(secondBody.attachedFileIds).toEqual(['cap_asst001', 'cap_asst002']);
+    expect(secondBody.captureId).toBeUndefined();
   });
 
-  it('clears pending captureId when switching workspace orgSlug', async () => {
-    const ready = makeAssistantCapture();
-    const accepted = makeAssistantCapture({
-      status: 'accepted',
-      acceptedFields: ready.fields,
-      acceptedAt: '2026-05-01T10:01:00Z',
-    });
+  it('rejects capture on deleteSessionFile to wipe bytes and fields', async () => {
+    const adapter = new AssistantAdapter();
+    assistantFetchMock.mockResolvedValueOnce(jsonResponse({ id: 'cap_asst001', status: 'rejected' }));
 
-    authFetch.mockImplementation(async (url: string) => {
-      if (url === '/api/document-captures/capabilities') return jsonResponse(assistantCaps);
-      if (url === '/api/document-captures') return jsonResponse(ready);
-      if (url === '/api/document-captures/cap_asst001/accept') return jsonResponse(accepted);
-      return jsonResponse({});
-    });
+    await adapter.deleteSessionFile('sess_1', 'cap_asst001');
 
-    const { rerender } = render(<AssistantSidepanel orgSlug="org-a" />);
+    expect(assistantFetchMock).toHaveBeenCalledWith(
+      '/api/document-captures/cap_asst001/reject',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
 
-    fireEvent.click(await screen.findByRole('button', { name: /Attach document/i }));
-    fireEvent.change(screen.getByLabelText('Upload image or PDF'), {
-      target: { files: [new File(['png'], 'note.png', { type: 'image/png' })] },
-    });
-    fireEvent.click(await screen.findByRole('button', { name: /Accept & apply to draft/i }));
-    await screen.findByText(/Attached cap_asst001/i);
-    expect(assistantAdapter.getPendingCaptureId()).toBe('cap_asst001');
+  it('throws a user-facing error when extraction ends in failed status', async () => {
+    const adapter = new AssistantAdapter();
+    adapter.setCaptureCapabilities(assistantCaps);
 
-    rerender(<AssistantSidepanel orgSlug="org-b" />);
-    expect(assistantAdapter.getPendingCaptureId()).toBeNull();
-    expect(screen.queryByText(/Attached cap_asst001/i)).toBeNull();
+    assistantFetchMock.mockResolvedValueOnce(
+      jsonResponse(makeAssistantCapture({ status: 'failed', errorCode: 'DOCUMENT_UNREADABLE' })),
+    );
+
+    const file = new File(['bad-bytes'], 'blurry.png', { type: 'image/png' });
+    await expect(adapter.uploadFile('sess_1', file)).rejects.toThrow(/read|unreadable|clearer/i);
+  });
+
+  it('rejects stuck extracting capture and throws timeout error after polling exhausts', async () => {
+    const { uploadAndWaitForCapture } = await import('../src/components/document-capture/captureClient');
+    const stuck = makeAssistantCapture({ id: 'cap_stuck01', status: 'extracting' });
+    assistantFetchMock
+      .mockResolvedValueOnce(jsonResponse(stuck))
+      .mockResolvedValueOnce(jsonResponse(stuck))
+      .mockResolvedValueOnce(jsonResponse({ id: 'cap_stuck01', status: 'rejected' }));
+
+    const file = new File(['png-bytes'], 'slow.png', { type: 'image/png' });
+    await expect(
+      uploadAndWaitForCapture(assistantFetchMock, 'assistant-attachment', file, assistantCaps, {
+        maxPollAttempts: 1,
+        pollDelayMs: 1,
+      }),
+    ).rejects.toThrow(/timed out|timeout|too long/i);
+
+    expect(assistantFetchMock).toHaveBeenCalledWith(
+      '/api/document-captures/cap_stuck01/reject',
+      expect.objectContaining({ method: 'POST' }),
+    );
   });
 });

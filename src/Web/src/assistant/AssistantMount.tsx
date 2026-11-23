@@ -4,6 +4,7 @@ import { ChatProvider, ChatSidepanelLayout } from '@anter/ai-chat-sdk';
 import '@anter/ai-chat-sdk/styles-no-base.css';
 import './assistant-chat.css';
 import { useAuth } from '../auth/AuthContext';
+import type { DocumentCaptureCapabilities } from '../components/document-capture/fields';
 import { useTheme } from '../themes/ThemeContext';
 import { assistantAdapter } from './AssistantAdapter';
 import { useAssistant } from './AssistantProvider';
@@ -56,11 +57,12 @@ export function AssistantMount({
   companySlug,
   companyId,
 }: AssistantMountProps) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, authFetch } = useAuth();
   const { resolvedScheme } = useTheme();
   const { isOpen, close, setCompactHost, setPageContext } = useAssistant();
   const location = useLocation();
   const { orgSlug } = useParams<{ orgSlug: string }>();
+  const [captureCapabilities, setCaptureCapabilities] = useState<DocumentCaptureCapabilities | null>(null);
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window === 'undefined' ? 1440 : window.innerWidth,
   );
@@ -98,11 +100,52 @@ export function AssistantMount({
     setCompactHost(isOpen && panelLayout.compactHost);
   }, [isOpen, panelLayout.compactHost, setCompactHost]);
 
+  const orgKey = organizationId || companySlug || orgSlug || 'accountgo';
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setCaptureCapabilities(null);
+      assistantAdapter.setCaptureCapabilities(null);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch('/api/document-captures/capabilities');
+        if (cancelled) return;
+        if (!res.ok) {
+          setCaptureCapabilities(null);
+          assistantAdapter.setCaptureCapabilities(null);
+          return;
+        }
+        const data: DocumentCaptureCapabilities = await res.json();
+        if (!cancelled) {
+          setCaptureCapabilities(data);
+          assistantAdapter.setCaptureCapabilities(data);
+        }
+      } catch {
+        if (!cancelled) {
+          setCaptureCapabilities(null);
+          assistantAdapter.setCaptureCapabilities(null);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch, isAuthenticated, orgKey]);
+
   if (!isAuthenticated) {
     return <>{children}</>;
   }
 
-  const orgKey = organizationId || companySlug || orgSlug || 'accountgo';
+  const canUploadDocument = Boolean(
+    captureCapabilities?.enabled &&
+      captureCapabilities.providerAvailable &&
+      captureCapabilities.kinds.includes('assistant-attachment'),
+  );
 
   return (
     <ChatProvider
@@ -115,7 +158,7 @@ export function AssistantMount({
         enableModelSelector: false,
         enableSlashCommands: false,
         enableCommandPalette: false,
-        enableFileUpload: false,
+        enableFileUpload: canUploadDocument,
         enableSlashFocusShortcut: false,
         enableArtifacts: true,
         enableTools: false,

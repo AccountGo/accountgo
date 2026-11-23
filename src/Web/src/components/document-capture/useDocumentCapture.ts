@@ -7,26 +7,23 @@ import { announceEntitlementDenial, isEntitlementProblem } from '../../lib/entit
 import {
   ALLOWED_CAPTURE_MIME_TYPES,
   CaptureErrorPresentation,
-  CURRENT_SCHEMA_VERSION,
   describeCaptureError,
   DocumentCaptureCapabilities,
   DocumentCaptureKind,
   DocumentCaptureView,
   MAX_UPLOAD_BYTES,
 } from './fields';
+import {
+  generateCaptureIdempotencyKey,
+  getCaptureStatus,
+  postCaptureUpload,
+} from './captureClient';
 
 export interface UseDocumentCaptureOptions {
   orgSlug: string;
   scopeKey?: string;
   /** Optional pre-fetched capabilities from the host page to avoid duplicate /capabilities fetches. */
   capabilities?: DocumentCaptureCapabilities | null;
-}
-
-function generateIdempotencyKey(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return `cap_${crypto.randomUUID().replace(/-/g, '')}`;
-  }
-  return `cap_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 14)}`;
 }
 
 export function useDocumentCapture({
@@ -165,7 +162,7 @@ export function useDocumentCapture({
       }
 
       setSelectedFile(file);
-      idempotencyKeyRef.current = generateIdempotencyKey();
+      idempotencyKeyRef.current = generateCaptureIdempotencyKey();
       if (file.type.startsWith('image/')) {
         const url = URL.createObjectURL(file);
         previewUrlRef.current = url;
@@ -184,7 +181,7 @@ export function useDocumentCapture({
         return null;
       }
       if (!idempotencyKeyRef.current) {
-        idempotencyKeyRef.current = generateIdempotencyKey();
+        idempotencyKeyRef.current = generateCaptureIdempotencyKey();
       }
       const key = idempotencyKeyRef.current;
       const scope = activeScopeRef.current;
@@ -194,16 +191,9 @@ export function useDocumentCapture({
       setError(null);
 
       try {
-        const form = new FormData();
-        form.append('Kind', kind);
-        form.append('SchemaVersion', String(capabilities?.schemaVersion ?? CURRENT_SCHEMA_VERSION));
-        form.append('File', targetFile);
-        if (options?.force) form.append('Force', 'true');
-
-        const res = await authFetch('/api/document-captures', {
-          method: 'POST',
-          headers: { 'Idempotency-Key': key },
-          body: form,
+        const res = await postCaptureUpload(authFetch, kind, targetFile, capabilities, {
+          idempotencyKey: key,
+          force: options?.force,
         });
 
         if (!isCurrent(scope, gen)) return null;
@@ -258,7 +248,7 @@ export function useDocumentCapture({
       setError(null);
 
       try {
-        const res = await authFetch(`/api/document-captures/${encodeURIComponent(targetId)}`);
+        const res = await getCaptureStatus(authFetch, targetId);
         if (!isCurrent(scope, gen)) return null;
         if (!res.ok) {
           await announceEntitlementDenial(res);

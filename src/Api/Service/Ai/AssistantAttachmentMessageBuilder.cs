@@ -80,41 +80,84 @@ public static partial class AssistantAttachmentMessageBuilder
         string userMessage,
         CancellationToken cancellationToken,
         IAssistantPseudonymService? pseudonymService = null,
-        string? sessionId = null)
+        string? sessionId = null,
+        DocumentCaptureService? captureService = null)
     {
         var capture = await DocumentCaptureService.LiveCompanyCaptures(db, companyId)
             .SingleOrDefaultAsync(c => c.Id == captureId, cancellationToken)
             .ConfigureAwait(false);
 
-        if (capture is null || !string.Equals(capture.CreatedBy, userId, StringComparison.Ordinal))
+        if (capture is null
+            || !string.Equals(capture.CreatedBy, userId, StringComparison.Ordinal)
+            || !string.Equals(capture.Kind, AttachmentKind, StringComparison.Ordinal))
         {
             return AssistantAttachmentBuildResult.Fail(
                 StatusCodes.Status404NotFound,
                 new { message = PublicIdErrorCodes.NotFoundMessage, code = PublicIdErrorCodes.UnknownId });
         }
 
-        if (!string.Equals(capture.Kind, AttachmentKind, StringComparison.Ordinal))
+        string acceptedFieldsJson;
+        if (string.Equals(capture.Status, "ready", StringComparison.Ordinal))
         {
-            return AssistantAttachmentBuildResult.Fail(
-                StatusCodes.Status400BadRequest,
-                new
-                {
-                    code = "DOCUMENT_ATTACHMENT_INVALID",
-                    detail = "Only accepted assistant attachments may be attached to chat messages.",
-                });
-        }
+            if (captureService is null || string.IsNullOrWhiteSpace(capture.FieldsJson))
+            {
+                return AssistantAttachmentBuildResult.Fail(
+                    StatusCodes.Status409Conflict,
+                    new { code = "DOCUMENT_STATE_CONFLICT", detail = "Captured attachment has no fields to accept." });
+            }
 
-        if (!string.Equals(capture.Status, "accepted", StringComparison.Ordinal)
-            || string.IsNullOrWhiteSpace(capture.AcceptedFieldsJson))
+            try
+            {
+                var accepted = await captureService
+                    .AcceptAsync(captureId, capture.FieldsJson, cancellationToken, purgeBytes: true)
+                    .ConfigureAwait(false);
+                acceptedFieldsJson = accepted.AcceptedFields?.ToString(Newtonsoft.Json.Formatting.None)
+                    ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(acceptedFieldsJson))
+                {
+                    return AssistantAttachmentBuildResult.Fail(
+                        StatusCodes.Status409Conflict,
+                        new { code = "DOCUMENT_STATE_CONFLICT", detail = "The accepted attachment fields could not be read." });
+                }
+            }
+            catch (DocumentCaptureServiceException ex)
+            {
+                return AssistantAttachmentBuildResult.Fail(
+                    ex.StatusCode,
+                    new
+                    {
+                        code = ex.ErrorCode,
+                        detail = "The captured attachment could not be accepted.",
+                    });
+            }
+            catch (JsonException)
+            {
+                return AssistantAttachmentBuildResult.Fail(
+                    StatusCodes.Status409Conflict,
+                    new { code = "DOCUMENT_STATE_CONFLICT", detail = "Captured attachment fields could not be read." });
+            }
+        }
+        else if (string.Equals(capture.Status, "accepted", StringComparison.Ordinal)
+            && !string.IsNullOrWhiteSpace(capture.AcceptedFieldsJson))
+        {
+            acceptedFieldsJson = capture.AcceptedFieldsJson;
+        }
+        else
         {
             return AssistantAttachmentBuildResult.Fail(
                 StatusCodes.Status409Conflict,
                 new
                 {
                     code = "DOCUMENT_STATE_CONFLICT",
-                    detail = "Accept the captured attachment fields before sending them to the assistant.",
+                    detail = "The captured attachment is not ready to be sent to the assistant.",
                 });
         }
+
+        var companyNames = await db.Companies.AsNoTracking()
+            .Where(c => c.Id == companyId)
+            .Select(c => new { c.Name, c.ShortName })
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
 
         string block;
         try
@@ -128,9 +171,12 @@ public static partial class AssistantAttachmentMessageBuilder
 
             block = await BuildDelimitedUntrustedBlockAsync(
                 capture.PublicId,
-                capture.AcceptedFieldsJson,
+                acceptedFieldsJson,
                 partyPseudonymizer,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken,
+                companyNames?.Name,
+                companyNames?.ShortName,
+                capture.RawText).ConfigureAwait(false);
         }
         catch (JsonException)
         {
@@ -158,8 +204,13 @@ public static partial class AssistantAttachmentMessageBuilder
         return AssistantAttachmentBuildResult.Ok(combined);
     }
 
-    internal static string BuildDelimitedUntrustedBlock(string capturePublicId, string acceptedFieldsJson) =>
-        BuildDelimitedUntrustedBlockAsync(capturePublicId, acceptedFieldsJson, null, CancellationToken.None)
+    internal static string BuildDelimitedUntrustedBlock(
+        string capturePublicId,
+        string acceptedFieldsJson,
+        string? companyName = null,
+        string? companyShortName = null,
+        string? maskedRawText = null) =>
+        BuildDelimitedUntrustedBlockAsync(capturePublicId, acceptedFieldsJson, null, CancellationToken.None, companyName, companyShortName, maskedRawText)
             .GetAwaiter()
             .GetResult();
 
@@ -167,15 +218,21 @@ public static partial class AssistantAttachmentMessageBuilder
         string capturePublicId,
         string acceptedFieldsJson,
         Func<string, string, CancellationToken, Task<string>>? partyPseudonymizer,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? companyName = null,
+        string? companyShortName = null,
+        string? maskedRawText = null)
     {
         using var parsed = JsonDocument.Parse(acceptedFieldsJson);
         var remaskedJson = DocumentCaptureMasking.MaskAssistantFields(parsed.RootElement);
         using var maskedDoc = JsonDocument.Parse(remaskedJson);
 
+        var looksLike = ComputeLooksLikeHint(maskedDoc.RootElement, companyName, companyShortName, maskedRawText);
+
         var sb = new StringBuilder();
         sb.AppendLine(BeginDelimiter);
         sb.Append("Attachment ID: ").AppendLine(SanitizeFieldText(capturePublicId, MaxLabelLength));
+        sb.Append("looksLike: ").AppendLine(looksLike);
 
         var wroteField = false;
         if (maskedDoc.RootElement.ValueKind == JsonValueKind.Object
@@ -225,6 +282,151 @@ public static partial class AssistantAttachmentMessageBuilder
         sb.Append(EndDelimiter);
         return sb.ToString();
     }
+
+    public const string LooksLikeBankDetails = "bank-details";
+    public const string LooksLikeSalesInvoice = "sales-invoice";
+    public const string LooksLikeVendorBillOrReceipt = "vendor-bill-or-receipt";
+
+
+    /// <summary>
+    /// Deterministic document-type hint (no AI): bank identifier labels without invoice/total labels -> bank-details;
+    /// issuer/vendor-like value (or unlabelled top-of-document header line) matching workspace company legal or trading name -> sales-invoice;
+    /// otherwise -> vendor-bill-or-receipt.
+    /// </summary>
+    internal static string ComputeLooksLikeHint(
+        JsonElement maskedRoot,
+        string? companyName,
+        string? companyShortName,
+        string? maskedRawText = null)
+    {
+        var normalizedCompany = NormalizeCompanyName(companyName);
+        var normalizedShort = NormalizeCompanyName(companyShortName);
+        var hasBankLabel = false;
+        var hasInvoiceOrTotalLabel = false;
+        var matchesWorkspaceIssuer = false;
+
+        if (maskedRoot.ValueKind == JsonValueKind.Object
+            && maskedRoot.TryGetProperty("fields", out var fields)
+            && fields.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in fields.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object)
+                    continue;
+                var label = item.TryGetProperty("label", out var l) && l.ValueKind == JsonValueKind.String
+                    ? l.GetString()
+                    : null;
+                var value = item.TryGetProperty("value", out var v) && v.ValueKind == JsonValueKind.String
+                    ? v.GetString()
+                    : null;
+                if (string.IsNullOrWhiteSpace(label))
+                    continue;
+
+                var trimmedLabel = label.Trim();
+                var lowerLabel = trimmedLabel.ToLowerInvariant();
+                if (BankIdentifierLabelRegex().IsMatch(trimmedLabel))
+                    hasBankLabel = true;
+                if (InvoiceOrTotalLabelRegex().IsMatch(trimmedLabel))
+                    hasInvoiceOrTotalLabel = true;
+
+                if (!matchesWorkspaceIssuer
+                    && !string.IsNullOrWhiteSpace(value)
+                    && IsIssuerLikeLabel(lowerLabel))
+                {
+                    if (MatchesWorkspaceName(NormalizeCompanyName(value), normalizedCompany, normalizedShort))
+                        matchesWorkspaceIssuer = true;
+                }
+            }
+        }
+
+        if (hasBankLabel && !hasInvoiceOrTotalLabel)
+            return LooksLikeBankDetails;
+
+        if (!matchesWorkspaceIssuer && !string.IsNullOrWhiteSpace(maskedRawText))
+        {
+            matchesWorkspaceIssuer = WorkspaceAppearsInDocumentHeader(maskedRawText, normalizedCompany, normalizedShort);
+        }
+
+        return matchesWorkspaceIssuer ? LooksLikeSalesInvoice : LooksLikeVendorBillOrReceipt;
+    }
+
+    private static bool MatchesWorkspaceName(string normalizedCandidate, string normalizedCompany, string normalizedShort)
+    {
+        if (string.IsNullOrEmpty(normalizedCandidate))
+            return false;
+        if (!string.IsNullOrEmpty(normalizedCompany) && string.Equals(normalizedCandidate, normalizedCompany, StringComparison.Ordinal))
+            return true;
+        if (!string.IsNullOrEmpty(normalizedShort) && string.Equals(normalizedCandidate, normalizedShort, StringComparison.Ordinal))
+            return true;
+        return false;
+    }
+
+    private static bool WorkspaceAppearsInDocumentHeader(string maskedRawText, string normalizedCompany, string normalizedShort)
+    {
+        if (string.IsNullOrEmpty(normalizedCompany) && string.IsNullOrEmpty(normalizedShort))
+            return false;
+
+        var checkedLines = 0;
+        foreach (var rawLine in maskedRawText.Split('\n'))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0)
+                continue;
+
+            // Stop before buyer/recipient sections so a workspace name under "Bill To" is not treated as the issuer.
+            if (RecipientHeaderRegex().IsMatch(line))
+                break;
+
+            var normalizedLine = NormalizeCompanyName(line);
+            if (MatchesWorkspaceHeaderLine(normalizedLine, normalizedCompany)
+                || MatchesWorkspaceHeaderLine(normalizedLine, normalizedShort))
+            {
+                return true;
+            }
+
+            if (++checkedLines >= 5)
+                break;
+        }
+
+        return false;
+    }
+
+    private static bool MatchesWorkspaceHeaderLine(string normalizedLine, string normalizedTarget)
+    {
+        if (string.IsNullOrEmpty(normalizedLine) || string.IsNullOrEmpty(normalizedTarget))
+            return false;
+        if (string.Equals(normalizedLine, normalizedTarget, StringComparison.Ordinal))
+            return true;
+        return normalizedTarget.Length >= 3
+            && normalizedLine.StartsWith(normalizedTarget + " ", StringComparison.Ordinal);
+    }
+
+    [GeneratedRegex(@"\b(?:iban|swift|bic|routing|aba|acct\.?|account\s*(?:number|no\.?|#))\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking)]
+    private static partial Regex BankIdentifierLabelRegex();
+
+    [GeneratedRegex(@"\b(?:invoice(?:\s*(?:no\.?|number|#))?|total|amount\s+due|subtotal|tax|receipt)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking)]
+    private static partial Regex InvoiceOrTotalLabelRegex();
+
+    [GeneratedRegex(@"^(?:bill\s+to|billed\s+to|sold\s+to|ship\s+to|invoice\s+to|customer|client)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking)]
+    private static partial Regex RecipientHeaderRegex();
+
+    private static bool IsIssuerLikeLabel(string lowerLabel) =>
+        lowerLabel.Contains("vendor", StringComparison.Ordinal)
+        || lowerLabel.Contains("supplier", StringComparison.Ordinal)
+        || lowerLabel.Contains("merchant", StringComparison.Ordinal)
+        || lowerLabel.Contains("issuer", StringComparison.Ordinal)
+        || lowerLabel.Contains("seller", StringComparison.Ordinal)
+        || lowerLabel.Contains("billed by", StringComparison.Ordinal)
+        || lowerLabel == "from"
+        || lowerLabel == "company"
+        || lowerLabel == "company name";
+
+    // Same normalisation as vendor/customer matching (rules M-01) so both features agree on what a company name is.
+    private static string NormalizeCompanyName(string? raw) =>
+        Api.DocumentCaptures.Matching.PartyNameNormalizer.Normalize(raw);
 
     internal static string? TryClassifyPartyLabel(string label)
     {
