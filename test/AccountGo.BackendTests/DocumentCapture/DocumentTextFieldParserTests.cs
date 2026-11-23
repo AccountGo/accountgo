@@ -139,11 +139,11 @@ public sealed class DocumentTextFieldParserTests
     {
         var isoRoot = ParseAndValidate("purchase-invoice", [Line("Acme Ltd"), Line("Total: $50.00 CAD")], out var isoWarnings);
         Assert.Equal("CAD", isoRoot.GetProperty("currency").GetString());
-        Assert.DoesNotContain("CURRENCY_AMBIGUOUS", isoWarnings);
+        Assert.DoesNotContain("AMBIGUOUS_CURRENCY", isoWarnings);
 
         var bareDollar = ParseAndValidate("purchase-invoice", [Line("Acme Ltd"), Line("Total: $50.00")], out var dollarWarnings);
         Assert.False(bareDollar.TryGetProperty("currency", out _));
-        Assert.Contains("CURRENCY_AMBIGUOUS", dollarWarnings);
+        Assert.Contains("AMBIGUOUS_CURRENCY", dollarWarnings);
     }
 
     [Fact]
@@ -992,7 +992,7 @@ public sealed class DocumentTextFieldParserTests
     [Fact]
     public void WarningCodes_E4_ListsEveryParserWarningCode()
     {
-        Assert.Contains("CURRENCY_AMBIGUOUS", DocumentTextFieldParser.WarningCodes);
+        Assert.Contains("AMBIGUOUS_CURRENCY", DocumentTextFieldParser.WarningCodes);
         Assert.Contains("TOTAL_UNLABELED", DocumentTextFieldParser.WarningCodes);
         Assert.Contains("TOTALS_INCONSISTENT", DocumentTextFieldParser.WarningCodes);
         Assert.Contains("PARSE_TRUNCATED", DocumentTextFieldParser.WarningCodes);

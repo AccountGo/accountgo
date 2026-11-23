@@ -23,7 +23,7 @@ public static class DocumentTextFieldParser
     private const RegexOptions Linear = RegexOptions.CultureInvariant | RegexOptions.NonBacktracking;
     private const RegexOptions LinearI = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking;
 
-    public const string WarningCurrencyAmbiguous = "CURRENCY_AMBIGUOUS";
+    public const string WarningAmbiguousCurrency = "AMBIGUOUS_CURRENCY";
     public const string WarningTotalUnlabeled = "TOTAL_UNLABELED";
     public const string WarningTotalsInconsistent = "TOTALS_INCONSISTENT";
     public const string WarningParseTruncated = "PARSE_TRUNCATED";
@@ -33,7 +33,7 @@ public static class DocumentTextFieldParser
     /// </summary>
     public static readonly IReadOnlyList<string> WarningCodes =
     [
-        WarningCurrencyAmbiguous,
+        WarningAmbiguousCurrency,
         WarningTotalUnlabeled,
         WarningTotalsInconsistent,
         WarningParseTruncated,
@@ -315,7 +315,7 @@ public static class DocumentTextFieldParser
             if (currency is not null)
                 fields["currency"] = currency;
             else if (ambiguousDollar)
-                warnings.Add(WarningCurrencyAmbiguous);
+                warnings.Add(WarningAmbiguousCurrency);
         }
 
         // Totals
