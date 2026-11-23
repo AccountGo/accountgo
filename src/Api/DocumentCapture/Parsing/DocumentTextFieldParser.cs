@@ -23,6 +23,22 @@ public static class DocumentTextFieldParser
     private const RegexOptions Linear = RegexOptions.CultureInvariant | RegexOptions.NonBacktracking;
     private const RegexOptions LinearI = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking;
 
+    public const string WarningCurrencyAmbiguous = "CURRENCY_AMBIGUOUS";
+    public const string WarningTotalUnlabeled = "TOTAL_UNLABELED";
+    public const string WarningTotalsInconsistent = "TOTALS_INCONSISTENT";
+    public const string WarningParseTruncated = "PARSE_TRUNCATED";
+
+    /// <summary>
+    /// Every warning code this parser can emit. Kept in sync with <c>DocumentCaptureWarningCodes</c> and UI review text.
+    /// </summary>
+    public static readonly IReadOnlyList<string> WarningCodes =
+    [
+        WarningCurrencyAmbiguous,
+        WarningTotalUnlabeled,
+        WarningTotalsInconsistent,
+        WarningParseTruncated,
+    ];
+
     private static readonly Regex TotalKeywordRegex = new(
         @"(?:grand\s*total|total\s*amount|amount\s*due|balance\s*due|total\s*\(?rm\)?|\btotal\b|ยอดรวมทั้งสิ้น|ยอดสุทธิ|รวมทั้งสิ้น|ทั้งสิ้น|จำนวนเงินรวม)",
         LinearI);
@@ -92,6 +108,16 @@ public static class DocumentTextFieldParser
     private static readonly Regex AddressPatternRegex = new(
         @"\b\d{1,5}\s+[A-Za-z0-9.\s]{1,30}\b(?:road|rd\.?|street|st\.?|avenue|ave\.?|blvd\.?|boulevard|lane|ln\.?|drive|dr\.?|way|unit|suite|ste\.?|floor|fl\.?|jalan|jln\.?|soi)\b|ถนน|ซอย",
         LinearI);
+
+    // E2: address lines starting with Unit/Suite/Floor/Tower etc. followed by a number.
+    private static readonly Regex AddressUnitPrefixRegex = new(
+        @"^(?:unit|suite|ste\.?|floor|fl\.?|level|lvl\.?|room|rm\.?|bldg\.?|building|tower)\s*#?\s*\d+",
+        LinearI);
+
+    // E3: strip leading row-number column prefix (e.g., "1 Consulting services", "2. Paper cups").
+    private static readonly Regex LeadingRowIndexRegex = new(
+        @"^\d{1,3}[.)]?\s+",
+        Linear);
 
     private static readonly Regex LegalSuffixRegex = new(
         @"\b(?:ltd\.?|limited|llc|l\.l\.c\.?|inc\.?|incorporated|corp\.?|corporation|llp|pte\.?\s*ltd\.?|pte\.?|sdn\.?\s*bhd\.?|gmbh|co\.?,?\s*ltd\.?|co\.)\b|บริษัท.*จำกัด",
@@ -183,7 +209,7 @@ public static class DocumentTextFieldParser
         }
 
         if (truncated)
-            warnings.Add("PARSE_TRUNCATED");
+            warnings.Add(WarningParseTruncated);
 
         var json = JsonSerializer.Serialize(payload);
         using var doc = JsonDocument.Parse(json);
@@ -277,17 +303,22 @@ public static class DocumentTextFieldParser
             if (currency is not null)
                 fields["currency"] = currency;
             else if (ambiguousDollar)
-                warnings.Add("CURRENCY_AMBIGUOUS");
+                warnings.Add(WarningCurrencyAmbiguous);
         }
 
         // Totals
         decimal? parsedGrandTotal = null;
+        decimal? parsedSubtotal = null;
+        decimal? parsedTaxTotal = null;
+        var parsedIsInclusive = false;
         if (!isTimedOut())
         {
             var (grandTotal, subtotal, taxTotal, isInclusive, usedUnlabeledFallback) = ExtractTotals(texts);
             parsedGrandTotal = grandTotal;
+            parsedSubtotal = subtotal;
+            parsedTaxTotal = taxTotal;
             if (usedUnlabeledFallback)
-                warnings.Add("TOTAL_UNLABELED");
+                warnings.Add(WarningTotalUnlabeled);
 
             if (grandTotal.HasValue || subtotal.HasValue || taxTotal.HasValue)
             {
@@ -305,6 +336,8 @@ public static class DocumentTextFieldParser
                 else if (inclusiveShapeMatches)
                     isInclusive = true;
 
+                parsedIsInclusive = isInclusive;
+
                 var totals = new Dictionary<string, object?>(StringComparer.Ordinal);
                 if (subtotal.HasValue) totals["subtotal"] = DateAndAmountParser.FormatDecimal2(subtotal.Value);
                 if (taxTotal.HasValue) totals["taxTotal"] = DateAndAmountParser.FormatDecimal2(taxTotal.Value);
@@ -316,13 +349,34 @@ public static class DocumentTextFieldParser
                     && !taxOnTopMatches
                     && !inclusiveShapeMatches)
                 {
-                    warnings.Add("TOTALS_INCONSISTENT");
+                    warnings.Add(WarningTotalsInconsistent);
                 }
             }
         }
 
-        // Lines (emit [] unless clear table pattern exists)
-        fields["lines"] = isTimedOut() ? new List<Dictionary<string, object?>>() : ExtractTableLines(texts, isTimedOut);
+        // E1: emit lines only when their sum reconciles to subtotal (or grandTotal with inclusive/no tax); never emit a partial table.
+        if (isTimedOut())
+        {
+            fields["lines"] = new List<Dictionary<string, object?>>();
+        }
+        else
+        {
+            var (extractedLines, lineSum) = ExtractTableLines(texts, isTimedOut);
+            var linesReconciled = false;
+            if (extractedLines.Count > 0)
+            {
+                if (parsedSubtotal.HasValue)
+                {
+                    linesReconciled = Math.Abs(lineSum - parsedSubtotal.Value) <= 0.01m;
+                }
+                else if (parsedGrandTotal.HasValue && (parsedIsInclusive || !parsedTaxTotal.HasValue || parsedTaxTotal.Value == 0m))
+                {
+                    linesReconciled = Math.Abs(lineSum - parsedGrandTotal.Value) <= 0.01m;
+                }
+            }
+
+            fields["lines"] = linesReconciled ? extractedLines : new List<Dictionary<string, object?>>();
+        }
 
         // Payment hints (bill kinds only)
         if (!isSales && !isTimedOut())
@@ -478,6 +532,7 @@ public static class DocumentTextFieldParser
         var maxHeight = candidates.Max(c => c.Height);
         string? bestText = null;
         var bestScore = double.NegativeInfinity;
+        var foundEarliestCleanLettersOnly = false;
 
         for (var i = 0; i < candidates.Count; i++)
         {
@@ -488,20 +543,30 @@ public static class DocumentTextFieldParser
 
             var letters = CountLetters(text);
             var digits = CountDigits(text);
+            var isPenalized = VendorPenaltyRegex.IsMatch(text);
+            var isAddress = IsAddressLine(text);
+            var hasLegalSuffix = LegalSuffixRegex.IsMatch(text);
 
             double score = 10.0 - i * 1.2;
 
-            if (VendorPenaltyRegex.IsMatch(text))
+            if (isPenalized)
                 score -= 20.0;
 
             if (digits >= letters && digits > 0)
                 score -= 15.0;
 
-            if (AddressPatternRegex.IsMatch(text))
+            if (isAddress)
                 score -= 18.0;
 
-            if (LegalSuffixRegex.IsMatch(text))
-                score += 8.0;
+            if (hasLegalSuffix)
+                score += 16.0;
+
+            // E2: earliest clean, letters-only line in the top block beats later lines unless a later one has a legal suffix.
+            if (!foundEarliestCleanLettersOnly && !isPenalized && !isAddress && digits == 0)
+            {
+                foundEarliestCleanLettersOnly = true;
+                score += 7.0;
+            }
 
             if (maxHeight > 0.5f && Math.Abs(c.Height - maxHeight) <= 0.5f)
                 score += 6.0;
@@ -514,6 +579,22 @@ public static class DocumentTextFieldParser
         }
 
         return bestScore > 0.0 ? bestText : null;
+    }
+
+    // E2: catch standard street addresses, Unit/Suite/Floor/Tower prefix + number, and comma-separated multi-part lines with numbers.
+    private static bool IsAddressLine(string text)
+    {
+        if (AddressPatternRegex.IsMatch(text) || AddressUnitPrefixRegex.IsMatch(text))
+            return true;
+
+        if (text.Contains(',', StringComparison.Ordinal)
+            && DateAndAmountParser.ContainsDigit(text)
+            && !LegalSuffixRegex.IsMatch(text))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     // K12: anchored labels, skip Customer Service/ID, reject digit-heavy / phone-like candidates.
@@ -552,7 +633,7 @@ public static class DocumentTextFieldParser
         var digits = CountDigits(cand);
         if (digits >= letters)
             return false;
-        if (AddressPatternRegex.IsMatch(cand) || VendorPenaltyRegex.IsMatch(cand))
+        if (IsAddressLine(cand) || VendorPenaltyRegex.IsMatch(cand))
             return false;
         return true;
     }
@@ -596,9 +677,10 @@ public static class DocumentTextFieldParser
         return null;
     }
 
-    private static List<Dictionary<string, object?>> ExtractTableLines(List<string> lines, Func<bool> isTimedOut)
+    private static (List<Dictionary<string, object?>> Lines, decimal Sum) ExtractTableLines(List<string> lines, Func<bool> isTimedOut)
     {
         var result = new List<Dictionary<string, object?>>();
+        var sum = 0m;
         foreach (var line in lines)
         {
             if (result.Count >= DocumentCaptureFieldSchemas.MaxFinancialLines || isTimedOut())
@@ -615,6 +697,10 @@ public static class DocumentTextFieldParser
                 continue;
 
             var desc = m.Groups[1].Value.Trim();
+            // E3: strip leading row-number column prefix (e.g., "1 Consulting services") when >= 2 letters remain.
+            var strippedDesc = LeadingRowIndexRegex.Replace(desc, string.Empty).Trim();
+            if (CountLetters(strippedDesc) >= 2)
+                desc = strippedDesc;
             if (desc.Length == 0 || CountLetters(desc) < 2)
                 continue;
 
@@ -631,6 +717,7 @@ public static class DocumentTextFieldParser
             if (Math.Abs(Math.Round(qty * unit, 2, MidpointRounding.AwayFromZero) - lineTotal) > 0.01m)
                 continue;
 
+            sum += lineTotal;
             result.Add(new Dictionary<string, object?>(StringComparer.Ordinal)
             {
                 ["description"] = Truncate(desc, DocumentCaptureFieldSchemas.MaxLineDescriptionLength),
@@ -640,7 +727,7 @@ public static class DocumentTextFieldParser
             });
         }
 
-        return result;
+        return (result, sum);
     }
 
     // K2 + L1: strong paid cues only, negations never count, positive amount due always wins;

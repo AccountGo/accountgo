@@ -767,6 +767,129 @@ public sealed class DocumentTextFieldParserTests
         Assert.Equal("200.00", partialHints.GetProperty("amountPaid").GetString());
     }
 
+    // --- E1: emit lines only when sum reconciles to subtotal (or grandTotal when inclusive/no tax) ---
+
+    [Fact]
+    public void Parse_Lines_E1_OmitsSplicedOrPartialTablesAndEmitsCompleteReconciledTable()
+    {
+        // Spliced-row case (like skewed OCR producing one wrong row summing to 50.00 vs subtotal 100.00)
+        var spliced = ParseAndValidate("expense-receipt", [
+            Line("Blue Bean Coffee Supply"),
+            Line("Paper cups 2 $25.00 $50.00"),
+            Line("Subtotal: USD 100.00"),
+            Line("Total: USD 100.00"),
+        ], out _);
+        Assert.Empty(spliced.GetProperty("lines").EnumerateArray().ToList());
+
+        // Complete table reconciling to subtotal with tax on top
+        var complete = ParseAndValidate("purchase-invoice", [
+            Line("Blue Bean Coffee Supply"),
+            Line("Espresso beans 2 $25.00 $50.00"),
+            Line("Paper cups 1 $50.00 $50.00"),
+            Line("Subtotal: USD 100.00"),
+            Line("Tax: USD 10.00"),
+            Line("Total: USD 110.00"),
+        ], out _);
+        Assert.Equal(2, complete.GetProperty("lines").EnumerateArray().Count());
+
+        // Table with a missing row (rows sum to 100.00 vs subtotal 125.00)
+        var missingRow = ParseAndValidate("purchase-invoice", [
+            Line("Blue Bean Coffee Supply"),
+            Line("Espresso beans 2 $25.00 $50.00"),
+            Line("Paper cups 1 $50.00 $50.00"),
+            Line("Subtotal: USD 125.00"),
+            Line("Total: USD 125.00"),
+        ], out _);
+        Assert.Empty(missingRow.GetProperty("lines").EnumerateArray().ToList());
+
+        // No subtotal, non-inclusive tax present -> cannot reconcile against grandTotal -> empty
+        var noSubtotalWithTax = ParseAndValidate("purchase-invoice", [
+            Line("Blue Bean Coffee Supply"),
+            Line("Espresso beans 2 $25.00 $50.00"),
+            Line("Paper cups 1 $50.00 $50.00"),
+            Line("Tax: USD 10.00"),
+            Line("Total: USD 110.00"),
+        ], out _);
+        Assert.Empty(noSubtotalWithTax.GetProperty("lines").EnumerateArray().ToList());
+    }
+
+    // --- E2: vendor address detection (Unit/Tower/comma+digit) and earliest clean letters-only line ---
+
+    [Fact]
+    public void Parse_Vendor_E2_SkipsUnitAndCommaNumberAddressLinesAndPrefersEarliestCleanIssuer()
+    {
+        var lines = new[]
+        {
+            Line("Jane Example", y0: 0, y1: 14),
+            Line("INVOICE", y0: 16, y1: 30),
+            Line("Unit 1200 North Tower, Example Residences Sample Avenue Townsville", y0: 32, y1: 56),
+            Line("#7", y0: 58, y1: 72),
+            Line("45 Sample St. Ext. Some Area, Example City", y0: 74, y1: 88),
+            Line("Total: USD 500.00", y0: 100, y1: 114),
+        };
+
+        var root = ParseAndValidate("purchase-invoice", lines, out _);
+        Assert.Equal("Jane Example", root.GetProperty("vendorName").GetString());
+
+        // Earliest clean letters-only line beats later non-legal-suffix line even with larger height
+        var earliestClean = ParseAndValidate("purchase-invoice", [
+            Line("Jane Example", y0: 0, y1: 14),
+            Line("Sample Services Division", y0: 20, y1: 44),
+            Line("Total: USD 500.00", y0: 60, y1: 74),
+        ], out _);
+        Assert.Equal("Jane Example", earliestClean.GetProperty("vendorName").GetString());
+
+        // Later line with a legal suffix still beats an earlier plain line
+        var laterLegal = ParseAndValidate("purchase-invoice", [
+            Line("Billing Department", y0: 0, y1: 14),
+            Line("Northwind Consulting LLC", y0: 20, y1: 44),
+            Line("Total: USD 500.00", y0: 60, y1: 74),
+        ], out _);
+        Assert.Equal("Northwind Consulting LLC", laterLegal.GetProperty("vendorName").GetString());
+    }
+
+    // --- E3: strip leading row-number column from line item descriptions ---
+
+    [Fact]
+    public void Parse_Lines_E3_StripsLeadingRowIndexPrefixAndPreservesUnindexedDescriptions()
+    {
+        var indexed = ParseAndValidate("purchase-invoice", [
+            Line("Jane Example"),
+            Line("1 Consulting services 1 $500.00 $500.00"),
+            Line("2. Design review 2 $100.00 $200.00"),
+            Line("3) Support retainer 1 $300.00 $300.00"),
+            Line("Total: USD 1,000.00"),
+        ], out _);
+
+        var indexedLines = indexed.GetProperty("lines").EnumerateArray().ToList();
+        Assert.Equal(3, indexedLines.Count);
+        Assert.Equal("Consulting services", indexedLines[0].GetProperty("description").GetString());
+        Assert.Equal("Design review", indexedLines[1].GetProperty("description").GetString());
+        Assert.Equal("Support retainer", indexedLines[2].GetProperty("description").GetString());
+
+        var unindexed = ParseAndValidate("purchase-invoice", [
+            Line("Jane Example"),
+            Line("Consulting services 1 $500.00 $500.00"),
+            Line("Total: USD 500.00"),
+        ], out _);
+
+        var unindexedLines = unindexed.GetProperty("lines").EnumerateArray().ToList();
+        Assert.Single(unindexedLines);
+        Assert.Equal("Consulting services", unindexedLines[0].GetProperty("description").GetString());
+    }
+
+    // --- E4: DocumentTextFieldParser.WarningCodes exposes every parser warning code ---
+
+    [Fact]
+    public void WarningCodes_E4_ListsEveryParserWarningCode()
+    {
+        Assert.Contains("CURRENCY_AMBIGUOUS", DocumentTextFieldParser.WarningCodes);
+        Assert.Contains("TOTAL_UNLABELED", DocumentTextFieldParser.WarningCodes);
+        Assert.Contains("TOTALS_INCONSISTENT", DocumentTextFieldParser.WarningCodes);
+        Assert.Contains("PARSE_TRUNCATED", DocumentTextFieldParser.WarningCodes);
+        Assert.Equal(4, DocumentTextFieldParser.WarningCodes.Distinct(StringComparer.Ordinal).Count());
+    }
+
     // --- L2: real tax-inclusive receipts recognised without TOTALS_INCONSISTENT ---
 
     [Fact]
