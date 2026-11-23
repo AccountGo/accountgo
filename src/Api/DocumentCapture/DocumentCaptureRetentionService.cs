@@ -68,13 +68,7 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
         {
             var abandoned = await db.DocumentCaptures.IgnoreQueryFilters().AsNoTracking()
                 .Where(capture => capture.ExpiresAt <= utcNow && capture.AcceptedAt == null && capture.RejectedAt == null
-                    && (capture.BytesDeletedAt == null
-                        || capture.FieldsWipedAt == null
-                        || capture.RawText != null
-                        || capture.WarningsJson != null
-                        || (capture.Kind == "assistant-attachment"
-                            ? capture.FieldsJson != DocumentCaptureFieldSchemas.EmptyAssistantFieldsJson
-                            : capture.FieldsJson != DocumentCaptureFieldSchemas.EmptyObjectJson))
+                    && (capture.BytesDeletedAt == null || capture.FieldsWipedAt == null)
                     && !stalledAbandonedCaptures.Contains(capture.Id))
                 .OrderBy(capture => capture.ExpiresAt)
                 .Select(capture => new { capture.CompanyId, capture.Id })
@@ -109,13 +103,7 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
         {
             var rejectedResidue = await db.DocumentCaptures.IgnoreQueryFilters().AsNoTracking()
                 .Where(capture => capture.AcceptedAt == null && capture.RejectedAt != null
-                    && (capture.BytesDeletedAt == null
-                        || capture.FieldsWipedAt == null
-                        || capture.RawText != null
-                        || capture.WarningsJson != null
-                        || (capture.Kind == "assistant-attachment"
-                            ? capture.FieldsJson != DocumentCaptureFieldSchemas.EmptyAssistantFieldsJson
-                            : capture.FieldsJson != DocumentCaptureFieldSchemas.EmptyObjectJson))
+                    && (capture.BytesDeletedAt == null || capture.FieldsWipedAt == null)
                     && !stalledRejectedCaptures.Contains(capture.Id))
                 .OrderBy(capture => capture.RejectedAt)
                 .Select(capture => new { capture.CompanyId, capture.Id })
@@ -219,13 +207,7 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
         var capture = await db.DocumentCaptures.IgnoreQueryFilters()
             .SingleOrDefaultAsync(item => item.CompanyId == companyId && item.Id == captureId
                 && item.ExpiresAt <= utcNow && item.AcceptedAt == null && item.RejectedAt == null
-                && (item.BytesDeletedAt == null
-                    || item.FieldsWipedAt == null
-                    || item.RawText != null
-                    || item.WarningsJson != null
-                    || (item.Kind == "assistant-attachment"
-                        ? item.FieldsJson != DocumentCaptureFieldSchemas.EmptyAssistantFieldsJson
-                        : item.FieldsJson != DocumentCaptureFieldSchemas.EmptyObjectJson))
+                && (item.BytesDeletedAt == null || item.FieldsWipedAt == null)
                 && (item.Status != "extracting" || item.LeaseExpiresAt == null || item.LeaseExpiresAt <= utcNow)
                 && db.Companies.IgnoreQueryFilters().Any(company => company.Id == companyId && company.DeletedAt == null),
                 cancellationToken).ConfigureAwait(false);
@@ -247,13 +229,7 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
         var capture = await db.DocumentCaptures.IgnoreQueryFilters()
             .SingleOrDefaultAsync(item => item.CompanyId == companyId && item.Id == captureId
                 && item.AcceptedAt == null && item.RejectedAt != null
-                && (item.BytesDeletedAt == null
-                    || item.FieldsWipedAt == null
-                    || item.RawText != null
-                    || item.WarningsJson != null
-                    || (item.Kind == "assistant-attachment"
-                        ? item.FieldsJson != DocumentCaptureFieldSchemas.EmptyAssistantFieldsJson
-                        : item.FieldsJson != DocumentCaptureFieldSchemas.EmptyObjectJson))
+                && (item.BytesDeletedAt == null || item.FieldsWipedAt == null)
                 && db.Companies.IgnoreQueryFilters().Any(company => company.Id == companyId && company.DeletedAt == null),
                 cancellationToken).ConfigureAwait(false);
         if (capture is null)
