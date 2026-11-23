@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Security.Claims;
 using System.Text.Json;
@@ -32,6 +33,7 @@ namespace Api.Controllers
     public class AiChatController(
         IAnterAgentRunnerClient anterClient,
         IMcpCallerAssertionService assertionService,
+        IAssistantPseudonymService pseudonymService,
         ITenantContext tenantContext,
         IAdministrationService administrationService,
         IPlanCatalog plans,
@@ -42,6 +44,8 @@ namespace Api.Controllers
             ?? throw new ArgumentNullException(nameof(anterClient));
         private readonly IMcpCallerAssertionService _assertionService = assertionService
             ?? throw new ArgumentNullException(nameof(assertionService));
+        private readonly IAssistantPseudonymService _pseudonymService = pseudonymService
+            ?? throw new ArgumentNullException(nameof(pseudonymService));
         private readonly ITenantContext _tenantContext = tenantContext
             ?? throw new ArgumentNullException(nameof(tenantContext));
         private readonly IAdministrationService _administrationService = administrationService
@@ -69,6 +73,18 @@ namespace Api.Controllers
             public string? Decision { get; set; }
             public string? Reason { get; set; }
         }
+
+        public sealed class ResumeExecutionRequest
+        {
+            public string? SessionId { get; set; }
+        }
+
+        public sealed class ReidentifyRequest
+        {
+            public List<string>? Tokens { get; set; }
+        }
+
+        public const int MaxReidentifyTokens = 200;
 
         private string? CurrentUserId =>
             User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
@@ -122,7 +138,7 @@ namespace Api.Controllers
             if (body?.CaptureId is { } captureId)
             {
                 var attached = await AssistantAttachmentMessageBuilder.TryAppendAttachmentAsync(
-                    _db, companyId, userId, captureId, message, cancellationToken);
+                    _db, companyId, userId, captureId, message, cancellationToken, _pseudonymService, body?.SessionId);
                 if (!attached.Succeeded)
                 {
                     Response.StatusCode = attached.ErrorStatusCode;
@@ -134,7 +150,7 @@ namespace Api.Controllers
 
             var companySlug = _tenantContext.CompanySlug ?? $"company-{companyId}";
             var scopedUserId = AnterRunStreamBody.BuildScopedUserId(companyId, userId);
-            var callerAssertion = _assertionService.MintAssertion(userId, companyId, companySlug);
+            var callerAssertion = _assertionService.MintAssertion(userId, companyId, companySlug, sessionId: body?.SessionId);
             var safeContext = SanitizeClientContext(body?.ContextVariables);
             ResolveEntitlementContext(
                 out var companyPlan,
@@ -209,6 +225,221 @@ namespace Api.Controllers
             return Ok(new { ok = true });
         }
 
+        [HttpPost("sessions/{sessionId}/reidentify")]
+        public async Task<IActionResult> ReidentifySessionTokens(
+            string sessionId,
+            [FromBody] ReidentifyRequest? body,
+            CancellationToken cancellationToken)
+        {
+            var userId = CurrentUserId;
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return Unauthorized();
+            }
+
+            if (!_tenantContext.IsResolved || !_tenantContext.CompanyId.HasValue)
+            {
+                return BadRequest(new { detail = "Workspace context is required." });
+            }
+
+            if (string.IsNullOrWhiteSpace(sessionId))
+            {
+                return BadRequest(new { detail = "sessionId is required." });
+            }
+
+            var requestedTokens = body?.Tokens;
+            if (requestedTokens is { Count: > MaxReidentifyTokens })
+            {
+                return BadRequest(new { detail = $"At most {MaxReidentifyTokens} tokens may be re-identified per request." });
+            }
+
+            var names = new Dictionary<string, string>(StringComparer.Ordinal);
+            if (requestedTokens is null || requestedTokens.Count == 0)
+            {
+                return Content(JsonSerializer.Serialize(new { names }), "application/json");
+            }
+
+            var companyId = _tenantContext.CompanyId.Value;
+            var resolved = await _pseudonymService.ResolveTokensAsync(
+                companyId,
+                userId,
+                sessionId,
+                requestedTokens,
+                cancellationToken);
+
+            if (resolved.Count == 0)
+            {
+                return Content(JsonSerializer.Serialize(new { names }), "application/json");
+            }
+
+            // Synthetic entries (syn:...) have no backing workspace entity; return their stored DisplayText
+            // directly since the row is already scoped to (companyId, userId, sessionId).
+            foreach (var item in resolved.Values)
+            {
+                if (AssistantPseudonymKind.IsSyntheticPublicId(item.PublicId)
+                    && !string.IsNullOrWhiteSpace(item.DisplayText))
+                {
+                    names[item.Token] = item.DisplayText;
+                }
+            }
+
+            var permissions = _tenantContext.Permissions;
+
+            if (permissions.Contains(Core.Domain.Security.SystemPermissions.SalesCustomersView))
+            {
+                var customerTokens = resolved.Values
+                    .Where(r => string.Equals(r.Kind, AssistantPseudonymKind.Customer, StringComparison.Ordinal)
+                        && r.PublicId.StartsWith("cus_", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                if (customerTokens.Count > 0)
+                {
+                    var ids = customerTokens.Select(t => t.PublicId).Distinct(StringComparer.Ordinal).ToList();
+                    var lookup = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToDictionaryAsync(
+                        _db.Customers
+                            .Where(c => ids.Contains(c.PublicId))
+                            .Select(c => new { c.PublicId, Name = c.Party != null ? c.Party.Name : null }),
+                        x => x.PublicId,
+                        x => x.Name,
+                        StringComparer.Ordinal,
+                        cancellationToken);
+
+                    foreach (var item in customerTokens)
+                    {
+                        if (lookup.TryGetValue(item.PublicId, out var name) && !string.IsNullOrWhiteSpace(name))
+                        {
+                            names[item.Token] = name;
+                        }
+                    }
+                }
+            }
+
+            if (permissions.Contains(Core.Domain.Security.SystemPermissions.PurchasesVendorsView))
+            {
+                var vendorTokens = resolved.Values
+                    .Where(r => string.Equals(r.Kind, AssistantPseudonymKind.Vendor, StringComparison.Ordinal)
+                        && r.PublicId.StartsWith("ven_", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                if (vendorTokens.Count > 0)
+                {
+                    var ids = vendorTokens.Select(t => t.PublicId).Distinct(StringComparer.Ordinal).ToList();
+                    var lookup = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToDictionaryAsync(
+                        _db.Vendors
+                            .Where(v => ids.Contains(v.PublicId))
+                            .Select(v => new { v.PublicId, Name = v.Party != null ? v.Party.Name : null }),
+                        x => x.PublicId,
+                        x => x.Name,
+                        StringComparer.Ordinal,
+                        cancellationToken);
+
+                    foreach (var item in vendorTokens)
+                    {
+                        if (lookup.TryGetValue(item.PublicId, out var name) && !string.IsNullOrWhiteSpace(name))
+                        {
+                            names[item.Token] = name;
+                        }
+                    }
+                }
+            }
+
+            if (permissions.Contains(Core.Domain.Security.SystemPermissions.BankingAccountsView))
+            {
+                var bankTokens = resolved.Values
+                    .Where(r => string.Equals(r.Kind, AssistantPseudonymKind.BankAccount, StringComparison.Ordinal)
+                        && r.PublicId.StartsWith("ba_", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                if (bankTokens.Count > 0)
+                {
+                    var ids = bankTokens.Select(t => t.PublicId).Distinct(StringComparer.Ordinal).ToList();
+                    var lookup = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToDictionaryAsync(
+                        _db.Banks
+                            .Where(b => ids.Contains(b.PublicId))
+                            .Select(b => new { b.PublicId, Name = !string.IsNullOrEmpty(b.Name) ? b.Name : b.BankName }),
+                        x => x.PublicId,
+                        x => x.Name,
+                        StringComparer.Ordinal,
+                        cancellationToken);
+
+                    foreach (var item in bankTokens)
+                    {
+                        if (lookup.TryGetValue(item.PublicId, out var name) && !string.IsNullOrWhiteSpace(name))
+                        {
+                            names[item.Token] = name;
+                        }
+                    }
+                }
+            }
+
+            var canViewMembers = permissions.Contains(Core.Domain.Security.SystemPermissions.AdminMembersManage)
+                || permissions.Contains(Core.Domain.Security.SystemPermissions.AuditLogsView);
+
+            if (canViewMembers)
+            {
+                var personTokens = resolved.Values
+                    .Where(r => string.Equals(r.Kind, AssistantPseudonymKind.Person, StringComparison.Ordinal)
+                        && (r.PublicId.StartsWith("mem_", StringComparison.OrdinalIgnoreCase)
+                            || r.PublicId.StartsWith("usr:", StringComparison.Ordinal)))
+                    .ToList();
+                if (personTokens.Count > 0)
+                {
+                    var memIds = personTokens
+                        .Where(t => t.PublicId.StartsWith("mem_", StringComparison.OrdinalIgnoreCase))
+                        .Select(t => t.PublicId)
+                        .Distinct(StringComparer.Ordinal)
+                        .ToList();
+                    var usrIds = personTokens
+                        .Where(t => t.PublicId.StartsWith("usr:", StringComparison.Ordinal))
+                        .Select(t => t.PublicId["usr:".Length..])
+                        .Distinct(StringComparer.Ordinal)
+                        .ToList();
+
+                    var memberRows = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+                        _db.CompanyMembers
+                            .Where(m => m.CompanyId == companyId
+                                && (memIds.Contains(m.PublicId) || usrIds.Contains(m.UserId)))
+                            .Select(m => new { m.PublicId, m.UserId }),
+                        cancellationToken);
+
+                    var userManager = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions
+                        .GetService<Microsoft.AspNetCore.Identity.UserManager<Api.Data.ApplicationUser>>(HttpContext.RequestServices);
+                    var lookup = new Dictionary<string, string>(StringComparer.Ordinal);
+                    if (userManager is not null && memberRows.Count > 0)
+                    {
+                        var memberUserIds = memberRows.Select(m => m.UserId).Distinct(StringComparer.Ordinal).ToList();
+                        var users = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToDictionaryAsync(
+                            userManager.Users
+                                .Where(u => memberUserIds.Contains(u.Id) && u.DeletedAt == null)
+                                .Select(u => new { u.Id, u.Email, u.UserName }),
+                            u => u.Id,
+                            StringComparer.Ordinal,
+                            cancellationToken);
+
+                        foreach (var m in memberRows)
+                        {
+                            if (!users.TryGetValue(m.UserId, out var u))
+                                continue;
+                            var display = !string.IsNullOrWhiteSpace(u.Email) ? u.Email : (u.UserName ?? string.Empty);
+                            if (!string.IsNullOrWhiteSpace(display))
+                            {
+                                if (!string.IsNullOrWhiteSpace(m.PublicId))
+                                    lookup[m.PublicId] = display;
+                                lookup["usr:" + m.UserId] = display;
+                            }
+                        }
+                    }
+
+                    foreach (var item in personTokens)
+                    {
+                        if (lookup.TryGetValue(item.PublicId, out var name))
+                        {
+                            names[item.Token] = name;
+                        }
+                    }
+                }
+            }
+
+            return Content(JsonSerializer.Serialize(new { names }), "application/json");
+        }
+
         [HttpGet("executions/{executionId}/stream")]
         public async Task StreamExecution(
             string executionId,
@@ -264,7 +495,10 @@ namespace Api.Controllers
         }
 
         [HttpPost("executions/{executionId}/resume")]
-        public async Task ResumeExecution(string executionId, CancellationToken cancellationToken)
+        public async Task ResumeExecution(
+            string executionId,
+            [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] ResumeExecutionRequest? body,
+            CancellationToken cancellationToken)
         {
             if (!await EnsureConfiguredAsync(cancellationToken)) return;
             var userId = CurrentUserId;
@@ -284,7 +518,11 @@ namespace Api.Controllers
             var companyId = _tenantContext.CompanyId.Value;
             var companySlug = _tenantContext.CompanySlug ?? $"company-{companyId}";
             var scopedUserId = AnterRunStreamBody.BuildScopedUserId(companyId, userId);
-            var callerAssertion = _assertionService.MintAssertion(userId, companyId, companySlug);
+            var callerAssertion = _assertionService.MintAssertion(
+                userId,
+                companyId,
+                companySlug,
+                sessionId: body?.SessionId);
 
             HttpResponseMessage upstream;
             try

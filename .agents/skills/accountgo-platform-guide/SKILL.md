@@ -47,7 +47,12 @@ The AccountGo tools read exactly what the matching page shows, as the signed-in 
 - Record ids are prefixed text such as `inv_…`, `bill_…`, `cus_…`, `acct_…`. Pass them exactly as a tool returned them; never invent, shorten or convert one, and use a tool's `*Id` value only in the tool that names that record type (a `cus_…` id is a client, not an invoice). A wrong-kind or unknown id comes back as `InvalidRequest` or `NotFound`: search again instead of guessing.
 - Search first when you only have a name or text, then fetch the one record. Lists are paged: say how many matched (`totalCount`) and page with `skip`/`take` rather than claiming you saw everything.
 - Every result has `status`. `Success`: answer from `data` and offer `link` (already includes the workspace). `AccessDenied`: say this member's access does not include it and to ask a workspace admin; `PlanRestricted`: name the area the plan lacks; `NotFound`: say no such record exists in this workspace. Never treat a refusal or an empty page as empty books, and do not retry sibling tools in a loop.
-- Amounts are in the workspace currency from `get_workspace_context`. Aging defaults to today; pass `asOfDate` for a period-end reconstruction. The audit companion explains the distinct current-clearance limit of bank outstanding aging. Full bank account numbers are never returned; quote only the masked number.
+- Amounts are in the workspace currency from `get_workspace_context`. Aging defaults to today; pass `asOfDate` for a period-end reconstruction. The audit companion explains the distinct current-clearance limit of bank outstanding aging.
+- **Privacy: data is de-identified before you see it.**
+  - Customer, vendor, person and bank-account names arrive as tokens such as `C-7F3A2B10`, `V-…`, `P-…` and `B-…`. Repeat them verbatim and pass them to tools like ids. The user's screen shows the real names.
+  - Never guess or invent a name, and never treat a token from another chat as the same record.
+  - `[text hidden]` (descriptions, memos, notes) and `[masked]` (contacts, addresses, tax and bank details) are hidden by policy, not missing data. Point to the record's `link`, and never ask the user to paste such details.
+  - Amounts, dates, document numbers, ids, statuses and non-bank account names are real.
 - Year-end: `get_fiscal_years` status **Closed** means closed; never infer it from the active flag or books lock, and never read it as correct books. Before close/reopen steps, read the financials reference's **Year-end close** and **Verified workflow limits**. Never suggest a manual **Closing entries** voucher, a close wizard or full evidence pack, or treat the unissued state as proof nothing was filed.
 
 ## Navigation

@@ -34,23 +34,41 @@ namespace AccountGo.BackendTests
         };
 
         /// <summary>Calls a tool as Anter does and returns its structured result.</summary>
-        protected async Task<JsonElement> CallTool(string name, object arguments, string userId = null)
+        protected async Task<JsonElement> CallTool(string name, object arguments, string userId = null, string sessionId = null)
         {
             var response = await McpRequest(
-                new { jsonrpc = "2.0", id = 2, method = "tools/call", @params = new { name, arguments } }, userId);
+                new { jsonrpc = "2.0", id = 2, method = "tools/call", @params = new { name, arguments } }, userId, sessionId);
             Assert.True(response.TryGetProperty("result", out var result), response.GetRawText());
             Assert.False(result.TryGetProperty("isError", out var isError) && isError.GetBoolean(), result.GetRawText());
             var text = result.GetProperty("content").EnumerateArray().First().GetProperty("text").GetString();
             return JsonDocument.Parse(text).RootElement.Clone();
         }
 
-        protected async Task<JsonElement> McpRequest(object body, string userId = null)
+        /// <summary>Runs a page payload through the same MCP de-identifier used on the wire for the given session.</summary>
+        protected async Task<JsonElement> DeidentifyPageData(string toolName, string kind, JsonElement pageData, string sessionId, string userId = null)
+        {
+            using var scope = _factory.Services.CreateScope();
+            var tenant = scope.ServiceProvider.GetRequiredService<Core.Tenancy.ITenantContext>();
+            using var _ = tenant.ImpersonateUser(_companyId, userId ?? _ownerId, _slug);
+            if (scope.ServiceProvider.GetService<Api.Service.Ai.IMcpCallerSessionContext>() is Api.Service.Ai.McpCallerSessionContext ctx)
+                ctx.SetSessionId(sessionId);
+            var deidentifier = scope.ServiceProvider.GetRequiredService<Api.Service.Ai.IMcpResponseDeidentifier>();
+            var envelope = new System.Text.Json.Nodes.JsonObject
+            {
+                ["kind"] = kind,
+                ["data"] = System.Text.Json.Nodes.JsonNode.Parse(pageData.GetRawText())
+            };
+            var result = await deidentifier.DeidentifyJsonAsync(toolName, envelope);
+            return JsonDocument.Parse(result!["data"]!.ToJsonString()).RootElement.Clone();
+        }
+
+        protected async Task<JsonElement> McpRequest(object body, string userId = null, string sessionId = null)
         {
             string assertion;
             using (var scope = _factory.Services.CreateScope())
             {
                 assertion = scope.ServiceProvider.GetRequiredService<Api.Service.Ai.IMcpCallerAssertionService>()
-                    .MintAssertion(userId ?? _ownerId, _companyId, _slug);
+                    .MintAssertion(userId ?? _ownerId, _companyId, _slug, sessionId: sessionId);
             }
 
             using var request = new HttpRequestMessage(HttpMethod.Post, "/mcp");
@@ -111,7 +129,9 @@ namespace AccountGo.BackendTests
             Assert.Equal($"/org/{_slug}/sales/{PubId<Core.Domain.Sales.SalesInvoiceHeader>(invoiceId)}", byId.GetProperty("link").GetString());
             var data = byId.GetProperty("data");
             Assert.Equal(invoiceNo, data.GetProperty("no").GetString());
-            Assert.Equal("Real customer", data.GetProperty("customerName").GetString());
+            var customerToken = data.GetProperty("customerName").GetString();
+            Assert.Matches(@"^C-[0-9A-F]{8}([0-9A-F]{4})?$", customerToken);
+            Assert.DoesNotContain("Real customer", byId.GetRawText(), StringComparison.OrdinalIgnoreCase);
             Assert.Equal(100m, data.GetProperty("balanceDue").GetDecimal());
             Assert.Single(data.GetProperty("salesInvoiceLines").EnumerateArray());
 
@@ -177,8 +197,11 @@ namespace AccountGo.BackendTests
             var journal = (await CallTool("get_journal_entry", new { journalEntryId = journalId })).GetProperty("data");
             var attribution = journal.GetProperty("attribution");
             var preparer = Assert.Single(attribution.GetProperty("preparedBy").EnumerateArray());
-            Assert.Equal(_ownerId, preparer.GetProperty("userId").GetString());
-            Assert.Equal(_ownerId, attribution.GetProperty("postedByUserId").GetString());
+            var preparerToken = preparer.GetProperty("userId").GetString();
+            var posterToken = attribution.GetProperty("postedByUserId").GetString();
+            Assert.Matches(@"^P-[0-9A-F]{8}([0-9A-F]{4})?$", preparerToken);
+            Assert.Equal(preparerToken, posterToken);
+            Assert.NotEqual(_ownerId, preparerToken);
             Assert.True(attribution.GetProperty("postedByAPreparer").GetBoolean());
             Assert.True(attribution.GetProperty("postedAt").GetDateTime() > DateTime.UtcNow.AddMinutes(-30));
         }
@@ -389,7 +412,14 @@ namespace AccountGo.BackendTests
             Assert.DoesNotContain("123456789012", raw);
             Assert.DoesNotContain("021000021", raw);
             Assert.DoesNotContain("GB33BUKB20201555555555", raw);
-            Assert.Contains("Assistant checking", raw);
+            Assert.DoesNotContain("Assistant checking", raw, StringComparison.OrdinalIgnoreCase);
+            var bankPubId = PubId<Core.Domain.Financials.Bank>(bank.Id);
+            var listData = list.GetProperty("data");
+            var bankArray = listData.ValueKind == JsonValueKind.Array
+                ? listData
+                : listData.TryGetProperty("items", out var bankItems) ? bankItems : listData.GetProperty("accounts");
+            var bankRow = bankArray.EnumerateArray().Single(b => b.GetProperty("id").GetString() == bankPubId);
+            Assert.Matches(@"^B-[0-9A-F]{8}([0-9A-F]{4})?$", bankRow.GetProperty("name").GetString());
 
             var one = await CallTool("list_bank_accounts", new { bankId = PubId<Core.Domain.Financials.Bank>(bank.Id) });
             Assert.DoesNotContain("123456789012", one.GetRawText());

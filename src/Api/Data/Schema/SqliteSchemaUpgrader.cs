@@ -805,6 +805,7 @@ WHERE ""DisabledModulesJson"" IS NULL
         private static void EnsureTables(DbConnection connection)
         {
             EnsureDocumentCaptureSchema(connection);
+            EnsureAssistantPseudonymsSchema(connection);
 
             if (!TableExists(connection, "SalesInvoiceHeader")
                 || !TableExists(connection, "Item")
@@ -841,6 +842,46 @@ WHERE ""DisabledModulesJson"" IS NULL
             EnsureLinkedEntryPairs(connection);
             EnsureCreditsReturnsRefundsSchema(connection);
         }
+
+        private static void EnsureAssistantPseudonymsSchema(DbConnection connection)
+        {
+            string[] statements =
+            {
+                AssistantPseudonymsTableSql,
+                AssistantPseudonymsScopeTokenIndexSql,
+                AssistantPseudonymsExpiresAtIndexSql
+            };
+            foreach (var sql in statements)
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText = sql;
+                command.ExecuteNonQuery();
+            }
+            AddColumnIfMissing(connection, "AssistantPseudonyms", "DisplayText", "TEXT NULL");
+        }
+
+        private const string AssistantPseudonymsTableSql = @"
+            CREATE TABLE IF NOT EXISTS ""AssistantPseudonyms"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_AssistantPseudonyms"" PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""UserId"" TEXT NOT NULL,
+                ""SessionId"" TEXT NOT NULL,
+                ""Token"" TEXT NOT NULL,
+                ""Kind"" TEXT NOT NULL,
+                ""PublicId"" TEXT NOT NULL,
+                ""DisplayText"" TEXT NULL,
+                ""CreatedAt"" TEXT NOT NULL,
+                ""LastUsedAt"" TEXT NOT NULL,
+                ""ExpiresAt"" TEXT NOT NULL
+            );";
+
+        private const string AssistantPseudonymsScopeTokenIndexSql = @"
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_AssistantPseudonyms_CompanyId_UserId_SessionId_Token""
+            ON ""AssistantPseudonyms"" (""CompanyId"", ""UserId"", ""SessionId"", ""Token"");";
+
+        private const string AssistantPseudonymsExpiresAtIndexSql = @"
+            CREATE INDEX IF NOT EXISTS ""IX_AssistantPseudonyms_ExpiresAt""
+            ON ""AssistantPseudonyms"" (""ExpiresAt"");";
 
         private static void EnsureDocumentCaptureSchema(DbConnection connection)
         {

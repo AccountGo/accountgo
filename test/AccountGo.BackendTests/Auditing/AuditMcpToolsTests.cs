@@ -39,7 +39,13 @@ public sealed class AuditMcpToolsTests(AuditTestHost host) : IClassFixture<Audit
 
         var record = await CallHistory(user.Token, slug, new { entityType = "Company", entityId = companyPublicId });
         Assert.True(record.GetProperty("status").GetString() == "Success", record.GetRawText());
-        Assert.Equal(2, record.GetProperty("data").GetProperty("items").EnumerateArray().Count(i => i.GetProperty("actorUserId").GetString() == "probe-actor"));
+        var recordActorTokens = record.GetProperty("data").GetProperty("items").EnumerateArray()
+            .Select(i => i.GetProperty("actorUserId").GetString())
+            .Where(t => !string.IsNullOrEmpty(t) && t.StartsWith("P-", StringComparison.Ordinal))
+            .GroupBy(t => t!)
+            .ToList();
+        Assert.Contains(recordActorTokens, g => g.Count() == 2);
+        Assert.DoesNotContain("probe-actor", record.GetRawText(), StringComparison.OrdinalIgnoreCase);
         Assert.Equal(JsonValueKind.Null, record.GetProperty("data").GetProperty("windowDays").ValueKind);
 
         var feed = await CallHistory(user.Token, slug, new { limit = 100 });
@@ -51,8 +57,17 @@ public sealed class AuditMcpToolsTests(AuditTestHost host) : IClassFixture<Audit
             return;
         }
         var data = feed.GetProperty("data");
-        var probes = data.GetProperty("items").EnumerateArray().Where(i => i.GetProperty("entityType").GetString() == "Company" && i.GetProperty("actorUserId").GetString() == "probe-actor").ToList();
-        Assert.Equal(window == 90 ? 1 : 2, probes.Count);
+        var companyRows = data.GetProperty("items").EnumerateArray()
+            .Where(i => i.GetProperty("entityType").GetString() == "Company")
+            .ToList();
+        Assert.DoesNotContain("probe-actor", data.GetRawText(), StringComparison.OrdinalIgnoreCase);
+        var feedGroups = companyRows
+            .Select(i => i.GetProperty("actorUserId").GetString())
+            .Where(t => !string.IsNullOrEmpty(t) && t.StartsWith("P-", StringComparison.Ordinal))
+            .GroupBy(t => t!)
+            .Select(g => g.Count())
+            .ToList();
+        Assert.Contains(window == 90 ? 1 : 2, feedGroups);
         if (window == 90)
             Assert.Equal(90, data.GetProperty("windowDays").GetInt32());
         else

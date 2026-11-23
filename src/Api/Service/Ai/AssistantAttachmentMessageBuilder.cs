@@ -78,7 +78,9 @@ public static partial class AssistantAttachmentMessageBuilder
         string userId,
         int captureId,
         string userMessage,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IAssistantPseudonymService? pseudonymService = null,
+        string? sessionId = null)
     {
         var capture = await DocumentCaptureService.LiveCompanyCaptures(db, companyId)
             .SingleOrDefaultAsync(c => c.Id == captureId, cancellationToken)
@@ -117,7 +119,18 @@ public static partial class AssistantAttachmentMessageBuilder
         string block;
         try
         {
-            block = BuildDelimitedUntrustedBlock(capture.PublicId, capture.AcceptedFieldsJson);
+            Func<string, string, CancellationToken, Task<string>>? partyPseudonymizer = null;
+            if (pseudonymService is not null)
+            {
+                partyPseudonymizer = (label, rawValue, ct) =>
+                    PseudonymizeAttachmentPartyAsync(db, companyId, userId, sessionId, capture.PublicId, label, rawValue, pseudonymService, ct);
+            }
+
+            block = await BuildDelimitedUntrustedBlockAsync(
+                capture.PublicId,
+                capture.AcceptedFieldsJson,
+                partyPseudonymizer,
+                cancellationToken).ConfigureAwait(false);
         }
         catch (JsonException)
         {
@@ -145,7 +158,16 @@ public static partial class AssistantAttachmentMessageBuilder
         return AssistantAttachmentBuildResult.Ok(combined);
     }
 
-    internal static string BuildDelimitedUntrustedBlock(string capturePublicId, string acceptedFieldsJson)
+    internal static string BuildDelimitedUntrustedBlock(string capturePublicId, string acceptedFieldsJson) =>
+        BuildDelimitedUntrustedBlockAsync(capturePublicId, acceptedFieldsJson, null, CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+    internal static async Task<string> BuildDelimitedUntrustedBlockAsync(
+        string capturePublicId,
+        string acceptedFieldsJson,
+        Func<string, string, CancellationToken, Task<string>>? partyPseudonymizer,
+        CancellationToken cancellationToken)
     {
         using var parsed = JsonDocument.Parse(acceptedFieldsJson);
         var remaskedJson = DocumentCaptureMasking.MaskAssistantFields(parsed.RootElement);
@@ -178,6 +200,14 @@ public static partial class AssistantAttachmentMessageBuilder
                     ? string.Empty
                     : SanitizeFieldText(DocumentCaptureMasking.MaskSensitiveValue(value), MaxValueLength);
 
+                if (partyPseudonymizer is not null
+                    && !string.IsNullOrEmpty(safeLabel)
+                    && !string.IsNullOrEmpty(safeValue)
+                    && TryClassifyPartyLabel(safeLabel) is not null)
+                {
+                    safeValue = await partyPseudonymizer(safeLabel, safeValue, cancellationToken).ConfigureAwait(false);
+                }
+
                 if (string.IsNullOrEmpty(safeLabel) && string.IsNullOrEmpty(safeValue))
                     continue;
 
@@ -194,6 +224,76 @@ public static partial class AssistantAttachmentMessageBuilder
 
         sb.Append(EndDelimiter);
         return sb.ToString();
+    }
+
+    internal static string? TryClassifyPartyLabel(string label)
+    {
+        var normalized = label.Trim().ToLowerInvariant();
+        if (normalized.Contains("vendor") || normalized.Contains("supplier") || normalized.Contains("merchant") || normalized.Contains("issuer") || normalized.Contains("seller") || normalized.Contains("billed by"))
+            return AssistantPseudonymKind.Vendor;
+        if (normalized.Contains("customer") || normalized.Contains("client") || normalized.Contains("bill to") || normalized.Contains("sold to") || normalized.Contains("buyer"))
+            return AssistantPseudonymKind.Customer;
+        if (normalized.Contains("bank") || normalized.Contains("institution"))
+            return AssistantPseudonymKind.BankAccount;
+        if (normalized.Contains("payee") || normalized.Contains("payer") || normalized.Contains("contact") || normalized.Contains("person") || normalized.Contains("recipient") || normalized.Contains("sender") || normalized.Contains("account holder") || normalized == "from" || normalized == "to" || normalized == "party" || normalized == "name")
+            return AssistantPseudonymKind.Person;
+        return null;
+    }
+
+    private static async Task<string> PseudonymizeAttachmentPartyAsync(
+        ApiDbContext db,
+        int companyId,
+        string userId,
+        string? sessionId,
+        string capturePublicId,
+        string label,
+        string rawValue,
+        IAssistantPseudonymService pseudonymService,
+        CancellationToken cancellationToken)
+    {
+        var kind = TryClassifyPartyLabel(label) ?? AssistantPseudonymKind.Person;
+        var lowered = rawValue.Trim().ToLowerInvariant();
+
+        string? matchedPublicId = null;
+        if (kind == AssistantPseudonymKind.Vendor)
+        {
+            matchedPublicId = await db.Vendors.AsNoTracking()
+                .Where(v => v.CompanyId == companyId && v.Party != null && v.Party.Name != null && v.Party.Name.ToLower() == lowered)
+                .Select(v => v.PublicId)
+                .FirstOrDefaultAsync(cancellationToken)
+                .ConfigureAwait(false);
+        }
+        else if (kind == AssistantPseudonymKind.Customer)
+        {
+            matchedPublicId = await db.Customers.AsNoTracking()
+                .Where(c => c.CompanyId == companyId && c.Party != null && c.Party.Name != null && c.Party.Name.ToLower() == lowered)
+                .Select(c => c.PublicId)
+                .FirstOrDefaultAsync(cancellationToken)
+                .ConfigureAwait(false);
+        }
+        else if (kind == AssistantPseudonymKind.BankAccount)
+        {
+            matchedPublicId = await db.Banks.AsNoTracking()
+                .Where(b => b.CompanyId == companyId && b.Name != null && b.Name.ToLower() == lowered)
+                .Select(b => b.PublicId)
+                .FirstOrDefaultAsync(cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        var isSynthetic = string.IsNullOrWhiteSpace(matchedPublicId);
+        var publicId = isSynthetic
+            ? pseudonymService.BuildSyntheticKey(kind, $"{capturePublicId}:{lowered}")
+            : matchedPublicId!;
+
+        return await pseudonymService.PseudonymizeAsync(
+                companyId,
+                userId,
+                sessionId,
+                kind,
+                publicId,
+                cancellationToken,
+                displayText: isSynthetic ? rawValue : null)
+            .ConfigureAwait(false);
     }
 
     internal static string SanitizeFieldText(string raw, int maxLength)

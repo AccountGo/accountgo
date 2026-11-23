@@ -8,7 +8,8 @@ namespace Api.Service.Ai
         int CompanyId,
         string CompanySlug,
         long IssuedAtUnixSeconds,
-        long ExpiresAtUnixSeconds);
+        long ExpiresAtUnixSeconds,
+        string? SessionId);
 
     /// <summary>
     /// Mints and validates short-lived HMAC-SHA256 caller assertions (<c>X-Mcp-Caller-Assertion</c>)
@@ -17,7 +18,7 @@ namespace Api.Service.Ai
     /// </summary>
     public interface IMcpCallerAssertionService
     {
-        string MintAssertion(string userId, int companyId, string companySlug, TimeSpan? ttl = null);
+        string MintAssertion(string userId, int companyId, string companySlug, TimeSpan? ttl = null, string? sessionId = null);
 
         bool TryValidateAssertion(string? assertion, out McpCallerAssertionPayload? payload);
     }

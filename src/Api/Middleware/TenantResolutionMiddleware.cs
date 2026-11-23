@@ -186,6 +186,11 @@ namespace Api.Middleware
                 return;
             }
 
+            if (context.RequestServices.GetService<IMcpCallerSessionContext>() is McpCallerSessionContext sessionContext)
+            {
+                sessionContext.SetSessionId(payload.SessionId);
+            }
+
             await _next(context);
         }
 

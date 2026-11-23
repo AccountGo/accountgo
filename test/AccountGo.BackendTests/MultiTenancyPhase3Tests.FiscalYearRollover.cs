@@ -232,14 +232,24 @@ namespace AccountGo.BackendTests
             Assert.Equal(2, Row(yearEnd, "FY21-22").GetProperty("status").GetInt32());
             Assert.DoesNotContain(yearEnd.EnumerateArray(), y => y.GetProperty("fiscalYearCode").GetString() == currentCode);
 
-            var tool = await CallTool("get_fiscal_years", new { });
+            const string fySession = "sess-fy-close-1";
+            var tool = await CallTool("get_fiscal_years", new { }, sessionId: fySession);
             Assert.Equal("Success", tool.GetProperty("status").GetString());
-            Assert.True(JsonElement.DeepEquals(years, tool.GetProperty("data")));
+            var toolData = tool.GetProperty("data");
+            var expectedYears = await DeidentifyPageData("get_fiscal_years", "fiscalYears", years, fySession);
+            Assert.True(JsonElement.DeepEquals(expectedYears, toolData));
+            var toolClosed = Row(toolData, "FY-CLOSED0");
+            Assert.Equal("Closed", toolClosed.GetProperty("status").GetString());
+            Assert.Equal("Zero activity", toolClosed.GetProperty("fiscalYearName").GetString());
+            Assert.Matches(@"^P-[0-9A-F]{8}([0-9A-F]{4})?$", toolClosed.GetProperty("closedBy").GetString());
+            Assert.DoesNotContain("ada@example.test", toolData.GetRawText(), StringComparison.OrdinalIgnoreCase);
 
             await JoinOther();
-            var member = await CallTool("get_fiscal_years", new { }, _otherId);
+            const string fyOtherSession = "sess-fy-close-2";
+            var member = await CallTool("get_fiscal_years", new { }, _otherId, sessionId: fyOtherSession);
             Assert.Equal("Success", member.GetProperty("status").GetString());
-            Assert.True(JsonElement.DeepEquals(years, member.GetProperty("data")));
+            var expectedMemberYears = await DeidentifyPageData("get_fiscal_years", "fiscalYears", years, fyOtherSession, _otherId);
+            Assert.True(JsonElement.DeepEquals(expectedMemberYears, member.GetProperty("data")));
 
             WithDb(db => Assert.Equal(countBefore, db.FinancialYears.Count()));
         }

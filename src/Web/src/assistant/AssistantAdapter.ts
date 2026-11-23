@@ -13,6 +13,10 @@ import {
   buildRunStreamBody,
   mergeAssistantContextVariables,
 } from './contextVariables';
+import {
+  createReidentifyingSseStream,
+  reidentifyMessageContents,
+} from './reidentify';
 
 export type { AssistantPageContext };
 
@@ -65,6 +69,28 @@ type UpstreamSession = {
 export class AssistantAdapter implements ChatAdapter {
   private pageContext: AssistantPageContext = {};
   private pendingCaptureId: string | null = null;
+  private readonly executionSessions = new Map<string, string>();
+
+  private async lookupPseudonymNames(
+    sessionId: string,
+    tokens: string[],
+  ): Promise<Record<string, string>> {
+    const res = await assistantFetchJson<{ names?: Record<string, string> }>(
+      `/api/ai/chat/sessions/${encodeURIComponent(sessionId)}/reidentify`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tokens }),
+      },
+    );
+    return res?.names && typeof res.names === 'object' ? res.names : {};
+  }
+
+  private rememberExecutionSession(executionId: string | null | undefined, sessionId: string | undefined): void {
+    if (executionId && sessionId) {
+      this.executionSessions.set(executionId, sessionId);
+    }
+  }
 
   setPageContext(context: AssistantPageContext): void {
     this.pageContext = { ...context };
@@ -87,12 +113,21 @@ export class AssistantAdapter implements ChatAdapter {
       `/api/ai/chat/sessions/${encodeURIComponent(sessionId)}`,
     );
     const turns = Array.isArray(session?.turns) ? session.turns : [];
-    const messages = turns.map((turn, idx) => ({
+    const rawMessages = turns.map((turn, idx) => ({
       id: `${sessionId}_${turn?.seq ?? idx}`,
       role: (turn?.role === 'assistant' ? 'assistant' : 'user') as 'user' | 'assistant',
       content: typeof turn?.content === 'string' ? turn.content : '',
       timestamp: toDate(turn?.fullTimestamp || turn?.ts),
     }));
+
+    this.rememberExecutionSession(session?.activeExecutionId, sessionId);
+    this.rememberExecutionSession(session?.resumableExecutionId, sessionId);
+
+    const messages = await reidentifyMessageContents(
+      sessionId,
+      rawMessages,
+      (sid, tokens) => this.lookupPseudonymNames(sid, tokens),
+    );
 
     const firstUserMessage = turns.find(
       (turn) => turn?.role === 'user' && typeof turn?.content === 'string',
@@ -167,12 +202,21 @@ export class AssistantAdapter implements ChatAdapter {
     // Tenant ids are applied server-side from ITenantContext — do not send them here.
     const body = buildRunStreamBody(payload.message, sessionId, contextVariables, this.pendingCaptureId);
 
-    return assistantFetchStream('/api/ai/chat/run-stream', {
+    const stream = await assistantFetchStream('/api/ai/chat/run-stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
       signal: options?.signal,
     });
+
+    return createReidentifyingSseStream(
+      stream,
+      sessionId,
+      (sid, tokens) => this.lookupPseudonymNames(sid, tokens),
+      {
+        onExecutionStarted: (executionId) => this.rememberExecutionSession(executionId, sessionId),
+      },
+    );
   }
 
   async getExecutionStream(
@@ -181,9 +225,14 @@ export class AssistantAdapter implements ChatAdapter {
     options?: SendMessageOptions,
   ): Promise<ReadableStream<Uint8Array>> {
     const from = Number.isFinite(Number(resumeFrom)) ? Number(resumeFrom) : 0;
-    return assistantFetchStream(
+    const stream = await assistantFetchStream(
       `/api/ai/chat/executions/${encodeURIComponent(executionId)}/stream?resumeFrom=${encodeURIComponent(from)}`,
       { method: 'GET', signal: options?.signal },
+    );
+    return createReidentifyingSseStream(
+      stream,
+      this.executionSessions.get(executionId),
+      (sid, tokens) => this.lookupPseudonymNames(sid, tokens),
     );
   }
 
@@ -200,18 +249,25 @@ export class AssistantAdapter implements ChatAdapter {
     executionId: string,
     options?: SendMessageOptions,
   ): Promise<ReadableStream<Uint8Array>> {
-    return assistantFetchStream(
+    const sessionId = this.executionSessions.get(executionId);
+    const stream = await assistantFetchStream(
       `/api/ai/chat/executions/${encodeURIComponent(executionId)}/resume`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: '{}',
+        body: JSON.stringify(sessionId ? { sessionId } : {}),
         signal: options?.signal,
       },
+    );
+    return createReidentifyingSseStream(
+      stream,
+      sessionId,
+      (sid, tokens) => this.lookupPseudonymNames(sid, tokens),
     );
   }
 
   async resolveToolApproval({
+    sessionId,
     approval,
     decision,
     reason,
@@ -226,6 +282,7 @@ export class AssistantAdapter implements ChatAdapter {
     if (!executionId || !toolCallId) {
       throw new Error('AccountGo Assistant: approval is missing execution or tool call id');
     }
+    this.rememberExecutionSession(executionId, sessionId);
     await assistantFetchJson(
       `/api/ai/chat/approvals/${encodeURIComponent(executionId)}/${encodeURIComponent(toolCallId)}`,
       {

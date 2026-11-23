@@ -47,6 +47,67 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.ToTable("Address");
                 });
 
+            modelBuilder.Entity("Core.Domain.AssistantPseudonym", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("DisplayText")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("LastUsedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("SessionId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("IX_AssistantPseudonyms_ExpiresAt");
+
+                    b.HasIndex("CompanyId", "UserId", "SessionId", "Token")
+                        .IsUnique()
+                        .HasDatabaseName("IX_AssistantPseudonyms_CompanyId_UserId_SessionId_Token");
+
+                    b.ToTable("AssistantPseudonyms", (string)null);
+                });
+
             modelBuilder.Entity("Core.Domain.Auditing.AuditLog", b =>
                 {
                     b.Property<int>("Id")
@@ -868,6 +929,10 @@ namespace Api.Data.Migrations.Postgres.ApiDb
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("IX_DocumentCaptures_ExpiresAt_Unaccepted")
+                        .HasFilter("\"AcceptedAt\" IS NULL AND \"RejectedAt\" IS NULL AND \"BytesDeletedAt\" IS NULL");
+
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasFilter("\"PublicId\" <> ''");
@@ -878,10 +943,6 @@ namespace Api.Data.Migrations.Postgres.ApiDb
 
                     b.HasIndex("CompanyId", "PublicId")
                         .IsUnique();
-
-                    b.HasIndex("ExpiresAt")
-                        .HasDatabaseName("IX_DocumentCaptures_ExpiresAt_Unaccepted")
-                        .HasFilter("\"AcceptedAt\" IS NULL AND \"RejectedAt\" IS NULL AND \"BytesDeletedAt\" IS NULL");
 
                     b.HasIndex("CompanyId", "SourceHash", "Kind", "SchemaVersion", "CreatedAt");
 

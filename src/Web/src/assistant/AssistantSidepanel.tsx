@@ -60,7 +60,8 @@ function AssistantEmptyState() {
         }}
       >
         Get help with double-entry bookkeeping, journals, invoices, and reports for this
-        workspace.
+        workspace. Workspace names and personal details are hidden from the AI and restored on
+        your screen; text you type in the chat is sent as written.
       </p>
 
       <div
@@ -166,6 +167,12 @@ export function AssistantSidepanel({ orgSlug = '' }: { orgSlug?: string }) {
 
   return (
     <div className="accountgo-assistant-sidepanel flex flex-col h-full min-h-0">
+      <div
+        className="shrink-0 px-3 py-1.5 border-b border-[var(--border-subtle)] bg-[var(--bg-subtle)] text-[11px] text-[var(--text-secondary)]"
+        title="Workspace names and personal details returned by tools are replaced with session tokens before reaching the AI and restored on your screen. Text you type yourself is sent as written."
+      >
+        Names and personal details are hidden from the AI.
+      </div>
       {(canAttachDocument || attachedCapture || lastAcceptedCapture) && (
         <div className="shrink-0 px-3 py-2 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">

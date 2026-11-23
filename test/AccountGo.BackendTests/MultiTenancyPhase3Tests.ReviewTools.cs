@@ -74,9 +74,13 @@ namespace AccountGo.BackendTests
             await JoinOther();
             var result = await CallTool("get_members_and_roles", new { }, _otherId);
             Assert.Equal("Success", result.GetProperty("status").GetString());
-            var members = result.GetProperty("data").GetProperty("members");
-            Assert.Contains(members.EnumerateArray(), m => m.GetProperty("userId").GetString() == _ownerId);
-            Assert.Contains(members.EnumerateArray(), m => m.GetProperty("userId").GetString() == _otherId);
+            var members = result.GetProperty("data").GetProperty("members").EnumerateArray().ToList();
+            Assert.Equal(2, members.Count);
+            var userTokens = members.Select(m => m.GetProperty("userId").GetString()).ToList();
+            Assert.All(userTokens, t => Assert.Matches(@"^P-[0-9A-F]{8}([0-9A-F]{4})?$", t));
+            Assert.Equal(2, userTokens.Distinct(StringComparer.Ordinal).Count());
+            Assert.DoesNotContain(_ownerId, result.GetRawText(), StringComparison.Ordinal);
+            Assert.DoesNotContain(_otherId, result.GetRawText(), StringComparison.Ordinal);
         }
 
         [Fact]
@@ -275,16 +279,20 @@ namespace AccountGo.BackendTests
         [Fact]
         public async Task AuditTools_EquityStatement_PreservesBasisComparisonAndPagePayload()
         {
+            const string equitySession = "sess-equity-1";
             var arguments = new { from = "2026-01-01", to = "2026-06-30", basis = "Cash",
                 compareFrom = "2025-01-01", compareTo = "2025-06-30" };
-            var result = await CallTool("get_equity_statement", arguments);
+            var result = await CallTool("get_equity_statement", arguments, sessionId: equitySession);
             Assert.Equal("Success", result.GetProperty("status").GetString());
             var data = result.GetProperty("data");
             Assert.Equal("Cash", data.GetProperty("basis").GetString());
             Assert.Equal(new DateTime(2025, 6, 30), data.GetProperty("comparative").GetProperty("to").GetDateTime());
             var page = await Json(await Send(HttpMethod.Get,
                 "/api/Financials/EquityStatement?from=2026-01-01&to=2026-06-30&basis=Cash&compareFrom=2025-01-01&compareTo=2025-06-30"));
-            Assert.True(JsonElement.DeepEquals(page, data));
+            var expected = await DeidentifyPageData("get_equity_statement", "equityStatement", page, equitySession);
+            Assert.True(JsonElement.DeepEquals(expected, data));
+            Assert.Equal(page.GetProperty("balanceSheetEquity").GetDecimal(), data.GetProperty("balanceSheetEquity").GetDecimal());
+            Assert.Equal(page.GetProperty("differenceToBalanceSheet").GetDecimal(), data.GetProperty("differenceToBalanceSheet").GetDecimal());
         }
 
         [Fact]
@@ -350,12 +358,19 @@ namespace AccountGo.BackendTests
                 db.SaveChanges();
                 receiptId = receipt.Id;
             });
-            var result = await CallTool("search_receipts", new { receiptId = PubId<Core.Domain.Sales.SalesReceiptHeader>(receiptId) });
+            const string receiptSession = "sess-receipt-1";
+            var result = await CallTool("search_receipts", new { receiptId = PubId<Core.Domain.Sales.SalesReceiptHeader>(receiptId) }, sessionId: receiptSession);
             Assert.Equal("Success", result.GetProperty("status").GetString());
             var data = result.GetProperty("data");
             Assert.Equal(PubId<Core.Domain.Sales.SalesReceiptHeader>(receiptId), data.GetProperty("id").GetString());
             Assert.Equal(37.25m, data.GetProperty("amount").GetDecimal());
-            Assert.True(JsonElement.DeepEquals(await Json(await Send(HttpMethod.Get, $"/api/Sales/SalesReceipt?id={PubId<Core.Domain.Sales.SalesReceiptHeader>(receiptId)}")), data));
+            Assert.Equal("DETAIL-RECEIPT", data.GetProperty("receiptNo").GetString());
+            Assert.Matches(@"^C-[0-9A-F]{8}([0-9A-F]{4})?$", data.GetProperty("customerName").GetString());
+            Assert.Equal(Api.Service.Ai.McpFieldClassificationRegistry.HiddenTextPlaceholder, data.GetProperty("memo").GetString());
+            Assert.DoesNotContain("Receipt detail evidence", data.GetRawText(), StringComparison.OrdinalIgnoreCase);
+            var page = await Json(await Send(HttpMethod.Get, $"/api/Sales/SalesReceipt?id={PubId<Core.Domain.Sales.SalesReceiptHeader>(receiptId)}"));
+            var expected = await DeidentifyPageData("search_receipts", "receipt", page, receiptSession);
+            Assert.True(JsonElement.DeepEquals(expected, data));
             Assert.Equal("NotFound", (await CallTool("search_receipts", new { receiptId = "rcpt_ffffffffffffffffffffffffff" })).GetProperty("status").GetString());
             await JoinOther();
             Assert.Equal("AccessDenied", (await CallTool("search_receipts", new { receiptId = PubId<Core.Domain.Sales.SalesReceiptHeader>(receiptId) }, _otherId)).GetProperty("status").GetString());
@@ -381,7 +396,10 @@ namespace AccountGo.BackendTests
             });
             var members = await CallTool("get_members_and_roles", new { });
             Assert.Equal("Success", members.GetProperty("status").GetString());
-            Assert.Contains(members.GetProperty("data").GetProperty("members").EnumerateArray(), m => m.GetProperty("userId").GetString() == _ownerId);
+            var memberRows = members.GetProperty("data").GetProperty("members").EnumerateArray().ToList();
+            Assert.NotEmpty(memberRows);
+            Assert.All(memberRows, m => Assert.Matches(@"^P-[0-9A-F]{8}([0-9A-F]{4})?$", m.GetProperty("userId").GetString()));
+            Assert.DoesNotContain(_ownerId, members.GetRawText(), StringComparison.Ordinal);
             var receipts = await CallTool("search_receipts", new { query = "BANK-RECEIPT" });
             Assert.Single(receipts.GetProperty("data").EnumerateArray());
             var detail = await CallTool("search_receipts", new { receiptId = PubId<Core.Domain.Sales.SalesReceiptHeader>(receiptId) });

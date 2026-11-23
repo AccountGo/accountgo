@@ -40,6 +40,48 @@ namespace AccountGo.BackendTests.Ai
         }
 
         [Fact]
+        public void MintAssertion_BindsChatSessionIdIntoSignedPayload()
+        {
+            var service = CreateService();
+            var token = service.MintAssertion("user-123", 42, "ph-financials", sessionId: "session-abc_123");
+
+            Assert.True(service.TryValidateAssertion(token, out var payload));
+            Assert.Equal("session-abc_123", payload!.SessionId);
+        }
+
+        [Theory]
+        [InlineData("")]
+        [InlineData("   ")]
+        [InlineData("bad/sid")]
+        [InlineData("has space")]
+        [InlineData("sid|pipe")]
+        [InlineData("sid.dot")]
+        public void MintAssertion_TreatsInvalidSessionIdAsAbsent(string invalidSid)
+        {
+            var service = CreateService();
+            var token = service.MintAssertion("user-123", 42, "ph-financials", sessionId: invalidSid);
+
+            Assert.True(service.TryValidateAssertion(token, out var payload));
+            Assert.Null(payload!.SessionId);
+        }
+
+        [Fact]
+        public void MintAssertion_Enforces128CharLimitOnSessionId()
+        {
+            var service = CreateService();
+            var maxValid = new string('a', 128);
+            var tooLong = new string('a', 129);
+
+            var okToken = service.MintAssertion("user-123", 42, "ph-financials", sessionId: maxValid);
+            Assert.True(service.TryValidateAssertion(okToken, out var okPayload));
+            Assert.Equal(maxValid, okPayload!.SessionId);
+
+            var longToken = service.MintAssertion("user-123", 42, "ph-financials", sessionId: tooLong);
+            Assert.True(service.TryValidateAssertion(longToken, out var longPayload));
+            Assert.Null(longPayload!.SessionId);
+        }
+
+        [Fact]
         public void TryValidateAssertion_RejectsTamperedSignatureOrPayload()
         {
             var service = CreateService();

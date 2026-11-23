@@ -221,7 +221,8 @@ public sealed class AssistantDocumentCaptureTests : IAsyncLifetime
         Assert.Contains(AssistantAttachmentMessageBuilder.BeginDelimiter, sentMessage);
         Assert.Contains(AssistantAttachmentMessageBuilder.EndDelimiter, sentMessage);
         Assert.Contains($"Attachment ID: {pubId}", sentMessage);
-        Assert.Contains("- Vendor: Acme Supplies", sentMessage);
+        Assert.DoesNotContain("Acme Supplies", sentMessage);
+        Assert.Matches(@"- Vendor: V-[0-9A-F]{8}", sentMessage);
         Assert.Contains("- Total: 42.00", sentMessage);
         Assert.DoesNotContain("DocumentBytes", upstream.Body);
     }
