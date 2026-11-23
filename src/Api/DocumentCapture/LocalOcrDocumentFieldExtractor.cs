@@ -146,6 +146,8 @@ public sealed class LocalOcrDocumentFieldExtractor : IDocumentFieldExtractor, ID
             result = ParseWorkerResponse(payload, request.PageCount);
             var (lines, rawText) = BoundLines(result.Lines);
             var parsed = DocumentTextFieldParser.Parse(request.Kind, lines);
+            // Rule fields are returned as soon as the rules have read the document. An optional field mapper never runs here: a later
+            // background job calls CaptureFieldMappingRunner, so a slow mapper can't delay a scan or hold the OCR admission slot.
             var extraction = new DocumentExtractionResult(parsed.FieldsJson, request.Kind, 1,
                 result.Warnings.Concat(parsed.Warnings).Distinct(StringComparer.Ordinal).Take(32).ToArray(),
                 rawText, ProviderName, CurrentProviderVersion);

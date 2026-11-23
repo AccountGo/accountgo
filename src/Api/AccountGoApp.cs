@@ -251,6 +251,9 @@ public static class AccountGoApp
                 return true;
             }, "Document capture options are invalid.")
             .ValidateOnStart();
+        // The default field mapper returns the rule fields unchanged. It is not called when a document is scanned; a later background
+        // job calls it through CaptureFieldMappingRunner, and a later change can register an optional mapper here.
+        builder.Services.AddSingleton<Api.DocumentCaptures.Mapping.ICaptureFieldMapper, Api.DocumentCaptures.Mapping.RuleOnlyFieldMapper>();
         builder.Services.AddSingleton<Api.DocumentCaptures.IDocumentFieldExtractor>(serviceProvider =>
         {
             var options = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<Api.DocumentCaptures.DocumentCaptureOptions>>();

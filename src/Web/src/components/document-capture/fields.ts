@@ -90,7 +90,12 @@ export interface VendorCaptureFields {
   lines?: CaptureLineField[] | null;
   sourceTotals?: CaptureSourceTotals | null;
   paymentHints?: CapturePaymentHints | null;
+  /** Fields an optional field mapper filled in, by path. A path that is absent was found by the rules. */
+  fieldSources?: CaptureFieldSources | null;
 }
+
+/** Field path (for example `vendorName`, `sourceTotals.grandTotal`, `lines[2].description`) to where its value came from. */
+export type CaptureFieldSources = Record<string, 'rules' | 'ai'>;
 
 export interface SalesCaptureFields {
   customerName?: string | null;
@@ -102,6 +107,7 @@ export interface SalesCaptureFields {
   notes?: string | null;
   lines?: CaptureLineField[] | null;
   sourceTotals?: CaptureSourceTotals | null;
+  fieldSources?: CaptureFieldSources | null;
 }
 
 export interface BankCaptureFields {
@@ -1127,6 +1133,25 @@ export function describeCaptureError(
   }
 }
 
+const FIELD_SOURCE_PATH =
+  /^(?:vendorName|customerName|vendorInvoiceNo|sourceInvoiceNo|date|dueDate|referenceNo|currency|notes|sourceTotals\.(?:subtotal|taxTotal|grandTotal|discountTotal|additionalCharges|priceBasis)|paymentHints\.(?:paymentStatus|amountPaid|paymentMethod)|lines\[\d{1,2}\]\.(?:description|quantity|unitAmount|sourceLineTotal|taxHint|discount|priceBasis|missingQuantityDefaulted))$/;
+
+/**
+ * Reads the per-field source map from accepted or extracted fields. Anything that isn't a known path with a `rules` or `ai` value is
+ * ignored, and a missing or malformed map is an empty one, so a capture without it behaves exactly as before.
+ */
+export function parseFieldSources(raw: unknown): CaptureFieldSources {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const sources: CaptureFieldSources = {};
+  for (const [path, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (FIELD_SOURCE_PATH.test(path) && (value === 'rules' || value === 'ai')) sources[path] = value;
+  }
+  return sources;
+}
+
+/** True when an optional field mapper (not the rules) filled in this field. Nothing renders this yet. */
+export const isAiAssistedField = (sources: CaptureFieldSources | null | undefined, path: string) => sources?.[path] === 'ai';
+
 export function describeCaptureWarning(code: string): string {
   switch (code) {
     case 'OCR_PARTIAL_PAGES':
@@ -1153,6 +1178,14 @@ export function describeCaptureWarning(code: string): string {
       return 'Price basis (tax-inclusive vs tax-exclusive) is unknown — verify tax before approving.';
     case 'PAYMENT_STATUS_UNKNOWN':
       return 'Payment status could not be determined from the document.';
+    case 'AI_VALUE_NOT_IN_SOURCE':
+      return 'A suggested value was not found in the document text, so the value read by the rules was kept.';
+    case 'AI_TOTALS_INCONSISTENT':
+      return 'Suggested amounts did not add up, so the totals or lines read by the rules were kept.';
+    case 'AI_DISAGREES_WITH_RULES':
+      return 'Some suggested values differ from what the rules read. Check them against the document.';
+    case 'AI_UNAVAILABLE':
+      return 'Suggestions were not available, so the fields read by the rules are shown.';
     default:
       return 'Review extracted values carefully before applying.';
   }

@@ -20,7 +20,11 @@ public static class DocumentCaptureWarningCodes
         "TOTALS_INCONSISTENT",
         "TOTAL_UNLABELED",
         "PARSE_TRUNCATED",
-        "REVIEW_REQUIRED"
+        "REVIEW_REQUIRED",
+        "AI_VALUE_NOT_IN_SOURCE",
+        "AI_TOTALS_INCONSISTENT",
+        "AI_DISAGREES_WITH_RULES",
+        "AI_UNAVAILABLE"
     };
 
     public static string Sanitize(string? warning) => warning is not null && Known.Contains(warning) ? warning : "REVIEW_REQUIRED";

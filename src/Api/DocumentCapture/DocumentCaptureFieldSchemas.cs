@@ -24,6 +24,7 @@ public static partial class DocumentCaptureFieldSchemas
     public const int MaxNestingDepth = 4;
     public const int MaxDecimalSignificantDigits = 18;
     public const int MaxDecimalScale = 4;
+    public const int MaxFieldSources = 256;
 
     public const string EmptyObjectJson = "{}";
     public const string EmptyAssistantFieldsJson = "{\"fields\":[]}";
@@ -36,13 +37,13 @@ public static partial class DocumentCaptureFieldSchemas
     private static readonly HashSet<string> VendorFields = new(StringComparer.Ordinal)
     {
         "vendorName", "vendorInvoiceNo", "date", "dueDate", "referenceNo", "currency", "notes",
-        "lines", "sourceTotals", "paymentHints"
+        "lines", "sourceTotals", "paymentHints", "fieldSources"
     };
 
     private static readonly HashSet<string> SalesFields = new(StringComparer.Ordinal)
     {
         "customerName", "sourceInvoiceNo", "date", "dueDate", "referenceNo", "currency", "notes",
-        "lines", "sourceTotals"
+        "lines", "sourceTotals", "fieldSources"
     };
 
     private static readonly HashSet<string> BankFields = new(StringComparer.Ordinal)
@@ -123,7 +124,8 @@ public static partial class DocumentCaptureFieldSchemas
                 || !OptionalCurrency(fields, "currency")
                 || !OptionalLines(fields)
                 || !OptionalObject(fields, "sourceTotals", TotalFields, ValidateTotal)
-                || (kind != "sales-invoice" && !OptionalObject(fields, "paymentHints", PaymentHintFields, ValidatePaymentHint)))
+                || (kind != "sales-invoice" && !OptionalObject(fields, "paymentHints", PaymentHintFields, ValidatePaymentHint))
+                || !ValidFieldSources(kind, fields))
                 return Invalid(out errorCode);
         }
         else if (kind == "bank")
@@ -216,6 +218,11 @@ public static partial class DocumentCaptureFieldSchemas
             foreach (var property in parsed.RootElement.EnumerateObject().Where(property => allowed.Contains(property.Name))
                          .OrderBy(property => property.Name, StringComparer.Ordinal))
             {
+                if (property.Name == "fieldSources")
+                {
+                    WriteFieldSources(kind, property.Value, writer);
+                    continue;
+                }
                 writer.WritePropertyName(property.Name);
                 var nested = property.Name switch
                 {
@@ -236,6 +243,71 @@ public static partial class DocumentCaptureFieldSchemas
         }
         return Encoding.UTF8.GetString(output.ToArray());
     }
+
+    /// <summary>
+    /// Per-field source: field path to "rules" or "ai". Rule-only output omits it, and a path that is absent means the rules found the
+    /// value, so only AI-filled fields are listed. Unknown paths and values are dropped, and the map is bounded.
+    /// </summary>
+    private static bool ValidFieldSources(string kind, JsonElement fields)
+    {
+        if (!fields.TryGetProperty("fieldSources", out var sources))
+            return true;
+        if (sources.ValueKind != JsonValueKind.Object)
+            return false;
+        var count = 0;
+        foreach (var entry in sources.EnumerateObject())
+        {
+            if (++count > MaxFieldSources
+                || !IsValidFieldSourcePath(kind, entry.Name)
+                || entry.Value.ValueKind != JsonValueKind.String
+                || entry.Value.GetString() is not ("rules" or "ai"))
+                return false;
+        }
+        return true;
+    }
+
+    private static void WriteFieldSources(string kind, JsonElement sources, Utf8JsonWriter writer)
+    {
+        if (sources.ValueKind != JsonValueKind.Object)
+            return;
+        var kept = sources.EnumerateObject()
+            .Where(entry => IsValidFieldSourcePath(kind, entry.Name)
+                && entry.Value.ValueKind == JsonValueKind.String
+                && entry.Value.GetString() is "rules" or "ai")
+            .OrderBy(entry => entry.Name, StringComparer.Ordinal)
+            .Take(MaxFieldSources)
+            .ToList();
+        if (kept.Count == 0)
+            return;
+        writer.WritePropertyName("fieldSources");
+        writer.WriteStartObject();
+        foreach (var entry in kept)
+            writer.WriteString(entry.Name, entry.Value.GetString());
+        writer.WriteEndObject();
+    }
+
+    internal static bool IsValidFieldSourcePath(string kind, string path)
+    {
+        if (kind is not ("expense-receipt" or "purchase-invoice" or "sales-invoice") || path.Length > 64)
+            return false;
+        var topLevel = kind == "sales-invoice" ? SalesFields : VendorFields;
+        if (path is "lines" or "sourceTotals" or "paymentHints" or "fieldSources")
+            return false;
+        if (topLevel.Contains(path))
+            return true;
+        var dot = path.IndexOf('.', StringComparison.Ordinal);
+        if (dot > 0 && path[..dot] == "sourceTotals")
+            return TotalFields.Contains(path[(dot + 1)..]);
+        if (dot > 0 && kind != "sales-invoice" && path[..dot] == "paymentHints")
+            return PaymentHintFields.Contains(path[(dot + 1)..]);
+        var match = LineSourcePathRegex().Match(path);
+        return match.Success
+            && int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture) < MaxFinancialLines
+            && LineFields.Contains(match.Groups[2].Value);
+    }
+
+    [GeneratedRegex(@"^lines\[(\d{1,3})\]\.([A-Za-z]+)$", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking)]
+    private static partial Regex LineSourcePathRegex();
 
     private static void WriteFilteredArray(JsonElement array, HashSet<string> allowed, Utf8JsonWriter writer, HashSet<string>? boxProperties)
     {
