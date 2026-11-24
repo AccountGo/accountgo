@@ -95,46 +95,66 @@ public sealed class AnterCaptureFieldMapper(
             ["lines"] = new JsonArray(request.Lines.Select(line => (JsonNode?)JsonValue.Create(line.Text)).ToArray()),
         }.ToJsonString();
 
+    // The run-stream control events carry no assistant text. This list and the text and terminal rules below mirror what the web proxy
+    // already does with the same stream (src/Web/src/assistant/reidentify.ts: RUNNER_CONTROL_EVENTS, detectContentTarget, isTerminalSseEvent).
+    private static readonly HashSet<string> ControlEvents = new(StringComparer.Ordinal)
+    {
+        "started", "step", "artifact", "context_resolved", "tool_call", "tool_result", "tool_approval", "approval_required",
+        "thinking", "reasoning", "done", "complete", "completed", "cancelled", "canceled", "error",
+    };
+
     /// <summary>
-    /// Reads server-sent events and returns the assistant's reply: the text of a final event when there is one, otherwise the content
-    /// events joined in order. Events may arrive split across any number of network chunks.
+    /// Reads server-sent events and returns the assistant's reply: the text of every non-control event joined in order. The event name is
+    /// the <c>event:</c> line, else <c>event</c>, else <c>type</c> in the data; the text is the data's <c>content</c>, else
+    /// <c>payload.text</c>, else <c>payload.content</c>. It returns as soon as a <c>done</c> or <c>complete</c> event (or
+    /// <c>isComplete</c>) arrives, without waiting for the connection to close, and fails on an error or cancelled event.
+    /// Events may arrive split across any number of network chunks.
     /// </summary>
     internal static async Task<string> ReadReplyAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using var reader = new StreamReader(stream, Encoding.UTF8);
-        var content = new StringBuilder();
-        string? final = null;
+        var reply = new StringBuilder();
+        string? eventName = null;
         var data = new StringBuilder();
 
-        void Dispatch()
+        // Returns true when the stream is finished.
+        bool Dispatch()
         {
+            var name = eventName;
+            eventName = null;
             if (data.Length == 0)
-                return;
-            var json = data.ToString();
+                return false;
+            var raw = data.ToString();
             data.Clear();
-            JsonNode? node;
+            if (raw == "[DONE]")
+                return true;
+            JsonObject? node;
             try
             {
-                node = JsonNode.Parse(json);
+                node = JsonNode.Parse(raw) as JsonObject;
             }
             catch (JsonException)
             {
-                return;
+                return false;
             }
-            var type = node?["type"]?.GetValue<string>();
-            var text = node?["payload"]?["text"]?.GetValue<string>();
-            switch (type)
-            {
-                case "content" when text is not null:
-                    content.Append(text);
-                    break;
-                case "final" or "final_response" or "message_complete" when text is not null:
-                    final = text;
-                    break;
-                case "error":
-                    throw new InvalidOperationException("The mapper agent reported an error.");
-            }
+            if (node is null)
+                return false;
+
+            var outer = (!string.IsNullOrEmpty(name) ? name : StringValue(node["event"]) ?? StringValue(node["type"]) ?? string.Empty).ToLowerInvariant();
+            if (outer is "error" or "cancelled" or "canceled")
+                throw new InvalidOperationException("The mapper agent did not finish.");
+            if (outer is "done" or "complete" || node["isComplete"] is JsonValue complete && complete.TryGetValue<bool>(out var isComplete) && isComplete)
+                return true;
+            if (outer.Length > 0 && ControlEvents.Contains(outer))
+                return false;
+
+            var text = StringValue(node["content"]);
+            if (text is null && node["payload"] is JsonObject payload)
+                text = StringValue(payload["text"]) ?? StringValue(payload["content"]);
+            if (text is not null)
+                reply.Append(text);
+            return false;
         }
 
         string? line;
@@ -142,10 +162,13 @@ public sealed class AnterCaptureFieldMapper(
         {
             if (line.Length == 0)
             {
-                Dispatch();
+                if (Dispatch())
+                    return reply.ToString();
                 continue;
             }
-            if (line.StartsWith("data:", StringComparison.Ordinal))
+            if (line.StartsWith("event:", StringComparison.Ordinal))
+                eventName = line[6..].Trim();
+            else if (line.StartsWith("data:", StringComparison.Ordinal))
             {
                 if (data.Length > 0)
                     data.Append('\n');
@@ -153,8 +176,11 @@ public sealed class AnterCaptureFieldMapper(
             }
         }
         Dispatch();
-        return final ?? content.ToString();
+        return reply.ToString();
     }
+
+    private static string? StringValue(JsonNode? node) =>
+        node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
 
     /// <summary>The reply must be one JSON object (a markdown code fence around it is tolerated). Anything else is unusable.</summary>
     internal static string ParseFields(string reply)

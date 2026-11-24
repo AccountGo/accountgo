@@ -218,6 +218,11 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
     }
   }
 
+  // A new extraction of the same capture (a re-scan, or the capture cycling through extracting) gets its own AI-assisted merge.
+  useEffect(() => {
+    aiMergedForRef.current = '';
+  }, [currentCaptureKey]);
+
   // When the optional background mapping finishes, fold its improvements into fields the user hasn't touched.
   useEffect(() => {
     if (!capture || capture.status !== 'ready' || capture.aiMapping?.status !== 'done' || !baseline) return;

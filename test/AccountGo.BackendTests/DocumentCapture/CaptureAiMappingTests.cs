@@ -356,6 +356,83 @@ public sealed class CaptureAiMappingTests : IDisposable
         Assert.Equal("applied", (await JobAsync(second)).Outcome);
     }
 
+    // ---- retention: mapped values never outlive the capture's content --------------------------------------------
+
+    private async Task AddDoneJobAsync(int captureId, int generation, string contentHash = "a")
+    {
+        _tenant.Set(1);
+        _db.DocumentCaptureAiMappings.Add(new DocumentCaptureAiMapping
+        {
+            CompanyId = 1, CaptureId = captureId, ExtractionGeneration = generation, Status = "done", Attempts = 1,
+            Kind = "purchase-invoice", ContentHash = contentHash.PadRight(64, 'c'), RulesVersion = "rules-3",
+            MapperName = "scripted", MapperVersion = "1", Outcome = "applied", CreatedAt = DateTime.UtcNow, CompletedAt = DateTime.UtcNow,
+            MappedFieldsJson = MappedFields, RuleHintsJson = """{"vendorName":"Northstar"}""",
+        });
+        await _db.SaveChangesAsync();
+    }
+
+    private DocumentCaptureRetentionService Retention() => new(_db, new DocumentCaptureAdmissionLock(_db));
+
+    [Fact]
+    [Trait("Rule", "AI-06")]
+    public async Task AbandonedPurgeRemovesTheMappingRowsOfEveryGenerationButNotThoseOfAcceptedCaptures()
+    {
+        var abandoned = await AddReadyCaptureAsync(contentHash: "one");
+        var accepted = await AddReadyCaptureAsync(contentHash: "two");
+        await AddDoneJobAsync(abandoned, 1, "one");
+        await AddDoneJobAsync(abandoned, 2, "one");
+        await AddDoneJobAsync(accepted, 1, "two");
+        var now = DateTime.UtcNow;
+        await _db.DocumentCaptures.IgnoreQueryFilters().Where(c => c.Id == abandoned)
+            .ExecuteUpdateAsync(set => set.SetProperty(c => c.ExpiresAt, now.AddDays(-1)));
+        await _db.DocumentCaptures.IgnoreQueryFilters().Where(c => c.Id == accepted)
+            .ExecuteUpdateAsync(set => set.SetProperty(c => c.Status, "accepted").SetProperty(c => c.AcceptedAt, now.AddDays(-30))
+                .SetProperty(c => c.ExpiresAt, now.AddDays(-30)).SetProperty(c => c.FieldsJson, (string?)null).SetProperty(c => c.AcceptedFieldsJson, "{\"date\":\"2026-11-12\"}"));
+
+        await Retention().PurgeAsync(now, CancellationToken.None);
+
+        var remaining = await _db.DocumentCaptureAiMappings.IgnoreQueryFilters().AsNoTracking().ToListAsync();
+        Assert.DoesNotContain(remaining, job => job.CaptureId == abandoned);
+        Assert.Single(remaining, job => job.CaptureId == accepted);
+        Assert.NotNull((await CaptureAsync(abandoned)).FieldsWipedAt);
+    }
+
+    [Fact]
+    [Trait("Rule", "AI-06")]
+    public async Task RejectedResiduePurgeRemovesTheMappingRowsToo()
+    {
+        var rejected = await AddReadyCaptureAsync();
+        await AddDoneJobAsync(rejected, 1);
+        var now = DateTime.UtcNow;
+        await _db.DocumentCaptures.IgnoreQueryFilters().Where(c => c.Id == rejected)
+            .ExecuteUpdateAsync(set => set.SetProperty(c => c.Status, "rejected").SetProperty(c => c.RejectedAt, now.AddMinutes(-5))
+                .SetProperty(c => c.RejectedBy, "creator-1").SetProperty(c => c.ExpiresAt, now.AddDays(5)));
+
+        await Retention().PurgeAsync(now, CancellationToken.None);
+
+        Assert.Empty(await _db.DocumentCaptureAiMappings.IgnoreQueryFilters().Where(job => job.CaptureId == rejected).ToListAsync());
+        Assert.NotNull((await CaptureAsync(rejected)).FieldsWipedAt);
+    }
+
+    [Fact]
+    [Trait("Rule", "AI-07")]
+    public async Task AWipedCapturesMappingIsNeverReusedByTheCache()
+    {
+        var wiped = await AddReadyCaptureAsync(contentHash: "same");
+        await AddDoneJobAsync(wiped, 1, "same");
+        // A mapping row that somehow survived the wipe (for example from before the wipe also removed it).
+        await _db.DocumentCaptures.IgnoreQueryFilters().Where(c => c.Id == wiped)
+            .ExecuteUpdateAsync(set => set.SetProperty(c => c.FieldsWipedAt, DateTime.UtcNow).SetProperty(c => c.FieldsJson, "{}"));
+        var later = await AddReadyCaptureAsync(contentHash: "same");
+        await EnqueueAsync(later, contentHash: "same");
+        var mapper = new ScriptedMapper(MappedFields) { Version = "1" };
+
+        await Processor(mapper).ProcessNextAsync(CancellationToken.None);
+
+        Assert.Equal(1, mapper.Calls);
+        Assert.Equal("applied", (await JobAsync(later)).Outcome);
+    }
+
     // ---- leases, attempts and the rate cap ------------------------------------------------------------------------
 
     [Fact]
@@ -400,8 +477,9 @@ public sealed class CaptureAiMappingTests : IDisposable
     {
         var capture = await AddReadyCaptureAsync();
         await EnqueueAsync(capture);
+        var clock = new FixedClock(DateTimeOffset.UtcNow);
         var mapper = new ScriptedMapper((Func<string>)(() => throw new InvalidOperationException("secret NS-20457")));
-        var processor = Processor(mapper);
+        var processor = Processor(mapper, clock);
 
         for (var attempt = 1; attempt <= DocumentCaptureAiMappingProcessor.MaxAttempts; attempt++)
         {
@@ -409,12 +487,93 @@ public sealed class CaptureAiMappingTests : IDisposable
             var job = await JobAsync(capture);
             Assert.Equal(attempt, job.Attempts);
             Assert.Equal(attempt < DocumentCaptureAiMappingProcessor.MaxAttempts ? "queued" : "failed", job.Status);
+            clock.Advance(TimeSpan.FromMinutes(1)); // past any backoff
         }
 
         Assert.False(await processor.ProcessNextAsync(CancellationToken.None));
         Assert.Equal(DocumentCaptureAiMappingProcessor.MaxAttempts, mapper.Calls);
         Assert.Equal(RuleFields, (await CaptureAsync(capture)).FieldsJson);
         Assert.DoesNotContain("secret", (await JobAsync(capture)).Outcome);
+    }
+
+    [Fact]
+    public async Task ARequeuedJobWaitsOutItsBackoffBeforeItIsClaimedAgain()
+    {
+        var capture = await AddReadyCaptureAsync();
+        await EnqueueAsync(capture);
+        var clock = new FixedClock(DateTimeOffset.UtcNow);
+        var mapper = new ScriptedMapper((Func<string>)(() => throw new InvalidOperationException("outage")));
+        var processor = Processor(mapper, clock);
+
+        Assert.True(await processor.ProcessNextAsync(CancellationToken.None));
+        Assert.Equal(1, mapper.Calls);
+
+        // An outage doesn't burn the remaining attempts within seconds.
+        Assert.False(await processor.ProcessNextAsync(CancellationToken.None));
+        clock.Advance(TimeSpan.FromSeconds(9));
+        Assert.False(await processor.ProcessNextAsync(CancellationToken.None));
+        Assert.Equal(1, mapper.Calls);
+        Assert.Equal("queued", (await JobAsync(capture)).Status);
+
+        // Ten seconds per attempt used: claimable again just after the first backoff.
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.True(await processor.ProcessNextAsync(CancellationToken.None));
+        Assert.Equal(2, mapper.Calls);
+
+        // The second backoff is twice as long.
+        clock.Advance(TimeSpan.FromSeconds(15));
+        Assert.False(await processor.ProcessNextAsync(CancellationToken.None));
+        clock.Advance(TimeSpan.FromSeconds(6));
+        Assert.True(await processor.ProcessNextAsync(CancellationToken.None));
+        Assert.Equal(3, mapper.Calls);
+    }
+
+    // ---- no idle polling: the worker is woken by a signal ---------------------------------------------------------
+
+    [Fact]
+    public async Task AnEnqueueWakesTheWorkerWithoutWaitingForTheFallbackCheck()
+    {
+        var signal = new CaptureAiMappingSignal();
+        var capture = await AddReadyCaptureAsync();
+
+        // Nothing queued: the wait runs to the (here very short) fallback and reports it was not signalled.
+        Assert.False(await signal.WaitAsync(TimeSpan.FromMilliseconds(30), CancellationToken.None));
+
+        _tenant.Set(1);
+        Assert.True(await CaptureAiMappingQueue.TryEnqueueAsync(_db, Options.Create(_captureOptions), _policy, 1, capture, 1, "purchase-invoice",
+            "a".PadRight(64, 'c'), DateTime.UtcNow, CancellationToken.None, signal));
+
+        // A long fallback would never elapse in this test: the queued job signalled at once.
+        Assert.True(await signal.WaitAsync(TimeSpan.FromMinutes(10), CancellationToken.None));
+        Assert.True(await Processor(new ScriptedMapper(MappedFields)).ProcessNextAsync(CancellationToken.None));
+        Assert.Equal("done", (await JobAsync(capture)).Status);
+    }
+
+    [Fact]
+    public async Task SeveralEnqueuesCollapseIntoOneWakeUpAndADuplicateEnqueueDoesNotSignal()
+    {
+        var signal = new CaptureAiMappingSignal();
+        var first = await AddReadyCaptureAsync(contentHash: "one");
+        var second = await AddReadyCaptureAsync(contentHash: "two");
+        _tenant.Set(1);
+        await CaptureAiMappingQueue.TryEnqueueAsync(_db, Options.Create(_captureOptions), _policy, 1, first, 1, "purchase-invoice", "one".PadRight(64, 'c'),
+            DateTime.UtcNow, CancellationToken.None, signal);
+        await CaptureAiMappingQueue.TryEnqueueAsync(_db, Options.Create(_captureOptions), _policy, 1, second, 1, "purchase-invoice", "two".PadRight(64, 'c'),
+            DateTime.UtcNow, CancellationToken.None, signal);
+
+        Assert.True(await signal.WaitAsync(TimeSpan.FromMinutes(10), CancellationToken.None));
+        Assert.False(await signal.WaitAsync(TimeSpan.FromMilliseconds(30), CancellationToken.None));
+
+        // Enqueueing the same extraction again adds no job and wakes nobody.
+        await CaptureAiMappingQueue.TryEnqueueAsync(_db, Options.Create(_captureOptions), _policy, 1, first, 1, "purchase-invoice", "one".PadRight(64, 'c'),
+            DateTime.UtcNow, CancellationToken.None, signal);
+        Assert.False(await signal.WaitAsync(TimeSpan.FromMilliseconds(30), CancellationToken.None));
+    }
+
+    [Fact]
+    public void TheIdleWorkerChecksTheDatabaseOnlyEveryFifteenSecondsAtMost()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(15), DocumentCaptureAiMappingWorker.FallbackInterval);
     }
 
     [Fact]

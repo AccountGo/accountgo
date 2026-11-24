@@ -23,7 +23,8 @@ public static class CaptureAiMappingQueue
         string kind,
         string contentHash,
         DateTime now,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        CaptureAiMappingSignal? signal = null)
     {
         if (!options.Value.AiMapping.Enabled || policy is null || !CaptureMappingRequestFactory.IsMappableKind(kind))
             return false;
@@ -49,6 +50,7 @@ public static class CaptureAiMappingQueue
         try
         {
             await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            signal?.Notify();
             return true;
         }
         catch (DbUpdateException)

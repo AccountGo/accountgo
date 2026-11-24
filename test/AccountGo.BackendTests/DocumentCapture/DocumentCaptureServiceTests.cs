@@ -140,6 +140,21 @@ public sealed class DocumentCaptureServiceTests
         Assert.Equal("failed", (await service.GetAsync(internalId, CancellationToken.None)).AiMapping!.Status);
     }
 
+    [Fact]
+    public async Task Reject_DeletesTheAiMappingRowsThatHoldTheSameDocumentValues()
+    {
+        using var harness = new Harness(enabled: true);
+        harness.CaptureOptions.Value.AiMapping.Enabled = true;
+        var service = harness.CreateService(harness.Extractor, aiMappingPolicy: new AllowAiMappingPolicy());
+        var uploaded = await service.UploadAsync("purchase-invoice", 1, "image/png", CreatePng(), "ai-reject", CancellationToken.None);
+        Assert.Single(await harness.Db.DocumentCaptureAiMappings.IgnoreQueryFilters().ToListAsync());
+        var internalId = await harness.Db.DocumentCaptures.Where(c => c.PublicId == uploaded.Id).Select(c => c.Id).SingleAsync();
+
+        await service.RejectAsync(internalId, CancellationToken.None);
+
+        Assert.Empty(await harness.Db.DocumentCaptureAiMappings.IgnoreQueryFilters().ToListAsync());
+    }
+
     private static async Task<string?> PendingStatusAsync(Harness harness, DocumentCaptureService service, string publicId)
     {
         var internalId = await harness.Db.DocumentCaptures.Where(c => c.PublicId == publicId).Select(c => c.Id).SingleAsync();

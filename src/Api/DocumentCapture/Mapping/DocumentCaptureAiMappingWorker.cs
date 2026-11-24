@@ -9,9 +9,11 @@ using Microsoft.Extensions.Logging;
 namespace Api.DocumentCaptures.Mapping;
 
 /// <summary>Runs queued field-mapping jobs in the background. Registered only when AI mapping is enabled in configuration.</summary>
-public sealed class DocumentCaptureAiMappingWorker(IServiceScopeFactory scopes, ILogger<DocumentCaptureAiMappingWorker> logger) : BackgroundService
+public sealed class DocumentCaptureAiMappingWorker(IServiceScopeFactory scopes, CaptureAiMappingSignal signal,
+    ILogger<DocumentCaptureAiMappingWorker> logger) : BackgroundService
 {
-    private static readonly TimeSpan IdleDelay = TimeSpan.FromSeconds(1);
+    /// <summary>How long an idle worker waits for a wake-up before checking the database anyway (jobs queued by another instance, requeued jobs).</summary>
+    public static readonly TimeSpan FallbackInterval = TimeSpan.FromSeconds(15);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -37,7 +39,7 @@ public sealed class DocumentCaptureAiMappingWorker(IServiceScopeFactory scopes, 
             {
                 try
                 {
-                    await Task.Delay(IdleDelay, stoppingToken).ConfigureAwait(false);
+                    await signal.WaitAsync(FallbackInterval, stoppingToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {

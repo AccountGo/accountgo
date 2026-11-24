@@ -117,8 +117,13 @@ function mock(uploaded: DocumentCaptureView, polled: () => DocumentCaptureView) 
   return { polls: () => polls };
 }
 
-async function upload() {
-  render(<DocumentCapturePanel kind={['expense-receipt', 'purchase-invoice']} orgSlug="acme" onAccepted={vi.fn()} />);
+async function upload(scopeKey = 'new') {
+  const rendered = render(<DocumentCapturePanel kind={['expense-receipt', 'purchase-invoice']} orgSlug="acme" scopeKey={scopeKey} onAccepted={vi.fn()} />);
+  await selectFile();
+  return rendered;
+}
+
+async function selectFile() {
   await waitFor(() => expect(screen.getByLabelText('Upload image or PDF')).toBeTruthy());
   fireEvent.change(screen.getByLabelText('Upload image or PDF'), { target: { files: [new File(['x'], 'bill.png', { type: 'image/png' })] } });
   await waitFor(() => expect(screen.getByLabelText(/^Vendor name/)).toBeTruthy());
@@ -190,5 +195,31 @@ describe('AI-assisted review updates', () => {
     await new Promise((resolve) => setTimeout(resolve, 2200));
 
     expect(counters.polls()).toBe(after);
+  });
+
+  it('merges again after the same capture is re-extracted and its mapping finishes a second time', async () => {
+    let round = 1;
+    mock(pendingView(), () =>
+      round === 1
+        ? improved('done')
+        : view({
+            fields: {
+              ...(view().fields as object),
+              vendorName: 'Acme Coffee Roasters Limited',
+              fieldSources: { vendorName: 'ai' },
+            } as DocumentCaptureView['fields'],
+            aiMapping: { status: 'done', ruleHints: { vendorName: 'Acme Coffee' } },
+          })
+    );
+    const { rerender } = await upload('doc-1');
+    await waitFor(() => expect((screen.getByLabelText(/^Vendor name/) as HTMLInputElement).value).toBe('Acme Coffee Roasters Ltd'), { timeout: 4000 });
+
+    // The same capture is read again (a new extraction) in a fresh review scope; its mapping finishes with a different result.
+    round = 2;
+    rerender(<DocumentCapturePanel kind={['expense-receipt', 'purchase-invoice']} orgSlug="acme" scopeKey="doc-2" onAccepted={vi.fn()} />);
+    await selectFile();
+    expect((screen.getByLabelText(/^Vendor name/) as HTMLInputElement).value).toBe('Acme Coffee');
+
+    await waitFor(() => expect((screen.getByLabelText(/^Vendor name/) as HTMLInputElement).value).toBe('Acme Coffee Roasters Limited'), { timeout: 4000 });
   });
 });

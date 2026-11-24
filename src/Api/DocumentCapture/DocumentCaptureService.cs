@@ -69,7 +69,8 @@ public sealed class DocumentCaptureService(
     ILogger<DocumentCaptureService> logger,
     ISecurityAuditService? securityAudit = null,
     TimeProvider? timeProvider = null,
-    ICaptureAiMappingPolicy? aiMappingPolicy = null)
+    ICaptureAiMappingPolicy? aiMappingPolicy = null,
+    CaptureAiMappingSignal? aiMappingSignal = null)
 {
     private static readonly TimeSpan ExtractorDeadline = CaptureWorkerRunner.Deadline;
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
@@ -679,6 +680,9 @@ public sealed class DocumentCaptureService(
             throw new DocumentCaptureServiceException(409, "DOCUMENT_STATE_CONFLICT");
         await db.DocumentCaptureBlobs.Where(b => b.CompanyId == companyId && b.CaptureId == captureId)
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        // The mapped fields hold the same document values the reject just wiped.
+        await db.DocumentCaptureAiMappings.IgnoreQueryFilters().Where(job => job.CompanyId == companyId && job.CaptureId == captureId)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         await AuditTransitionAsync("document.capture.rejected", "success", companyId, capture.PublicId, capture.Kind,
             "rejected", capture.ExtractionGeneration, actorId).ConfigureAwait(false);
@@ -701,7 +705,7 @@ public sealed class DocumentCaptureService(
             if (contentHash is null)
                 return;
             await CaptureAiMappingQueue.TryEnqueueAsync(db, options, aiMappingPolicy, companyId, captureId, generation, kind, contentHash,
-                _timeProvider.GetUtcNow().UtcDateTime, cancellationToken).ConfigureAwait(false);
+                _timeProvider.GetUtcNow().UtcDateTime, cancellationToken, aiMappingSignal).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

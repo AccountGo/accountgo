@@ -218,6 +218,106 @@ public sealed class AnterCaptureFieldMapperTests
         Assert.Empty(handler.Requests);
     }
 
+    // ---- the real run-stream shapes (the same rules the web proxy uses) -------------------------------------------
+
+    private static Task<HttpResponseMessage> SseResponse(string sse) => Ok(sse);
+
+    [Fact]
+    public async Task ReadsTextFromARootContentField()
+    {
+        var sse = "event: started\ndata: {\"executionId\":\"e1\"}\n\n"
+            + $"data: {{\"content\":{System.Text.Json.JsonSerializer.Serialize(MappedFields)}}}\n\n"
+            + "event: done\ndata: {}\n\n";
+        var (mapper, _, _) = Create((request, _) => Respond(request, () => SseResponse(sse)));
+
+        var result = await mapper.MapAsync(Request("Invoice No: NS-20457"), CancellationToken.None);
+
+        Assert.Equal(MappedFields, result.FieldsJson);
+    }
+
+    [Fact]
+    public async Task ReadsTextFromAPayloadContentField()
+    {
+        var sse = $"data: {{\"type\":\"message\",\"payload\":{{\"content\":{System.Text.Json.JsonSerializer.Serialize(MappedFields)}}}}}\n\n"
+            + "data: {\"type\":\"done\"}\n\n";
+        var (mapper, _, _) = Create((request, _) => Respond(request, () => SseResponse(sse)));
+
+        Assert.Equal(MappedFields, (await mapper.MapAsync(Request("A"), CancellationToken.None)).FieldsJson);
+    }
+
+    [Fact]
+    public async Task TheEventNameCanComeFromAnEventLineWithNoTypeInTheData()
+    {
+        var sse = $"event: message\ndata: {{\"payload\":{{\"text\":{System.Text.Json.JsonSerializer.Serialize(MappedFields)}}}}}\n\n"
+            + "event: complete\ndata: {}\n\n";
+        var (mapper, _, _) = Create((request, _) => Respond(request, () => SseResponse(sse)));
+
+        Assert.Equal(MappedFields, (await mapper.MapAsync(Request("A"), CancellationToken.None)).FieldsJson);
+    }
+
+    [Fact]
+    public async Task JoinsDeltasFromSeveralEventsInOrder()
+    {
+        var sse = "data: {\"type\":\"delta\",\"content\":\"{\\\"vendorName\\\":\"}\n\n"
+            + "data: {\"type\":\"delta\",\"payload\":{\"text\":\"\\\"A\\\"}\"}}\n\n"
+            + "data: {\"isComplete\":true}\n\n";
+        var (mapper, _, _) = Create((request, _) => Respond(request, () => SseResponse(sse)));
+
+        Assert.Equal("""{"vendorName":"A"}""", (await mapper.MapAsync(Request("A"), CancellationToken.None)).FieldsJson);
+    }
+
+    [Fact]
+    public async Task ThinkingToolAndStepEventsAreIgnored()
+    {
+        var sse = "event: started\ndata: {\"content\":\"ignore started\"}\n\n"
+            + "data: {\"type\":\"thinking\",\"payload\":{\"text\":\"I should look at the totals\"}}\n\n"
+            + "data: {\"type\":\"reasoning\",\"content\":\"more thoughts\"}\n\n"
+            + "data: {\"type\":\"tool_call\",\"payload\":{\"content\":\"{\\\"tool\\\":1}\"}}\n\n"
+            + "data: {\"type\":\"tool_result\",\"payload\":{\"text\":\"result\"}}\n\n"
+            + "data: {\"type\":\"step\",\"content\":\"step 1\"}\n\n"
+            + $"data: {{\"type\":\"content\",\"payload\":{{\"text\":{System.Text.Json.JsonSerializer.Serialize(MappedFields)}}}}}\n\n"
+            + "data: {\"type\":\"done\"}\n\n";
+        var (mapper, _, _) = Create((request, _) => Respond(request, () => SseResponse(sse)));
+
+        Assert.Equal(MappedFields, (await mapper.MapAsync(Request("A"), CancellationToken.None)).FieldsJson);
+    }
+
+    [Theory]
+    [InlineData("error")]
+    [InlineData("cancelled")]
+    [InlineData("canceled")]
+    public async Task AnErrorOrCancelledEventFailsTheCallAndTheRunnerFallsBack(string type)
+    {
+        var sse = $"data: {{\"type\":\"content\",\"payload\":{{\"text\":{System.Text.Json.JsonSerializer.Serialize(MappedFields)}}}}}\n\n"
+            + $"event: {type}\ndata: {{\"message\":\"boom\"}}\n\n";
+        var (mapper, handler, _) = Create((request, _) => Respond(request, () => SseResponse(sse)));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => mapper.MapAsync(Request("A"), CancellationToken.None));
+        var outcome = await CaptureFieldMappingRunner.RunAsync(mapper, "purchase-invoice", 1, RuleFields,
+            [new TextLine(1, "A", 0, 0, 1, 1, TextLineSource.Ocr)], "rules-3", CancellationToken.None);
+
+        Assert.Equal(RuleFields, outcome.FieldsJson);
+        Assert.Equal([CaptureMappingGuards.WarningUnavailable], outcome.Warnings);
+        Assert.Equal(2, handler.Requests.Count(r => r.Method == HttpMethod.Delete));
+    }
+
+    [Fact]
+    public async Task ReturnsAtTheDoneEventEvenWhenTheConnectionIsNeverClosed()
+    {
+        var sse = Sse(MappedFields) + "event: done\ndata: {}\n\n";
+        var (mapper, handler, _) = Create((request, _) => Respond(request, () => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StreamContent(new HoldOpenStream(Encoding.UTF8.GetBytes(sse))),
+        })), timeoutSeconds: 6);
+
+        var started = DateTime.UtcNow;
+        var result = await mapper.MapAsync(Request("A"), CancellationToken.None);
+
+        Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(3), "It waited for the connection to close instead of returning at done.");
+        Assert.Equal(MappedFields, result.FieldsJson);
+        AssertSessionDeleted(handler);
+    }
+
     private static void AssertSessionDeleted(StubHandler handler)
     {
         var post = handler.Requests.Single(r => r.Method == HttpMethod.Post);
@@ -259,6 +359,35 @@ public sealed class AnterCaptureFieldMapperTests
             Array.Copy(bytes, _position, buffer, offset, n);
             _position += n;
             return n;
+        }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    /// <summary>Delivers its bytes, then blocks like a connection the server keeps open, until the read is cancelled.</summary>
+    private sealed class HoldOpenStream(byte[] bytes) : Stream
+    {
+        private int _position;
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => bytes.Length;
+        public override long Position { get => _position; set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) =>
+            ReadAsync(buffer.AsMemory(offset, count)).AsTask().GetAwaiter().GetResult();
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            if (_position < bytes.Length)
+            {
+                var n = Math.Min(buffer.Length, bytes.Length - _position);
+                bytes.AsMemory(_position, n).CopyTo(buffer);
+                _position += n;
+                return n;
+            }
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            return 0;
         }
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
         public override void SetLength(long value) => throw new NotSupportedException();

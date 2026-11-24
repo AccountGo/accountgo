@@ -252,34 +252,10 @@ public static class AccountGoApp
             }, "Document capture options are invalid.")
             .ValidateOnStart();
         // Optional AI field mapping: off unless DocumentCapture:AiMapping:Enabled is set AND the workspace policy allows it. The default
-        // policy allows nothing, and a host that adds consent and plan checks registers its own before this line. A scan never waits for
-        // the mapper: a background worker calls it through CaptureFieldMappingRunner and applies the result conditionally.
-        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<
-            Api.DocumentCaptures.Mapping.ICaptureAiMappingPolicy, Api.DocumentCaptures.Mapping.DisabledCaptureAiMappingPolicy>(builder.Services);
-        builder.Services.AddSingleton<Api.DocumentCaptures.Mapping.CaptureAiMappingRateLimiter>();
-        builder.Services.AddScoped<Api.DocumentCaptures.Mapping.DocumentCaptureAiMappingProcessor>();
-        var aiMappingSettings = builder.Configuration.GetSection($"{Api.DocumentCaptures.DocumentCaptureOptions.SectionName}:AiMapping")
-            .Get<Api.DocumentCaptures.DocumentCaptureAiMappingOptions>() ?? new Api.DocumentCaptures.DocumentCaptureAiMappingOptions();
-        if (!aiMappingSettings.Enabled)
-        {
-            builder.Services.AddSingleton<Api.DocumentCaptures.Mapping.ICaptureFieldMapper, Api.DocumentCaptures.Mapping.RuleOnlyFieldMapper>();
-        }
-        else if (string.Equals(aiMappingSettings.Mapper, "fake", StringComparison.OrdinalIgnoreCase))
-        {
-            builder.Services.AddSingleton<Api.DocumentCaptures.Mapping.ICaptureFieldMapper, Api.DocumentCaptures.Mapping.FakeCaptureFieldMapper>();
-        }
-        else
-        {
-            // Its own client with the short timeout, not the 10-minute assistant chat client.
-            builder.Services.AddHttpClient(Api.DocumentCaptures.Mapping.AnterCaptureFieldMapper.HttpClientName,
-                client => client.Timeout = TimeSpan.FromSeconds(Api.DocumentCaptures.DocumentCaptureAiMappingOptions.MaxTimeoutSeconds + 4));
-            builder.Services.AddSingleton<Api.DocumentCaptures.Mapping.ICaptureFieldMapper>(serviceProvider =>
-                new Api.DocumentCaptures.Mapping.AnterCaptureFieldMapper(
-                    serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(Api.DocumentCaptures.Mapping.AnterCaptureFieldMapper.HttpClientName),
-                    serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<Api.Options.AnterOptions>>(),
-                    serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<Api.DocumentCaptures.DocumentCaptureOptions>>(),
-                    serviceProvider.GetRequiredService<ILogger<Api.DocumentCaptures.Mapping.AnterCaptureFieldMapper>>()));
-        }
+        // policy allows nothing, and a host that adds consent and plan checks registers its own policy before this line. A scan never
+        // waits for the mapper: a background worker calls it and applies the result conditionally.
+        Api.DocumentCaptures.Mapping.CaptureAiMappingRegistration.AddCaptureAiMapping(builder.Services, builder.Configuration.GetSection($"{Api.DocumentCaptures.DocumentCaptureOptions.SectionName}:AiMapping")
+            .Get<Api.DocumentCaptures.DocumentCaptureAiMappingOptions>() ?? new Api.DocumentCaptures.DocumentCaptureAiMappingOptions());
         builder.Services.AddSingleton<Api.DocumentCaptures.IDocumentFieldExtractor>(serviceProvider =>
         {
             var options = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<Api.DocumentCaptures.DocumentCaptureOptions>>();
@@ -298,8 +274,6 @@ public static class AccountGoApp
         builder.Services.AddScoped<Api.DocumentCaptures.DocumentCaptureRetentionService>();
         builder.Services.AddHostedService<Api.DocumentCaptures.DocumentCapturePdfWarmup>();
         builder.Services.AddHostedService<Api.DocumentCaptures.DocumentCaptureRetentionWorker>();
-        if (aiMappingSettings.Enabled)
-            builder.Services.AddHostedService<Api.DocumentCaptures.Mapping.DocumentCaptureAiMappingWorker>();
         builder.Services.AddHostedService<Api.Service.AuditRetentionWorker>();
         builder.Services.AddScoped<Core.Tenancy.ITenantContext, Api.Tenancy.TenantContext>();
         builder.Services.AddScoped<Core.Tenancy.ITenantGuard, Services.Tenancy.TenantGuard>();

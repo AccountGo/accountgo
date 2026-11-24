@@ -49,6 +49,7 @@ public sealed class DocumentCaptureAiMappingProcessor(
 {
     public const int MaxAttempts = 3;
     public static readonly TimeSpan Lease = TimeSpan.FromSeconds(30);
+    public static readonly TimeSpan RetryBackoff = TimeSpan.FromSeconds(10);
     private readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
 
     /// <summary>Processes at most one job. Returns true when a job was claimed (so the caller can immediately look for another).</summary>
@@ -66,7 +67,8 @@ public sealed class DocumentCaptureAiMappingProcessor(
                 .SetProperty(job => job.CompletedAt, now), cancellationToken).ConfigureAwait(false);
 
         var candidate = await db.DocumentCaptureAiMappings.IgnoreQueryFilters().AsNoTracking()
-            .Where(job => job.Attempts < MaxAttempts && (job.Status == "queued" || (job.Status == "running" && job.LeaseUntil < now)))
+            .Where(job => job.Attempts < MaxAttempts
+                && ((job.Status == "queued" && (job.LeaseUntil == null || job.LeaseUntil < now)) || (job.Status == "running" && job.LeaseUntil < now)))
             .OrderBy(job => job.Id)
             .Select(job => new { job.Id, job.CompanyId, job.CaptureId, job.ExtractionGeneration, job.Kind, job.ContentHash, job.RulesVersion })
             .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
@@ -75,7 +77,7 @@ public sealed class DocumentCaptureAiMappingProcessor(
 
         var claimed = await db.DocumentCaptureAiMappings.IgnoreQueryFilters()
             .Where(job => job.Id == candidate.Id && job.Attempts < MaxAttempts
-                && (job.Status == "queued" || (job.Status == "running" && job.LeaseUntil < now)))
+                && ((job.Status == "queued" && (job.LeaseUntil == null || job.LeaseUntil < now)) || (job.Status == "running" && job.LeaseUntil < now)))
             .ExecuteUpdateAsync(set => set.SetProperty(job => job.Status, "running")
                 .SetProperty(job => job.Attempts, job => job.Attempts + 1)
                 .SetProperty(job => job.LeaseUntil, now + Lease), cancellationToken).ConfigureAwait(false);
@@ -150,7 +152,9 @@ public sealed class DocumentCaptureAiMappingProcessor(
         // AI-07: reuse a finished mapping of the same document, but only inside the same workspace.
         var cached = await db.DocumentCaptureAiMappings.IgnoreQueryFilters().AsNoTracking()
             .Where(job => job.CompanyId == companyId && job.Id != jobId && job.Status == "done" && job.ContentHash == contentHash
-                && job.Kind == kind && job.RulesVersion == rulesVersion && job.MapperVersion == mapperVersion && job.MappedFieldsJson != null)
+                && job.Kind == kind && job.RulesVersion == rulesVersion && job.MapperVersion == mapperVersion && job.MappedFieldsJson != null
+                // Defence in depth: a mapping is never reused once the capture it came from was wiped.
+                && db.DocumentCaptures.IgnoreQueryFilters().Any(source => source.CompanyId == job.CompanyId && source.Id == job.CaptureId && source.FieldsWipedAt == null))
             .OrderByDescending(job => job.Id)
             .Select(job => new { job.MappedFieldsJson, job.RuleHintsJson })
             .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
@@ -182,7 +186,7 @@ public sealed class DocumentCaptureAiMappingProcessor(
                     .Where(job => job.Id == jobId).Select(job => job.Attempts).FirstAsync(cancellationToken).ConfigureAwait(false);
                 // Retry later while attempts remain; otherwise the rule result simply stands.
                 await FinishAsync(jobId, attempts < MaxAttempts ? "queued" : "failed", "unavailable", mapperName, mapperVersion, started, null,
-                    cancellationToken, requeue: attempts < MaxAttempts).ConfigureAwait(false);
+                    cancellationToken, requeue: attempts < MaxAttempts, attempts: attempts).ConfigureAwait(false);
                 return ("unavailable", mapperName, mapperVersion);
             }
 
@@ -263,7 +267,7 @@ public sealed class DocumentCaptureAiMappingProcessor(
     }
 
     private async Task FinishAsync(int jobId, string status, string outcome, string? mapperName, string? mapperVersion, long started,
-        string? hintsJson, CancellationToken cancellationToken, bool requeue = false, string? mappedFields = null)
+        string? hintsJson, CancellationToken cancellationToken, bool requeue = false, string? mappedFields = null, int attempts = 0)
     {
         var latency = (int)_clock.GetElapsedTime(started).TotalMilliseconds;
         var now = _clock.GetUtcNow().UtcDateTime;
@@ -276,7 +280,8 @@ public sealed class DocumentCaptureAiMappingProcessor(
                 .SetProperty(job => job.LatencyMs, latency)
                 .SetProperty(job => job.RuleHintsJson, hintsJson)
                 .SetProperty(job => job.MappedFieldsJson, mappedFields)
-                .SetProperty(job => job.LeaseUntil, (DateTime?)null)
+                // A requeued job waits out a short backoff (10 s per attempt used) so an outage doesn't burn every attempt at once.
+                .SetProperty(job => job.LeaseUntil, requeue ? now + RetryBackoff * attempts : (DateTime?)null)
                 .SetProperty(job => job.CompletedAt, requeue ? (DateTime?)null : now), cancellationToken)
             .ConfigureAwait(false);
     }
