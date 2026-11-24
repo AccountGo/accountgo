@@ -97,6 +97,8 @@ public sealed class DocumentCaptureAiMapping : BaseEntity, ICompanyOwned
     public string? MappedFieldsJson { get; set; }
     /// <summary>Pages reserved against the host's usage meter for this job; 0 when none. Makes a retried job unable to reserve twice and a release idempotent.</summary>
     public int ReservedPages { get; set; }
+    /// <summary>When (UTC) <see cref="ReservedPages"/> was reserved, so a release goes back to the period the reservation was made in. Set and cleared together with the pages; null when none are reserved (or on a row from before this column existed).</summary>
+    public DateTime? ReservedAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
     public DocumentCapture Capture { get; set; } = null!;

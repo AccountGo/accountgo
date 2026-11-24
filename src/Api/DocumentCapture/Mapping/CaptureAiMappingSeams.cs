@@ -132,14 +132,15 @@ public sealed class EfCaptureAiMappingConsentStore(ApiDbContext db, TimeProvider
 /// </summary>
 public interface ICaptureAiMappingMeter
 {
-    /// <summary>Reserves pages. False when the cap would be exceeded (the job is then skipped and the rule result stands).</summary>
-    Task<bool> ReserveAsync(int companyId, int pages, CancellationToken cancellationToken);
+    /// <summary>Reserves pages as of <paramref name="reservedAtUtc"/>, the instant the job records on itself. False when the cap would be exceeded (the job is then skipped and the rule result stands).</summary>
+    Task<bool> ReserveAsync(int companyId, int pages, DateTime reservedAtUtc, CancellationToken cancellationToken);
 
-    Task ReleaseAsync(int companyId, int pages, CancellationToken cancellationToken);
+    /// <summary>Gives pages back. <paramref name="reservedAtUtc"/> is the instant they were reserved at, so a host that counts per period releases into the period it reserved in, not the one it is released in.</summary>
+    Task ReleaseAsync(int companyId, int pages, DateTime reservedAtUtc, CancellationToken cancellationToken);
 }
 
 public sealed class NoopCaptureAiMappingMeter : ICaptureAiMappingMeter
 {
-    public Task<bool> ReserveAsync(int companyId, int pages, CancellationToken cancellationToken) => Task.FromResult(true);
-    public Task ReleaseAsync(int companyId, int pages, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task<bool> ReserveAsync(int companyId, int pages, DateTime reservedAtUtc, CancellationToken cancellationToken) => Task.FromResult(true);
+    public Task ReleaseAsync(int companyId, int pages, DateTime reservedAtUtc, CancellationToken cancellationToken) => Task.CompletedTask;
 }

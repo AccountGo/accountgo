@@ -918,6 +918,7 @@ WHERE ""DisabledModulesJson"" IS NULL
             AddColumnIfMissing(connection, "DocumentCaptureLinks", "TaxTreatment", "TEXT NULL");
             AddColumnIfMissing(connection, "DocumentCaptures", "TextPageCount", "INTEGER NOT NULL DEFAULT 0");
             AddColumnIfMissing(connection, "DocumentCaptureAiMappings", "ReservedPages", "INTEGER NOT NULL DEFAULT 0");
+            AddColumnIfMissing(connection, "DocumentCaptureAiMappings", "ReservedAt", "TEXT NULL");
 
             using (var command = connection.CreateCommand())
             {
@@ -1022,6 +1023,7 @@ WHERE ""DisabledModulesJson"" IS NULL
                 ""RuleHintsJson"" TEXT NULL,
                 ""MappedFieldsJson"" TEXT NULL,
                 ""ReservedPages"" INTEGER NOT NULL DEFAULT 0,
+                ""ReservedAt"" TEXT NULL,
                 ""CreatedAt"" TEXT NOT NULL,
                 ""CompletedAt"" TEXT NULL,
                 CONSTRAINT ""FK_DocumentCaptureAiMappings_DocumentCaptures_CompanyId_CaptureId""
