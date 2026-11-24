@@ -252,7 +252,10 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
         : {},
     [capture]
   );
-  const isAiField = (path: string) => fieldSources[path] === 'ai';
+  // The badge says the mapper filled the field. Once the field shows the rules' own value again (after "use this", or typed back by
+  // the user) it is no longer AI-assisted. A field with no rules hint keeps the badge.
+  const isAiField = (path: string, currentValue?: string) =>
+    fieldSources[path] === 'ai' && !(currentValue !== undefined && capture?.aiMapping?.ruleHints?.[path] === currentValue);
   const applyRuleValue = (path: string, value: string) => {
     const lineMatch = /^lines\[(\d+)\]\.(\w+)$/.exec(path);
     if (lineMatch) {
@@ -668,7 +671,7 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
                       <label htmlFor={`capture-field-${desc.key}`} className="text-xs font-medium text-[var(--text-secondary)]">
                         {desc.label}
                         {desc.requiredForAccept && <span className="text-rose-500 ml-0.5">*</span>}
-                        {isAiField(desc.key) && <AiAssistedBadge />}
+                        {isAiField(desc.key, headerValues[desc.key] ?? '') && <AiAssistedBadge />}
                       </label>
                     </div>
                     {desc.type === 'textarea' ? (
@@ -863,7 +866,7 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
                               }
                               className="w-full px-2 py-1 text-xs bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded text-[var(--text-main)]"
                             />
-                            {(['description', 'quantity', 'unitAmount', 'sourceLineTotal', 'discount'] as const).some((f) => isAiField(`lines[${idx}].${f}`)) && (
+                            {(['description', 'quantity', 'unitAmount', 'sourceLineTotal', 'discount'] as const).some((f) => isAiField(`lines[${idx}].${f}`, line[f])) && (
                               <AiAssistedBadge />
                             )}
                             {(['description', 'quantity', 'unitAmount', 'sourceLineTotal', 'discount'] as const).map((f) => (

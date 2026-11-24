@@ -153,9 +153,8 @@ describe('AI-assisted review updates', () => {
     mock(pendingView(), () => improved('done'));
     await upload();
 
-    await waitFor(() => expect(screen.getAllByText('AI-assisted').length).toBeGreaterThan(0), { timeout: 4000 });
     // vendorName, vendorInvoiceNo and the line description are marked; the date is not.
-    expect(screen.getAllByText('AI-assisted').length).toBeGreaterThanOrEqual(3);
+    await waitFor(() => expect(screen.getAllByText('AI-assisted').length).toBeGreaterThanOrEqual(3), { timeout: 4000 });
     // One hint for the vendor name and one for the line description.
     await waitFor(() => expect(screen.getAllByText(/rules found:/i)).toHaveLength(2));
     const hints = screen.getAllByText(/rules found:/i).map((el) => el.textContent);
@@ -221,5 +220,37 @@ describe('AI-assisted review updates', () => {
     expect((screen.getByLabelText(/^Vendor name/) as HTMLInputElement).value).toBe('Acme Coffee');
 
     await waitFor(() => expect((screen.getByLabelText(/^Vendor name/) as HTMLInputElement).value).toBe('Acme Coffee Roasters Limited'), { timeout: 4000 });
+  });
+
+  it('drops the AI-assisted badge and the hint once the field shows the rules value again', async () => {
+    mock(pendingView(), () => improved('done'));
+    await upload();
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /Use the rules' value for vendorName/i })).toHaveLength(1), { timeout: 4000 });
+    const badgesBefore = screen.getAllByText('AI-assisted').length;
+
+    fireEvent.click(screen.getByRole('button', { name: /Use the rules' value for vendorName/i }));
+
+    expect((screen.getByLabelText(/^Vendor name/) as HTMLInputElement).value).toBe('Acme Coffee');
+    expect(screen.queryByRole('button', { name: /Use the rules' value for vendorName/i })).toBeNull();
+    // Exactly the vendor name's badge went away; the invoice number and line description are still AI-assisted.
+    expect(screen.getAllByText('AI-assisted')).toHaveLength(badgesBefore - 1);
+    expect(document.querySelector('label[for="capture-field-vendorName"]')?.textContent).not.toContain('AI-assisted');
+    expect(document.querySelector('label[for="capture-field-vendorInvoiceNo"]')?.textContent).toContain('AI-assisted');
+  });
+
+  it('also drops the badge when the user types the rules value back, and a field with no hint keeps it', async () => {
+    mock(pendingView(), () => improved('done'));
+    await upload();
+    await waitFor(() => expect(screen.getAllByText('AI-assisted').length).toBeGreaterThanOrEqual(3), { timeout: 4000 });
+
+    // The line description has a hint: typing the rules value removes its badge and hint.
+    fireEvent.change(screen.getByLabelText('Captured line 1 description'), { target: { value: 'Espresso beans' } });
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Use the rules' value for lines\[0\]\.description/i })).toBeNull());
+    const remaining = screen.getAllByText('AI-assisted').length;
+
+    // The invoice number has no hint (the rules found nothing), so it keeps its badge whatever it says.
+    fireEvent.change(screen.getByLabelText(/Vendor's bill #/i), { target: { value: 'AC-2045' } });
+    expect(screen.getAllByText('AI-assisted')).toHaveLength(remaining);
+    expect(remaining).toBeGreaterThanOrEqual(2);
   });
 });
