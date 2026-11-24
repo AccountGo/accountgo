@@ -899,6 +899,10 @@ WHERE ""DisabledModulesJson"" IS NULL
                 DocumentCaptureAttemptsReservationIndexSql,
                 DocumentCaptureLinksCaptureIndexSql,
                 DocumentCaptureLinksTargetIndexSql,
+                DocumentCaptureAiMappingTableSql,
+                DocumentCaptureAiMappingUniqueIndexSql,
+                DocumentCaptureAiMappingLeaseIndexSql,
+                DocumentCaptureAiMappingCacheIndexSql,
                 PartyAliasesTableSql,
                 PartyAliasesUniqueIndexSql,
                 PartyAliasesPartyIndexSql
@@ -993,6 +997,42 @@ WHERE ""DisabledModulesJson"" IS NULL
                 CONSTRAINT ""FK_DocumentCaptureLinks_DocumentCaptures_CompanyId_CaptureId""
                     FOREIGN KEY (""CompanyId"", ""CaptureId"") REFERENCES ""DocumentCaptures"" (""CompanyId"", ""Id"") ON DELETE CASCADE
             );";
+
+        private const string DocumentCaptureAiMappingTableSql = @"
+            CREATE TABLE IF NOT EXISTS ""DocumentCaptureAiMappings"" (
+                ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""CaptureId"" INTEGER NOT NULL,
+                ""ExtractionGeneration"" INTEGER NOT NULL,
+                ""Status"" TEXT NOT NULL,
+                ""Attempts"" INTEGER NOT NULL,
+                ""LeaseUntil"" TEXT NULL,
+                ""Kind"" TEXT NOT NULL,
+                ""ContentHash"" TEXT NOT NULL,
+                ""RulesVersion"" TEXT NOT NULL,
+                ""MapperName"" TEXT NULL,
+                ""MapperVersion"" TEXT NULL,
+                ""LatencyMs"" INTEGER NULL,
+                ""Outcome"" TEXT NULL,
+                ""RuleHintsJson"" TEXT NULL,
+                ""MappedFieldsJson"" TEXT NULL,
+                ""CreatedAt"" TEXT NOT NULL,
+                ""CompletedAt"" TEXT NULL,
+                CONSTRAINT ""FK_DocumentCaptureAiMappings_DocumentCaptures_CompanyId_CaptureId""
+                    FOREIGN KEY (""CompanyId"", ""CaptureId"") REFERENCES ""DocumentCaptures"" (""CompanyId"", ""Id"") ON DELETE CASCADE
+            );";
+
+        private const string DocumentCaptureAiMappingUniqueIndexSql = @"
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_DocumentCaptureAiMappings_CompanyId_CaptureId_ExtractionGeneration""
+            ON ""DocumentCaptureAiMappings"" (""CompanyId"", ""CaptureId"", ""ExtractionGeneration"");";
+
+        private const string DocumentCaptureAiMappingLeaseIndexSql = @"
+            CREATE INDEX IF NOT EXISTS ""IX_DocumentCaptureAiMappings_Status_LeaseUntil""
+            ON ""DocumentCaptureAiMappings"" (""Status"", ""LeaseUntil"");";
+
+        private const string DocumentCaptureAiMappingCacheIndexSql = @"
+            CREATE INDEX IF NOT EXISTS ""IX_DocumentCaptureAiMappings_Cache""
+            ON ""DocumentCaptureAiMappings"" (""CompanyId"", ""ContentHash"", ""Kind"", ""RulesVersion"", ""MapperVersion"");";
 
         private const string DocumentCaptureIdempotencyIndexSql = @"
             CREATE UNIQUE INDEX IF NOT EXISTS ""IX_DocumentCaptures_CompanyId_IdempotencyKey""

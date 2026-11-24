@@ -18,6 +18,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json.Linq;
+using Api.DocumentCaptures.Mapping;
 
 namespace Api.DocumentCaptures;
 
@@ -46,7 +47,14 @@ public sealed record DocumentCaptureView(
     DocumentCaptureLinkView? Link,
     DateTime CreatedAt,
     DateTime? AcceptedAt,
-    DateTime? RejectedAt);
+    DateTime? RejectedAt,
+    DocumentCaptureAiMappingView? AiMapping = null);
+
+/// <summary>
+/// Where the optional background field mapping stands for a capture: pending, done, failed or skipped (absent when mapping is not
+/// on). <see cref="RuleHints"/> maps a field path to the value the rules found, for the fields the mapper changed.
+/// </summary>
+public sealed record DocumentCaptureAiMappingView(string Status, IReadOnlyDictionary<string, string> RuleHints);
 
 public sealed record DocumentCaptureLinkView(string TargetType, string TargetId, DateTime LinkedAt, string? TaxTreatment = null);
 
@@ -60,7 +68,9 @@ public sealed class DocumentCaptureService(
     IOptions<DocumentCaptureOptions> options,
     ILogger<DocumentCaptureService> logger,
     ISecurityAuditService? securityAudit = null,
-    TimeProvider? timeProvider = null)
+    TimeProvider? timeProvider = null,
+    ICaptureAiMappingPolicy? aiMappingPolicy = null,
+    CaptureAiMappingSignal? aiMappingSignal = null)
 {
     private static readonly TimeSpan ExtractorDeadline = CaptureWorkerRunner.Deadline;
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
@@ -349,7 +359,35 @@ public sealed class DocumentCaptureService(
         var link = await GetLinkViewAsync(capture, companyId, cancellationToken).ConfigureAwait(false);
         var canWrite = DocumentCaptureAccessPolicy.AuthorizeNew(entitlements, companyId, tenant.Permissions, capture.Kind)
             == DocumentCaptureAccessFailure.None;
-        return ToView(capture, bytesAvailable, canWrite, link);
+        var aiMapping = await GetAiMappingViewAsync(capture, companyId, cancellationToken).ConfigureAwait(false);
+        return ToView(capture, bytesAvailable, canWrite, link, aiMapping);
+    }
+
+    private async Task<DocumentCaptureAiMappingView?> GetAiMappingViewAsync(DocumentCapture capture, int companyId, CancellationToken cancellationToken)
+    {
+        if (!options.Value.AiMapping.Enabled || capture.Status != "ready")
+            return null;
+        var job = await db.DocumentCaptureAiMappings.AsNoTracking()
+            .Where(item => item.CompanyId == companyId && item.CaptureId == capture.Id && item.ExtractionGeneration == capture.ExtractionGeneration)
+            .Select(item => new { item.Status, item.RuleHintsJson })
+            .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        if (job is null)
+            return null;
+        var status = job.Status switch { "queued" or "running" => "pending", var other => other };
+        var hints = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (status == "done" && !string.IsNullOrWhiteSpace(job.RuleHintsJson))
+        {
+            try
+            {
+                foreach (var pair in JsonSerializer.Deserialize<Dictionary<string, string>>(job.RuleHintsJson) ?? [])
+                    hints[pair.Key] = pair.Value;
+            }
+            catch (JsonException)
+            {
+                hints.Clear();
+            }
+        }
+        return new DocumentCaptureAiMappingView(status, hints);
     }
 
     public async Task<(byte[] Bytes, string ContentType)> GetBytesAsync(int captureId, CancellationToken cancellationToken)
@@ -642,10 +680,38 @@ public sealed class DocumentCaptureService(
             throw new DocumentCaptureServiceException(409, "DOCUMENT_STATE_CONFLICT");
         await db.DocumentCaptureBlobs.Where(b => b.CompanyId == companyId && b.CaptureId == captureId)
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        // The mapped fields hold the same document values the reject just wiped.
+        await db.DocumentCaptureAiMappings.IgnoreQueryFilters().Where(job => job.CompanyId == companyId && job.CaptureId == captureId)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         await AuditTransitionAsync("document.capture.rejected", "success", companyId, capture.PublicId, capture.Kind,
             "rejected", capture.ExtractionGeneration, actorId).ConfigureAwait(false);
         return await GetAsync(captureId, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Queues the optional background field mapping for a capture that just became ready. It never delays or fails the scan: the rule
+    /// fields are already stored, and a mapping failure leaves them as they are.
+    /// </summary>
+    private async Task TryQueueAiMappingAsync(int companyId, int captureId, int generation, string kind, CancellationToken cancellationToken)
+    {
+        if (!options.Value.AiMapping.Enabled || aiMappingPolicy is null)
+            return;
+        try
+        {
+            var contentHash = await db.DocumentCaptures.IgnoreQueryFilters().AsNoTracking()
+                .Where(c => c.CompanyId == companyId && c.Id == captureId).Select(c => c.ContentHash)
+                .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+            if (contentHash is null)
+                return;
+            await CaptureAiMappingQueue.TryEnqueueAsync(db, options, aiMappingPolicy, companyId, captureId, generation, kind, contentHash,
+                _timeProvider.GetUtcNow().UtcDateTime, cancellationToken, aiMappingSignal).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            db.ChangeTracker.Clear();
+            logger.LogWarning("Document capture AI mapping could not be queued. CaptureId={CaptureId} FailureType={FailureType}", captureId, ex.GetType().Name);
+        }
     }
 
     private async Task<DocumentCaptureView> RunExtractionAsync(
@@ -715,6 +781,7 @@ public sealed class DocumentCaptureService(
             db.ChangeTracker.Clear();
             await AuditTransitionAsync("document.capture.ready", "success", companyId, capturePublicId, media.Kind,
                 "ready", generation, tenant.UserId).ConfigureAwait(false);
+            await TryQueueAiMappingAsync(companyId, captureId, generation, media.Kind, cancellationToken).ConfigureAwait(false);
         }
         catch (DocumentCaptureServiceException ex) when (ex.ErrorCode is "DOCUMENT_STATE_CONFLICT" or "DOCUMENT_RATE_LIMITED")
         {
@@ -949,7 +1016,8 @@ public sealed class DocumentCaptureService(
         _ => 422
     };
 
-    private static DocumentCaptureView ToView(DocumentCapture capture, bool bytesAvailable, bool canWrite, DocumentCaptureLinkView? link) => new(
+    private static DocumentCaptureView ToView(DocumentCapture capture, bool bytesAvailable, bool canWrite, DocumentCaptureLinkView? link,
+        DocumentCaptureAiMappingView? aiMapping = null) => new(
         capture.PublicId, capture.Kind, capture.SchemaVersion, capture.Status, capture.ContentType, capture.ByteCount,
         capture.Width, capture.Height, capture.PageCount,
         capture.Status == "accepted" ? null : ParseJson(capture.FieldsJson),
@@ -961,7 +1029,8 @@ public sealed class DocumentCaptureService(
         capture.ProviderName, capture.ProviderVersion, capture.SourceHash, capture.ContentHash, capture.NormalizationVersion, link,
         DateTime.SpecifyKind(capture.CreatedAt, DateTimeKind.Utc),
         capture.AcceptedAt is { } accepted ? DateTime.SpecifyKind(accepted, DateTimeKind.Utc) : null,
-        capture.RejectedAt is { } rejected ? DateTime.SpecifyKind(rejected, DateTimeKind.Utc) : null);
+        capture.RejectedAt is { } rejected ? DateTime.SpecifyKind(rejected, DateTimeKind.Utc) : null,
+        aiMapping);
 
     private static JToken? ParseJson(string? json)
     {

@@ -69,6 +69,35 @@ public sealed class DocumentCaptureAttempt : BaseEntity, ICompanyOwned
     public DocumentCapture Capture { get; set; } = null!;
 }
 
+/// <summary>
+/// One background field-mapping job for one extraction of a capture. Metadata and the mapped fields only: never document text
+/// beyond the fields the user already reviews. The unique (company, capture, generation) key makes enqueueing idempotent.
+/// </summary>
+public sealed class DocumentCaptureAiMapping : BaseEntity, ICompanyOwned
+{
+    public int CompanyId { get; set; }
+    public int CaptureId { get; set; }
+    public int ExtractionGeneration { get; set; }
+    /// <summary>queued, running, done, failed or skipped.</summary>
+    public string Status { get; set; } = "queued";
+    public int Attempts { get; set; }
+    public DateTime? LeaseUntil { get; set; }
+    public string Kind { get; set; } = string.Empty;
+    public string ContentHash { get; set; } = string.Empty;
+    public string RulesVersion { get; set; } = string.Empty;
+    public string? MapperName { get; set; }
+    public string? MapperVersion { get; set; }
+    public int? LatencyMs { get; set; }
+    public string? Outcome { get; set; }
+    /// <summary>The rules' value per mapped field path, so the review step can show "rules found ...". Bounded.</summary>
+    public string? RuleHintsJson { get; set; }
+    /// <summary>The stored (guarded and masked) mapped fields, kept so an identical document in the same company needs no second call. Bounded.</summary>
+    public string? MappedFieldsJson { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
+    public DocumentCapture Capture { get; set; } = null!;
+}
+
 public sealed class DocumentCaptureLink : BaseEntity, ICompanyOwned
 {
     public int CompanyId { get; set; }

@@ -144,6 +144,18 @@ export interface DocumentCaptureLinkView {
   taxTreatment?: string | null;
 }
 
+export type CaptureAiMappingStatus = 'pending' | 'done' | 'failed' | 'skipped';
+
+export interface CaptureAiMappingView {
+  status: CaptureAiMappingStatus;
+  /** Field path to the value the rules found, for the fields the mapper changed. */
+  ruleHints: Record<string, string>;
+}
+
+/** How often, and for how long, the review panel asks whether the background mapping has finished. */
+export const AI_MAPPING_POLL_INTERVAL_MS = 1000;
+export const AI_MAPPING_POLL_WINDOW_MS = 8000;
+
 export interface DocumentCaptureView {
   id: string;
   kind: DocumentCaptureKind | string;
@@ -167,6 +179,8 @@ export interface DocumentCaptureView {
   contentHash: string;
   normalizationVersion: string;
   link: DocumentCaptureLinkView | null;
+  /** The optional background field mapping. Absent or null when it isn't on for this capture. */
+  aiMapping?: CaptureAiMappingView | null;
   createdAt: string;
   acceptedAt: string | null;
   rejectedAt: string | null;
@@ -1499,4 +1513,66 @@ export function describeLinkedTaxTreatment(
     return `Tax from scan: ${side === 'sales' ? 'output' : 'input'} tax${label ? ` ${label}` : ''}`;
   }
   return null;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Live AI-assisted review updates: fold the mapper's improved fields into the review form without
+// ever overwriting something the user has already touched.
+// ---------------------------------------------------------------------------------------------
+
+/** A field is untouched while it still equals what the review form was first filled with. */
+export function mergeUntouched(
+  current: Record<string, string>,
+  baseline: Record<string, string>,
+  next: Record<string, string>
+): Record<string, string> {
+  const merged: Record<string, string> = { ...current };
+  for (const [key, value] of Object.entries(next)) {
+    if ((current[key] ?? '') === (baseline[key] ?? '')) merged[key] = value;
+  }
+  return merged;
+}
+
+const LINE_FIELDS = [
+  'description',
+  'quantity',
+  'unitAmount',
+  'sourceLineTotal',
+  'taxHint',
+  'discount',
+  'priceBasis',
+  'missingQuantityDefaulted',
+] as const;
+
+const sameLine = (a: EditableLineDraft, b: EditableLineDraft) => LINE_FIELDS.every((field) => a[field] === b[field]);
+
+/**
+ * Lines the user hasn't edited at all are replaced by the improved ones. Once any line was edited, lines are merged field by field
+ * only when the row count is unchanged; otherwise the user's lines stay exactly as they are.
+ */
+export function mergeUntouchedLines(
+  current: EditableLineDraft[],
+  baseline: EditableLineDraft[],
+  next: EditableLineDraft[]
+): EditableLineDraft[] {
+  if (current.length === baseline.length && current.every((line, i) => sameLine(line, baseline[i]))) return next;
+  if (current.length !== baseline.length || current.length !== next.length) return current;
+  return current.map((line, i) => {
+    const merged: EditableLineDraft = { ...line };
+    for (const field of LINE_FIELDS) {
+      if (line[field] === baseline[i][field]) (merged as unknown as Record<string, unknown>)[field] = next[i][field];
+    }
+    return merged;
+  });
+}
+
+/** The value the rules found for a field the mapper changed, or null when there is none or it is what the form shows. */
+export function ruleHintFor(
+  aiMapping: CaptureAiMappingView | null | undefined,
+  path: string,
+  currentValue: string
+): string | null {
+  if (aiMapping?.status !== 'done') return null;
+  const hint = aiMapping.ruleHints?.[path];
+  return typeof hint === 'string' && hint !== currentValue ? hint : null;
 }

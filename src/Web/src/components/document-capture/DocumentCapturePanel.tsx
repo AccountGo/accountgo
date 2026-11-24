@@ -18,6 +18,7 @@ import {
 import {
   AssistantCaptureFieldItem,
   AssistantCaptureFields,
+  CaptureFieldSources,
   CaptureLineField,
   CapturePaymentHints,
   CaptureSourceTotals,
@@ -38,6 +39,10 @@ import {
   isSupportedSchemaVersion,
   isVendorKind,
   KIND_LABELS,
+  mergeUntouched,
+  mergeUntouchedLines,
+  parseFieldSources,
+  ruleHintFor,
   validateAssistantFieldsForAccept,
   validateBankFieldsForAccept,
   validateSalesFieldsForAccept,
@@ -77,6 +82,16 @@ function toEditableAssistantFields(
     box: item.box ?? null,
   }));
 }
+
+/** Marks a field the optional field mapper filled in. It has text, not only colour. */
+const AiAssistedBadge: React.FC = () => (
+  <span
+    title="Filled in by AccountGo Assistant from the text of this document. Check it against the original."
+    className="ml-1.5 inline-flex items-center rounded-full border border-violet-500/30 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:text-violet-300"
+  >
+    AI-assisted
+  </span>
+);
 
 function toEditableLines(source: CaptureLineField[] | null | undefined): EditableLineDraft[] {
   if (!source || source.length === 0) return [];
@@ -147,11 +162,15 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
   const [sourceTotals, setSourceTotals] = useState<CaptureSourceTotals | null>(null);
   const [paymentHints, setPaymentHints] = useState<CapturePaymentHints | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  // What the review form was first filled with, so a later AI-assisted update only changes fields the user hasn't touched.
+  const [baseline, setBaseline] = useState<{ header: Record<string, string>; lines: EditableLineDraft[] } | null>(null);
+  const aiMergedForRef = useRef('');
 
   const currentCaptureKey = capture ? `${capture.id}:${capture.status}:${capture.acceptedAt ?? ''}` : '';
   if (currentCaptureKey !== syncedCaptureKey) {
     setSyncedCaptureKey(currentCaptureKey);
     if (!capture) {
+      setBaseline(null);
       setHeaderValues({});
       setLines([]);
       setAssistantFields([]);
@@ -173,9 +192,12 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
         nextHeader[desc.key] = typeof v === 'string' ? v : '';
       }
       setHeaderValues(nextHeader);
+      let baselineLines: EditableLineDraft[] = [];
       if (isVendorKind(capture.kind) || capture.kind === 'sales-invoice') {
         const financial = raw as VendorCaptureFields;
-        setLines(toEditableLines(financial.lines));
+        const nextLines = toEditableLines(financial.lines);
+        baselineLines = nextLines.map((l) => ({ ...l }));
+        setLines(nextLines);
         setAssistantFields([]);
         setSourceTotals(financial.sourceTotals ?? null);
         setPaymentHints(financial.paymentHints ?? null);
@@ -191,9 +213,75 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
         setSourceTotals(null);
         setPaymentHints(null);
       }
+      setBaseline({ header: nextHeader, lines: baselineLines });
       setValidationErrors([]);
     }
   }
+
+  // A new extraction of the same capture (a re-scan, or the capture cycling through extracting) gets its own AI-assisted merge.
+  useEffect(() => {
+    aiMergedForRef.current = '';
+  }, [currentCaptureKey]);
+
+  // When the optional background mapping finishes, fold its improvements into fields the user hasn't touched.
+  useEffect(() => {
+    if (!capture || capture.status !== 'ready' || capture.aiMapping?.status !== 'done' || !baseline) return;
+    if (aiMergedForRef.current === capture.id) return;
+    aiMergedForRef.current = capture.id;
+    const raw = (capture.fields ?? {}) as Record<string, unknown>;
+    const ambiguousDate = (capture.warnings ?? []).includes('AMBIGUOUS_DATE');
+    const nextHeader: Record<string, string> = {};
+    for (const desc of getFieldDescriptors(capture.kind, capture.schemaVersion)) {
+      // An ambiguous date stays blank until the user confirms it.
+      if (desc.key === 'date' && ambiguousDate) continue;
+      const v = raw[desc.key];
+      nextHeader[desc.key] = typeof v === 'string' ? v : '';
+    }
+    setHeaderValues((prev) => mergeUntouched(prev, baseline.header, nextHeader));
+    if (isVendorKind(capture.kind) || capture.kind === 'sales-invoice') {
+      const financial = raw as VendorCaptureFields;
+      setLines((prev) => mergeUntouchedLines(prev, baseline.lines, toEditableLines(financial.lines)));
+      setSourceTotals(financial.sourceTotals ?? null);
+    }
+  }, [capture, baseline]);
+
+  const fieldSources = useMemo<CaptureFieldSources>(
+    () =>
+      capture?.status === 'ready' && capture.aiMapping?.status === 'done'
+        ? parseFieldSources((capture.fields as { fieldSources?: unknown } | null)?.fieldSources)
+        : {},
+    [capture]
+  );
+  // The badge says the mapper filled the field. Once the field shows the rules' own value again (after "use this", or typed back by
+  // the user) it is no longer AI-assisted. A field with no rules hint keeps the badge.
+  const isAiField = (path: string, currentValue?: string) =>
+    fieldSources[path] === 'ai' && !(currentValue !== undefined && capture?.aiMapping?.ruleHints?.[path] === currentValue);
+  const applyRuleValue = (path: string, value: string) => {
+    const lineMatch = /^lines\[(\d+)\]\.(\w+)$/.exec(path);
+    if (lineMatch) {
+      const index = Number(lineMatch[1]);
+      setLines((prev) => prev.map((l, i) => (i === index ? { ...l, [lineMatch[2]]: value } : l)));
+    } else {
+      setHeaderValues((prev) => ({ ...prev, [path]: value }));
+    }
+  };
+  const renderRuleHint = (path: string, currentValue: string) => {
+    const hint = capture?.status === 'ready' ? ruleHintFor(capture.aiMapping, path, currentValue) : null;
+    if (hint === null) return null;
+    return (
+      <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-[var(--text-muted)]">
+        <span>rules found: <span className="font-mono">{hint || '(blank)'}</span></span>
+        <button
+          type="button"
+          aria-label={`Use the rules' value for ${path}`}
+          onClick={() => applyRuleValue(path, hint)}
+          className="font-semibold text-[var(--brand-primary)] hover:opacity-80"
+        >
+          use this
+        </button>
+      </div>
+    );
+  };
 
   const allowedKinds = useMemo(() => {
     if (!capabilities?.enabled || !capabilities.providerAvailable) return [];
@@ -534,6 +622,14 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
       {/* Review form once capture is loaded */}
       {capture && capture.status !== 'rejected' && !isAlreadyLinked && (
         <div className="space-y-4 pt-2 border-t border-[var(--border-subtle)]">
+          {/* Optional AI field mapping still running: the rule result is already here and stands if it fails. */}
+          {capture.status === 'ready' && capture.aiMapping?.status === 'pending' && (
+            <p role="status" className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Improving with AccountGo Assistant…
+            </p>
+          )}
+
           {/* Warnings */}
           {capture.warnings && capture.warnings.length > 0 && (
             <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 space-y-1 text-xs text-amber-800 dark:text-amber-300">
@@ -575,6 +671,7 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
                       <label htmlFor={`capture-field-${desc.key}`} className="text-xs font-medium text-[var(--text-secondary)]">
                         {desc.label}
                         {desc.requiredForAccept && <span className="text-rose-500 ml-0.5">*</span>}
+                        {isAiField(desc.key, headerValues[desc.key] ?? '') && <AiAssistedBadge />}
                       </label>
                     </div>
                     {desc.type === 'textarea' ? (
@@ -599,6 +696,7 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
                         className="w-full px-3 py-2 text-xs bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded-lg text-[var(--text-main)]"
                       />
                     )}
+                    {renderRuleHint(desc.key, headerValues[desc.key] ?? '')}
                   </div>
                 );
               })}
@@ -768,6 +866,12 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
                               }
                               className="w-full px-2 py-1 text-xs bg-[var(--bg-subtle)] border border-[var(--border-subtle)] rounded text-[var(--text-main)]"
                             />
+                            {(['description', 'quantity', 'unitAmount', 'sourceLineTotal', 'discount'] as const).some((f) => isAiField(`lines[${idx}].${f}`, line[f])) && (
+                              <AiAssistedBadge />
+                            )}
+                            {(['description', 'quantity', 'unitAmount', 'sourceLineTotal', 'discount'] as const).map((f) => (
+                              <React.Fragment key={f}>{renderRuleHint(`lines[${idx}].${f}`, line[f])}</React.Fragment>
+                            ))}
                           </td>
                           <td className="py-1.5 px-2">
                             <input
@@ -848,6 +952,7 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
                 <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3 space-y-1">
                   <div className="font-semibold text-[var(--text-main)]">
                     Source totals (review only · {sourceTotals.priceBasis || 'unknown'} tax basis)
+                    {Object.keys(fieldSources).some((path) => path.startsWith('sourceTotals.')) && <AiAssistedBadge />}
                   </div>
                   <div className="flex justify-between text-[var(--text-secondary)]">
                     <span>Subtotal</span>

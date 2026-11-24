@@ -250,6 +250,10 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
         await db.DocumentCaptureBlobs.IgnoreQueryFilters()
             .Where(blob => blob.CompanyId == companyId && blob.CaptureId == captureId)
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        // The mapped fields and hints hold the same document values as the fields wiped below, for every extraction generation.
+        await db.DocumentCaptureAiMappings.IgnoreQueryFilters()
+            .Where(job => job.CompanyId == companyId && job.CaptureId == captureId)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         capture.BytesDeletedAt ??= utcNow;
         capture.FieldsWipedAt = utcNow;
         capture.FieldsJson = DocumentCaptureFieldSchemas.EmptyFieldsJsonForKind(capture.Kind);

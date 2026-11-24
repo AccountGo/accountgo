@@ -251,9 +251,11 @@ public static class AccountGoApp
                 return true;
             }, "Document capture options are invalid.")
             .ValidateOnStart();
-        // The default field mapper returns the rule fields unchanged. It is not called when a document is scanned; a later background
-        // job calls it through CaptureFieldMappingRunner, and a later change can register an optional mapper here.
-        builder.Services.AddSingleton<Api.DocumentCaptures.Mapping.ICaptureFieldMapper, Api.DocumentCaptures.Mapping.RuleOnlyFieldMapper>();
+        // Optional AI field mapping: off unless DocumentCapture:AiMapping:Enabled is set AND the workspace policy allows it. The default
+        // policy allows nothing, and a host that adds consent and plan checks registers its own policy before this line. A scan never
+        // waits for the mapper: a background worker calls it and applies the result conditionally.
+        Api.DocumentCaptures.Mapping.CaptureAiMappingRegistration.AddCaptureAiMapping(builder.Services, builder.Configuration.GetSection($"{Api.DocumentCaptures.DocumentCaptureOptions.SectionName}:AiMapping")
+            .Get<Api.DocumentCaptures.DocumentCaptureAiMappingOptions>() ?? new Api.DocumentCaptures.DocumentCaptureAiMappingOptions());
         builder.Services.AddSingleton<Api.DocumentCaptures.IDocumentFieldExtractor>(serviceProvider =>
         {
             var options = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<Api.DocumentCaptures.DocumentCaptureOptions>>();

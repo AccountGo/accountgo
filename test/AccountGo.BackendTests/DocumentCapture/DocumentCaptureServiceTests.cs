@@ -85,6 +85,82 @@ public sealed class DocumentCaptureServiceTests
         Assert.Empty(await harness.Db.Banks.ToListAsync());
     }
 
+    private sealed class AllowAiMappingPolicy : Api.DocumentCaptures.Mapping.ICaptureAiMappingPolicy
+    {
+        public Task<bool> IsAllowedAsync(int companyId, string kind, CancellationToken cancellationToken) => Task.FromResult(true);
+    }
+
+    [Fact]
+    public async Task Upload_QueuesNoAiMappingUnlessEnabledAndAllowed_AndTheViewHasNoAiMappingBlock()
+    {
+        using var harness = new Harness(enabled: true);
+        var source = CreatePng();
+
+        // Enabled in configuration but the default policy allows nothing.
+        harness.CaptureOptions.Value.AiMapping.Enabled = true;
+        var denied = await harness.CreateService(harness.Extractor, aiMappingPolicy: new Api.DocumentCaptures.Mapping.DisabledCaptureAiMappingPolicy())
+            .UploadAsync("purchase-invoice", 1, "image/png", source, "ai-denied", CancellationToken.None);
+        Assert.Equal("ready", denied.Status);
+        Assert.Null(denied.AiMapping);
+        Assert.Empty(await harness.Db.DocumentCaptureAiMappings.IgnoreQueryFilters().ToListAsync());
+
+        // Allowed by policy but switched off in configuration.
+        harness.CaptureOptions.Value.AiMapping.Enabled = false;
+        var off = await harness.CreateService(harness.Extractor, aiMappingPolicy: new AllowAiMappingPolicy())
+            .UploadAsync("sales-invoice", 1, "image/png", CreatePng(), "ai-off", CancellationToken.None);
+        Assert.Null(off.AiMapping);
+        Assert.Empty(await harness.Db.DocumentCaptureAiMappings.IgnoreQueryFilters().ToListAsync());
+    }
+
+    [Fact]
+    public async Task Upload_QueuesAnAiMappingJobWithoutDelayingTheRuleResult_AndTheViewShowsPendingThenDoneWithRuleHints()
+    {
+        using var harness = new Harness(enabled: true);
+        harness.CaptureOptions.Value.AiMapping.Enabled = true;
+        var service = harness.CreateService(harness.Extractor, aiMappingPolicy: new AllowAiMappingPolicy());
+
+        var uploaded = await service.UploadAsync("purchase-invoice", 1, "image/png", CreatePng(), "ai-on", CancellationToken.None);
+
+        // The rule result is returned immediately, with the job still pending.
+        Assert.Equal("ready", uploaded.Status);
+        Assert.Equal("Fixture Vendor", uploaded.Fields!["vendorName"]!.ToObject<string>());
+        Assert.Equal("pending", uploaded.AiMapping is null ? await PendingStatusAsync(harness, service, uploaded.Id) : uploaded.AiMapping.Status);
+        var job = await harness.Db.DocumentCaptureAiMappings.IgnoreQueryFilters().AsNoTracking().SingleAsync();
+        Assert.Equal("queued", job.Status);
+        Assert.Equal("purchase-invoice", job.Kind);
+
+        await harness.Db.DocumentCaptureAiMappings.IgnoreQueryFilters().ExecuteUpdateAsync(set => set
+            .SetProperty(j => j.Status, "done").SetProperty(j => j.RuleHintsJson, "{\"vendorName\":\"Fixture\"}"));
+        var internalId = await harness.Db.DocumentCaptures.Where(c => c.PublicId == uploaded.Id).Select(c => c.Id).SingleAsync();
+        var done = await service.GetAsync(internalId, CancellationToken.None);
+        Assert.Equal("done", done.AiMapping!.Status);
+        Assert.Equal("Fixture", done.AiMapping.RuleHints["vendorName"]);
+
+        await harness.Db.DocumentCaptureAiMappings.IgnoreQueryFilters().ExecuteUpdateAsync(set => set.SetProperty(j => j.Status, "failed"));
+        Assert.Equal("failed", (await service.GetAsync(internalId, CancellationToken.None)).AiMapping!.Status);
+    }
+
+    [Fact]
+    public async Task Reject_DeletesTheAiMappingRowsThatHoldTheSameDocumentValues()
+    {
+        using var harness = new Harness(enabled: true);
+        harness.CaptureOptions.Value.AiMapping.Enabled = true;
+        var service = harness.CreateService(harness.Extractor, aiMappingPolicy: new AllowAiMappingPolicy());
+        var uploaded = await service.UploadAsync("purchase-invoice", 1, "image/png", CreatePng(), "ai-reject", CancellationToken.None);
+        Assert.Single(await harness.Db.DocumentCaptureAiMappings.IgnoreQueryFilters().ToListAsync());
+        var internalId = await harness.Db.DocumentCaptures.Where(c => c.PublicId == uploaded.Id).Select(c => c.Id).SingleAsync();
+
+        await service.RejectAsync(internalId, CancellationToken.None);
+
+        Assert.Empty(await harness.Db.DocumentCaptureAiMappings.IgnoreQueryFilters().ToListAsync());
+    }
+
+    private static async Task<string?> PendingStatusAsync(Harness harness, DocumentCaptureService service, string publicId)
+    {
+        var internalId = await harness.Db.DocumentCaptures.Where(c => c.PublicId == publicId).Select(c => c.Id).SingleAsync();
+        return (await service.GetAsync(internalId, CancellationToken.None)).AiMapping?.Status;
+    }
+
     [Theory]
     [InlineData("expense-receipt", "{\"vendorName\":\"Corner Cafe\",\"date\":\"2026-11-20\"}", "{}")]
     [InlineData("purchase-invoice", "{\"vendorName\":\"Acme Ltd\",\"date\":\"2026-11-20\"}", "{}")]
@@ -1082,9 +1158,10 @@ public sealed class DocumentCaptureServiceTests
         }
 
         public DocumentCaptureService CreateService(IDocumentFieldExtractor extractor, ISecurityAuditService? audit = null, TimeProvider? timeProvider = null,
-            Microsoft.Extensions.Logging.ILogger<DocumentCaptureService>? logger = null, IDocumentCaptureAdmissionLock? admissionLock = null) =>
+            Microsoft.Extensions.Logging.ILogger<DocumentCaptureService>? logger = null, IDocumentCaptureAdmissionLock? admissionLock = null,
+            Api.DocumentCaptures.Mapping.ICaptureAiMappingPolicy? aiMappingPolicy = null) =>
             new(Db, admissionLock ?? new DocumentCaptureAdmissionLock(Db), extractor, _entitlement, PublicIds.Object,
-                _tenant, _configuredOptions, logger ?? NullLogger<DocumentCaptureService>.Instance, audit, timeProvider);
+                _tenant, _configuredOptions, logger ?? NullLogger<DocumentCaptureService>.Instance, audit, timeProvider, aiMappingPolicy);
 
         public void Dispose()
         {

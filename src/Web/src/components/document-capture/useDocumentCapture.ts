@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { announceEntitlementDenial, isEntitlementProblem } from '../../lib/entitlementEvents';
 import {
+  AI_MAPPING_POLL_INTERVAL_MS,
+  AI_MAPPING_POLL_WINDOW_MS,
   ALLOWED_CAPTURE_MIME_TYPES,
   CaptureErrorPresentation,
   describeCaptureError,
@@ -277,6 +279,46 @@ export function useDocumentCapture({
     },
     [authFetch, capture?.id, isCurrent, lastCaptureId]
   );
+
+  // While the optional background field mapping is pending, ask for the capture quietly (no busy state, no error) about once a second
+  // for a few seconds. When it finishes the improved capture replaces the current one; if it doesn't in time, the pending line goes
+  // away and the rule result stands. Stops on unmount, scope change or when the capture changes.
+  const aiPendingCaptureId = capture?.status === 'ready' && capture.aiMapping?.status === 'pending' ? capture.id : null;
+  useEffect(() => {
+    if (!aiPendingCaptureId) return;
+    const scope = activeScopeRef.current;
+    let cancelled = false;
+    let elapsed = 0;
+    let inFlight = false;
+    const timer = setInterval(async () => {
+      if (cancelled || inFlight) return;
+      elapsed += AI_MAPPING_POLL_INTERVAL_MS;
+      if (elapsed > AI_MAPPING_POLL_WINDOW_MS) {
+        clearInterval(timer);
+        setCapture((prev) => (prev && prev.id === aiPendingCaptureId && prev.aiMapping?.status === 'pending' ? { ...prev, aiMapping: null } : prev));
+        return;
+      }
+      inFlight = true;
+      try {
+        const res = await getCaptureStatus(authFetch, aiPendingCaptureId);
+        if (cancelled || activeScopeRef.current !== scope || !res.ok) return;
+        const view: DocumentCaptureView = await res.json();
+        if (cancelled || activeScopeRef.current !== scope) return;
+        if (view.id === aiPendingCaptureId && view.status === 'ready' && view.aiMapping?.status !== 'pending') {
+          clearInterval(timer);
+          setCapture((prev) => (prev && prev.id === aiPendingCaptureId && prev.status === 'ready' ? view : prev));
+        }
+      } catch {
+        // A failed poll changes nothing; the next tick or the window's end settles it.
+      } finally {
+        inFlight = false;
+      }
+    }, AI_MAPPING_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [authFetch, aiPendingCaptureId]);
 
   const accept = useCallback(
     async (fields: Record<string, unknown>, captureIdOverride?: string): Promise<DocumentCaptureView | null> => {

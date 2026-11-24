@@ -949,6 +949,92 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.ToTable("DocumentCaptures", (string)null);
                 });
 
+            modelBuilder.Entity("Core.Domain.DocumentCaptureAiMapping", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CaptureId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("ExtractionGeneration")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<int?>("LatencyMs")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("LeaseUntil")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("MappedFieldsJson")
+                        .HasMaxLength(65536)
+                        .HasColumnType("character varying(65536)");
+
+                    b.Property<string>("MapperName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("MapperVersion")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Outcome")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("RuleHintsJson")
+                        .HasMaxLength(16384)
+                        .HasColumnType("character varying(16384)");
+
+                    b.Property<string>("RulesVersion")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status", "LeaseUntil")
+                        .HasDatabaseName("IX_DocumentCaptureAiMappings_Status_LeaseUntil");
+
+                    b.HasIndex("CompanyId", "CaptureId", "ExtractionGeneration")
+                        .IsUnique();
+
+                    b.HasIndex("CompanyId", "ContentHash", "Kind", "RulesVersion", "MapperVersion")
+                        .HasDatabaseName("IX_DocumentCaptureAiMappings_Cache");
+
+                    b.ToTable("DocumentCaptureAiMappings", (string)null);
+                });
+
             modelBuilder.Entity("Core.Domain.DocumentCaptureAttempt", b =>
                 {
                     b.Property<int>("Id")
@@ -7594,6 +7680,18 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Navigation("Contact");
 
                     b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("Core.Domain.DocumentCaptureAiMapping", b =>
+                {
+                    b.HasOne("Core.Domain.DocumentCapture", "Capture")
+                        .WithMany()
+                        .HasForeignKey("CompanyId", "CaptureId")
+                        .HasPrincipalKey("CompanyId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Capture");
                 });
 
             modelBuilder.Entity("Core.Domain.DocumentCaptureAttempt", b =>

@@ -19,7 +19,7 @@ public sealed class DocumentCaptureSqliteSchemaTests
             db.Database.EnsureCreated();
         }
 
-        Execute(connection, "DROP TABLE \"PartyAliases\"; DROP TABLE \"DocumentCaptureLinks\"; DROP TABLE \"DocumentCaptureAttempts\"; DROP TABLE \"DocumentCaptureBlobs\"; DROP TABLE \"DocumentCaptures\";");
+        Execute(connection, "DROP TABLE \"PartyAliases\"; DROP TABLE \"DocumentCaptureAiMappings\"; DROP TABLE \"DocumentCaptureLinks\"; DROP TABLE \"DocumentCaptureAttempts\"; DROP TABLE \"DocumentCaptureBlobs\"; DROP TABLE \"DocumentCaptures\";");
         SQLitePCL.raw.sqlite3_limit(connection.Handle, SQLitePCL.raw.SQLITE_LIMIT_COMPOUND_SELECT, 1);
 
         SqliteSchemaUpgrader.Upgrade(connection);
@@ -30,6 +30,11 @@ public sealed class DocumentCaptureSqliteSchemaTests
         Assert.Equal(1, ScalarInt(connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'DocumentCaptureAttempts';"));
         Assert.Equal(1, ScalarInt(connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'DocumentCaptureLinks';"));
         Assert.Equal(1, ScalarInt(connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'PartyAliases';"));
+        Assert.Equal(1, ScalarInt(connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'DocumentCaptureAiMappings';"));
+        Assert.Contains("UNIQUE", ScalarText(connection,
+            "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'IX_DocumentCaptureAiMappings_CompanyId_CaptureId_ExtractionGeneration';"), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, ScalarInt(connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'IX_DocumentCaptureAiMappings_Cache';"));
+        Assert.Equal(1, ScalarInt(connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'IX_DocumentCaptureAiMappings_Status_LeaseUntil';"));
         Assert.Contains("UNIQUE", ScalarText(connection,
             "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'IX_PartyAliases_CompanyId_Role_NormalizedAlias';"), StringComparison.OrdinalIgnoreCase);
         var captureRetentionIndex = ScalarText(connection,
@@ -40,7 +45,7 @@ public sealed class DocumentCaptureSqliteSchemaTests
             "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'IX_DocumentCaptureAttempts_ReservedAt';"), StringComparison.Ordinal);
         Assert.Equal(0, ScalarInt(connection,
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'IX_DocumentCaptures_CompanyId_Status_ExpiresAt';"));
-        Assert.All(new[] { "DocumentCaptures", "DocumentCaptureBlobs", "DocumentCaptureAttempts", "DocumentCaptureLinks" }, table =>
+        Assert.All(new[] { "DocumentCaptures", "DocumentCaptureBlobs", "DocumentCaptureAttempts", "DocumentCaptureLinks", "DocumentCaptureAiMappings" }, table =>
             Assert.DoesNotContain(table, SqliteSchemaUpgrader.TenantTables));
         Assert.Equal(1, ScalarInt(connection,
             "SELECT COUNT(*) FROM pragma_table_info('DocumentCaptureLinks') WHERE name = 'TaxTreatment' AND \"notnull\" = 0;"));
