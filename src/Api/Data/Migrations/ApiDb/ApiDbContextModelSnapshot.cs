@@ -1050,6 +1050,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
 
+                    b.Property<DateTime?>("ReservedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<int>("ReservedPages")
                         .HasColumnType("int");
 

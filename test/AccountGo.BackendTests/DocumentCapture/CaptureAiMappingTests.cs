@@ -792,6 +792,64 @@ public sealed class CaptureAiMappingTests : IDisposable
     }
 
     [Fact]
+    [Trait("Rule", "AI-08")]
+    public async Task AReservationRecordsTheInstantItWasMadeAtOnTheJobAndTheMeter()
+    {
+        var instant = new DateTimeOffset(2026, 10, 31, 23, 59, 58, TimeSpan.Zero);
+        var capture = await AddReadyCaptureAsync();
+        await EnqueueAsync(capture);
+
+        await Processor(new FakeCaptureFieldMapper(), new FixedClock(instant)).ProcessNextAsync(CancellationToken.None);
+
+        var job = await JobAsync(capture);
+        Assert.Equal(instant.UtcDateTime, job.ReservedAt);
+        Assert.Equal([instant.UtcDateTime], _meter.ReservedAtUtc);
+    }
+
+    [Fact]
+    [Trait("Rule", "AI-08")]
+    public async Task AReleaseGoesBackToTheInstantTheReservationWasMadeAtAndClearsBothAndASecondReleaseGivesNothing()
+    {
+        // Reserved on the last day of a month, given back in the next one.
+        var reservedAt = new DateTimeOffset(2026, 10, 31, 23, 59, 0, TimeSpan.Zero);
+        var clock = new FixedClock(reservedAt);
+        var capture = await AddReadyCaptureAsync();
+        await EnqueueAsync(capture);
+        var processor = Processor(new ScriptedMapper((Func<string>)(() => throw new InvalidOperationException("down"))), clock);
+
+        for (var attempt = 0; attempt < DocumentCaptureAiMappingProcessor.MaxAttempts; attempt++)
+        {
+            await processor.ProcessNextAsync(CancellationToken.None);
+            clock.Advance(TimeSpan.FromDays(1)); // into November
+        }
+        await processor.ProcessNextAsync(CancellationToken.None);
+        await processor.ProcessNextAsync(CancellationToken.None);
+
+        Assert.Equal([reservedAt.UtcDateTime], _meter.ReleasedAtUtc);
+        var job = await JobAsync(capture);
+        Assert.Equal(0, job.ReservedPages);
+        Assert.Null(job.ReservedAt);
+    }
+
+    [Fact]
+    [Trait("Rule", "AI-08")]
+    public async Task ALegacyRowWithPagesButNoReservedAtReleasesAtItsCreationTime()
+    {
+        var capture = await AddReadyCaptureAsync();
+        await EnqueueAsync(capture);
+        await _db.DocumentCaptureAiMappings.IgnoreQueryFilters().Where(j => j.CaptureId == capture).ExecuteUpdateAsync(set => set
+            .SetProperty(j => j.Status, "running").SetProperty(j => j.Attempts, DocumentCaptureAiMappingProcessor.MaxAttempts)
+            .SetProperty(j => j.LeaseUntil, DateTime.UtcNow.AddMinutes(-1)).SetProperty(j => j.ReservedPages, 2));
+        var createdAt = (await JobAsync(capture)).CreatedAt;
+        var processor = Processor(new ScriptedMapper(MappedFields));
+
+        await processor.ProcessNextAsync(CancellationToken.None);
+        await processor.ProcessNextAsync(CancellationToken.None);
+
+        Assert.Equal([createdAt], _meter.ReleasedAtUtc);
+    }
+
+    [Fact]
     public async Task ACaptureAcceptedWhileTheMapperRunsGivesItsPagesBack()
     {
         var capture = await AddReadyCaptureAsync();
@@ -872,17 +930,23 @@ public sealed class CaptureAiMappingTests : IDisposable
         public bool AllowReserve { get; set; } = true;
         public List<(int CompanyId, int Pages)> Reserved { get; } = [];
         public List<(int CompanyId, int Pages)> Released { get; } = [];
+        public List<DateTime> ReservedAtUtc { get; } = [];
+        public List<DateTime> ReleasedAtUtc { get; } = [];
 
-        public Task<bool> ReserveAsync(int companyId, int pages, CancellationToken cancellationToken)
+        public Task<bool> ReserveAsync(int companyId, int pages, DateTime reservedAtUtc, CancellationToken cancellationToken)
         {
             if (AllowReserve)
+            {
                 Reserved.Add((companyId, pages));
+                ReservedAtUtc.Add(reservedAtUtc);
+            }
             return Task.FromResult(AllowReserve);
         }
 
-        public Task ReleaseAsync(int companyId, int pages, CancellationToken cancellationToken)
+        public Task ReleaseAsync(int companyId, int pages, DateTime reservedAtUtc, CancellationToken cancellationToken)
         {
             Released.Add((companyId, pages));
+            ReleasedAtUtc.Add(reservedAtUtc);
             return Task.CompletedTask;
         }
     }

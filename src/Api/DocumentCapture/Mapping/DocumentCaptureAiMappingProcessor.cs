@@ -291,13 +291,15 @@ public sealed class DocumentCaptureAiMappingProcessor(
         // The MaxLines cut below can drop text from late pages; that is accepted, because the unit metered is pages read. Rows
         // written before TextPageCount existed hold 0 and fall back to the document's page count.
         var pages = textPageCount > 0 ? textPageCount : Math.Max(pageCount, 1);
-        if (!await _meter.ReserveAsync(companyId, pages, cancellationToken).ConfigureAwait(false))
+        // One instant for the meter and the job, so a host that counts per period reserves and later releases in the same one.
+        var reservedAt = _clock.GetUtcNow().UtcDateTime;
+        if (!await _meter.ReserveAsync(companyId, pages, reservedAt, cancellationToken).ConfigureAwait(false))
             return false;
         var recorded = await db.DocumentCaptureAiMappings.IgnoreQueryFilters()
             .Where(job => job.Id == jobId && job.ReservedPages == 0)
-            .ExecuteUpdateAsync(set => set.SetProperty(job => job.ReservedPages, pages), cancellationToken).ConfigureAwait(false);
+            .ExecuteUpdateAsync(set => set.SetProperty(job => job.ReservedPages, pages).SetProperty(job => job.ReservedAt, (DateTime?)reservedAt), cancellationToken).ConfigureAwait(false);
         if (recorded != 1)
-            await _meter.ReleaseAsync(companyId, pages, cancellationToken).ConfigureAwait(false); // another run recorded first
+            await _meter.ReleaseAsync(companyId, pages, reservedAt, cancellationToken).ConfigureAwait(false); // another run recorded first
         return true;
     }
 
@@ -307,15 +309,16 @@ public sealed class DocumentCaptureAiMappingProcessor(
         try
         {
             var job = await db.DocumentCaptureAiMappings.IgnoreQueryFilters().AsNoTracking()
-                .Where(j => j.Id == jobId).Select(j => new { j.CompanyId, j.ReservedPages }).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+                .Where(j => j.Id == jobId).Select(j => new { j.CompanyId, j.ReservedPages, j.ReservedAt, j.CreatedAt }).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
             if (job is null || job.ReservedPages <= 0)
                 return;
             var reserved = job.ReservedPages;
             var cleared = await db.DocumentCaptureAiMappings.IgnoreQueryFilters()
                 .Where(j => j.Id == jobId && j.ReservedPages == reserved)
-                .ExecuteUpdateAsync(set => set.SetProperty(j => j.ReservedPages, 0), cancellationToken).ConfigureAwait(false);
+                .ExecuteUpdateAsync(set => set.SetProperty(j => j.ReservedPages, 0).SetProperty(j => j.ReservedAt, (DateTime?)null), cancellationToken).ConfigureAwait(false);
+            // A row reserved before ReservedAt existed has none: its creation time is the closest instant to when it was reserved.
             if (cleared == 1)
-                await _meter.ReleaseAsync(job.CompanyId, reserved, cancellationToken).ConfigureAwait(false);
+                await _meter.ReleaseAsync(job.CompanyId, reserved, job.ReservedAt ?? job.CreatedAt, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

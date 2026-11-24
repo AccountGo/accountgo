@@ -298,7 +298,7 @@ public sealed class CaptureAiMappingConsentTests : IDisposable
         Assert.False(availability.Available);
         Assert.Equal("not_offered", availability.UnavailableReason);
         Assert.False(await provider.GetRequiredService<ICaptureAiMappingPolicy>().IsAllowedAsync(1, "purchase-invoice", CancellationToken.None));
-        Assert.True(await provider.GetRequiredService<ICaptureAiMappingMeter>().ReserveAsync(1, 3, CancellationToken.None));
+        Assert.True(await provider.GetRequiredService<ICaptureAiMappingMeter>().ReserveAsync(1, 3, DateTime.UtcNow, CancellationToken.None));
     }
 
     [Fact]

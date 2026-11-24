@@ -1049,6 +1049,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
 
+                    b.Property<DateTime?>("ReservedAt")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<int>("ReservedPages")
                         .HasColumnType("integer");
 

@@ -86,12 +86,13 @@ public sealed class DocumentCaptureSqliteSchemaTests
         }
 
         // A database from before this change: no consent table, and mapping jobs without the reserved-pages column.
-        Execute(connection, "PRAGMA foreign_keys = OFF; DROP TABLE \"CaptureAiMappingConsents\"; ALTER TABLE \"DocumentCaptureAiMappings\" DROP COLUMN \"ReservedPages\"; ALTER TABLE \"DocumentCaptures\" DROP COLUMN \"TextPageCount\";");
+        Execute(connection, "PRAGMA foreign_keys = OFF; DROP TABLE \"CaptureAiMappingConsents\"; ALTER TABLE \"DocumentCaptureAiMappings\" DROP COLUMN \"ReservedPages\"; ALTER TABLE \"DocumentCaptureAiMappings\" DROP COLUMN \"ReservedAt\"; ALTER TABLE \"DocumentCaptures\" DROP COLUMN \"TextPageCount\";");
 
         SqliteSchemaUpgrader.Upgrade(connection);
         SqliteSchemaUpgrader.Upgrade(connection);
 
         Assert.Equal(1, ScalarInt(connection, "SELECT COUNT(*) FROM pragma_table_info('DocumentCaptureAiMappings') WHERE name = 'ReservedPages';"));
+        Assert.Equal(1, ScalarInt(connection, "SELECT COUNT(*) FROM pragma_table_info('DocumentCaptureAiMappings') WHERE name = 'ReservedAt';"));
         Assert.Equal(1, ScalarInt(connection, "SELECT COUNT(*) FROM pragma_table_info('DocumentCaptures') WHERE name = 'TextPageCount';"));
         Assert.Equal(1, ScalarInt(connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'CaptureAiMappingConsents';"));
         Assert.Contains("UNIQUE", ScalarText(connection,
