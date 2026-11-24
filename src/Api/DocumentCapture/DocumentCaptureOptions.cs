@@ -7,6 +7,38 @@ using Microsoft.Extensions.Hosting;
 
 namespace Api.DocumentCaptures;
 
+/// <summary>
+/// Optional AI field mapping. Off by default: it runs only when <see cref="Enabled"/> is set here AND the workspace policy allows it,
+/// and it never blocks a scan (the rule fields are returned first and the mapper runs in the background).
+/// </summary>
+public sealed class DocumentCaptureAiMappingOptions
+{
+    public const int MaxTimeoutSeconds = 6;
+    public bool Enabled { get; set; }
+    /// <summary>"anter" (the capture-mapper agent) or "fake" (development and tests only).</summary>
+    public string Mapper { get; set; } = "anter";
+    public string AgentSlug { get; set; } = "accountgo-capture-mapper";
+    public int TimeoutSeconds { get; set; } = MaxTimeoutSeconds;
+    public int MaxLines { get; set; } = 200;
+    /// <summary>A per-instance safety cap; jobs over it stay queued.</summary>
+    public int MaxMappingsPerMinute { get; set; } = 30;
+
+    internal void Validate(IHostEnvironment environment)
+    {
+        if (TimeoutSeconds is < 1 or > MaxTimeoutSeconds
+            || MaxLines is < 1 or > 1_000
+            || MaxMappingsPerMinute is < 1 or > 600
+            || string.IsNullOrWhiteSpace(AgentSlug) || AgentSlug.Length > 100)
+            throw new InvalidOperationException("Document capture AI mapping limits are outside the supported range.");
+        if (!string.Equals(Mapper, "anter", StringComparison.OrdinalIgnoreCase) && !string.Equals(Mapper, "fake", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("DocumentCapture:AiMapping:Mapper must be anter or fake.");
+        if (string.Equals(Mapper, "fake", StringComparison.OrdinalIgnoreCase)
+            && !environment.IsDevelopment()
+            && !string.Equals(environment.EnvironmentName, "Testing", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The fake field mapper is allowed only in development and tests.");
+    }
+}
+
 public sealed class DocumentCaptureOptions
 {
     public const string SectionName = "DocumentCapture";
@@ -21,6 +53,7 @@ public sealed class DocumentCaptureOptions
     public int PdfParseSlots { get; set; } = DocumentCapturePdfLimits.ParseGateSlots;
     public int RetentionStartDelaySeconds { get; set; } = 60;
     public int AbandonedRetentionHours { get; set; } = 24;
+    public DocumentCaptureAiMappingOptions AiMapping { get; set; } = new();
     public Dictionary<string, string> FakeFixtures { get; set; } = new(StringComparer.Ordinal);
 
     public static void Validate(DocumentCaptureOptions options, IHostEnvironment environment)
@@ -35,6 +68,8 @@ public sealed class DocumentCaptureOptions
             || options.RetentionStartDelaySeconds is < 0 or > 3_600
             || options.AbandonedRetentionHours is < 1 or > 168)
             throw new InvalidOperationException("Document capture limits are outside the supported range.");
+
+        options.AiMapping.Validate(environment);
 
         if (!string.Equals(options.Extractor, "", StringComparison.Ordinal)
             && !string.Equals(options.Extractor, "fake", StringComparison.OrdinalIgnoreCase)

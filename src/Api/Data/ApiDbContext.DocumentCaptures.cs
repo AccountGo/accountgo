@@ -13,6 +13,7 @@ public partial class ApiDbContext
     public virtual DbSet<DocumentCaptureBlob> DocumentCaptureBlobs { get; set; } = null!;
     public virtual DbSet<DocumentCaptureAttempt> DocumentCaptureAttempts { get; set; } = null!;
     public virtual DbSet<DocumentCaptureLink> DocumentCaptureLinks { get; set; } = null!;
+    public virtual DbSet<DocumentCaptureAiMapping> DocumentCaptureAiMappings { get; set; } = null!;
     public virtual DbSet<PartyAlias> PartyAliases { get; set; } = null!;
 
     private static void ConfigureDocumentCaptureModel(ModelBuilder builder)
@@ -74,6 +75,30 @@ public partial class ApiDbContext
             entity.HasOne(attempt => attempt.Capture)
                 .WithMany(capture => capture.Attempts)
                 .HasForeignKey(attempt => new { attempt.CompanyId, attempt.CaptureId })
+                .HasPrincipalKey(capture => new { capture.CompanyId, capture.Id })
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<DocumentCaptureAiMapping>(entity =>
+        {
+            entity.ToTable("DocumentCaptureAiMappings");
+            entity.HasKey(job => job.Id);
+            entity.Property(job => job.Status).HasMaxLength(20).IsRequired();
+            entity.Property(job => job.Kind).HasMaxLength(40).IsRequired();
+            entity.Property(job => job.ContentHash).HasMaxLength(64).IsRequired();
+            entity.Property(job => job.RulesVersion).HasMaxLength(40).IsRequired();
+            entity.Property(job => job.MapperName).HasMaxLength(100);
+            entity.Property(job => job.MapperVersion).HasMaxLength(100);
+            entity.Property(job => job.Outcome).HasMaxLength(40);
+            entity.Property(job => job.RuleHintsJson).HasMaxLength(16_384);
+            entity.Property(job => job.MappedFieldsJson).HasMaxLength(65_536);
+            entity.HasIndex(job => new { job.CompanyId, job.CaptureId, job.ExtractionGeneration }).IsUnique();
+            entity.HasIndex(job => new { job.Status, job.LeaseUntil }).HasDatabaseName("IX_DocumentCaptureAiMappings_Status_LeaseUntil");
+            entity.HasIndex(job => new { job.CompanyId, job.ContentHash, job.Kind, job.RulesVersion, job.MapperVersion })
+                .HasDatabaseName("IX_DocumentCaptureAiMappings_Cache");
+            entity.HasOne(job => job.Capture)
+                .WithMany()
+                .HasForeignKey(job => new { job.CompanyId, job.CaptureId })
                 .HasPrincipalKey(capture => new { capture.CompanyId, capture.Id })
                 .OnDelete(DeleteBehavior.Cascade);
         });
