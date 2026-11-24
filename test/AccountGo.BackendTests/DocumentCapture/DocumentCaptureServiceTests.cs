@@ -199,6 +199,7 @@ public sealed class DocumentCaptureServiceTests
         Assert.NotNull(stored.FieldsWipedAt);
         Assert.Equal(expectedEmptyJson, stored.FieldsJson);
         Assert.Null(stored.RawText);
+        Assert.Equal(0, stored.TextPageCount);
         Assert.Null(stored.WarningsJson);
         Assert.False(await harness.Db.DocumentCaptureBlobs.AnyAsync(b => b.CaptureId == internalId));
 
@@ -252,6 +253,7 @@ public sealed class DocumentCaptureServiceTests
         Assert.NotNull(afterExpiry.FieldsWipedAt);
         Assert.Equal("{}", afterExpiry.FieldsJson);
         Assert.Null(afterExpiry.RawText);
+        Assert.Equal(0, afterExpiry.TextPageCount);
         Assert.Null(afterExpiry.WarningsJson);
 
         // Deduplication never returns a purged capture.
@@ -276,13 +278,40 @@ public sealed class DocumentCaptureServiceTests
         DocumentCaptureOptions.Validate(new DocumentCaptureOptions { AbandonedRetentionHours = 168 }, dev.Object);
     }
 
-    private sealed class WarningStaticExtractor(string fieldsJson) : IDocumentFieldExtractor
+    [Fact]
+    [Trait("Rule", "AI-08")]
+    public async Task Upload_StoresTheTextPagesReadAndRejectClearsThem()
+    {
+        using var harness = new Harness(enabled: true);
+        var service = harness.CreateService(new WarningStaticExtractor("{\"vendorName\":\"Acme Ltd\"}", textPages: 6));
+
+        var uploaded = await service.UploadAsync("purchase-invoice", 1, "image/png", CreatePng(), "text-pages", CancellationToken.None);
+        var internalId = await harness.Db.DocumentCaptures.Where(c => c.PublicId == uploaded.Id).Select(c => c.Id).SingleAsync();
+        Assert.Equal(6, (await harness.Db.DocumentCaptures.AsNoTracking().SingleAsync(c => c.Id == internalId)).TextPageCount);
+
+        await service.RejectAsync(internalId, CancellationToken.None);
+        Assert.Equal(0, (await harness.Db.DocumentCaptures.AsNoTracking().SingleAsync(c => c.Id == internalId)).TextPageCount);
+    }
+
+    [Fact]
+    [Trait("Rule", "AI-08")]
+    public async Task Upload_AnExtractorThatReportsNoPagesStillMetersOnePageForTheText()
+    {
+        using var harness = new Harness(enabled: true);
+        var service = harness.CreateService(new WarningStaticExtractor("{\"vendorName\":\"Acme Ltd\"}"));
+
+        var uploaded = await service.UploadAsync("purchase-invoice", 1, "image/png", CreatePng(), "text-pages-min", CancellationToken.None);
+
+        Assert.Equal(1, (await harness.Db.DocumentCaptures.AsNoTracking().SingleAsync(c => c.PublicId == uploaded.Id)).TextPageCount);
+    }
+
+    private sealed class WarningStaticExtractor(string fieldsJson, int textPages = 0) : IDocumentFieldExtractor
     {
         public bool IsConfigured => true;
         public string ProviderName => "fixture";
         public Task<DocumentExtractionResult> ExtractAsync(DocumentExtractionRequest request, CancellationToken cancellationToken) =>
             Task.FromResult(new DocumentExtractionResult(fieldsJson, request.Kind, 1, ["TOTAL_UNLABELED"],
-                "sensitive raw text", "fixture", "1"));
+                "sensitive raw text", "fixture", "1", textPages));
     }
 
     [Fact]

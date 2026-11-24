@@ -17,6 +17,8 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 - Self-hosted installations can opt in to reading uploaded documents locally and review the extracted details before saving.
 
+- Workspace owners can opt in to AI-assisted reading of scanned documents from Settings, where their host offers it, and turn it off again at any time.
+
 ### Changed
 
 - Attach a document to the assistant from the message box; the file is read on our servers and only masked fields reach the AI.

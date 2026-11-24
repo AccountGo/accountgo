@@ -903,6 +903,8 @@ WHERE ""DisabledModulesJson"" IS NULL
                 DocumentCaptureAiMappingUniqueIndexSql,
                 DocumentCaptureAiMappingLeaseIndexSql,
                 DocumentCaptureAiMappingCacheIndexSql,
+                CaptureAiMappingConsentTableSql,
+                CaptureAiMappingConsentCompanyIndexSql,
                 PartyAliasesTableSql,
                 PartyAliasesUniqueIndexSql,
                 PartyAliasesPartyIndexSql
@@ -914,6 +916,8 @@ WHERE ""DisabledModulesJson"" IS NULL
             }
 
             AddColumnIfMissing(connection, "DocumentCaptureLinks", "TaxTreatment", "TEXT NULL");
+            AddColumnIfMissing(connection, "DocumentCaptures", "TextPageCount", "INTEGER NOT NULL DEFAULT 0");
+            AddColumnIfMissing(connection, "DocumentCaptureAiMappings", "ReservedPages", "INTEGER NOT NULL DEFAULT 0");
 
             using (var command = connection.CreateCommand())
             {
@@ -949,6 +953,7 @@ WHERE ""DisabledModulesJson"" IS NULL
                 ""FieldsJson"" TEXT NULL,
                 ""AcceptedFieldsJson"" TEXT NULL,
                 ""RawText"" TEXT NULL,
+                ""TextPageCount"" INTEGER NOT NULL DEFAULT 0,
                 ""ProviderName"" TEXT NULL,
                 ""ProviderVersion"" TEXT NULL,
                 ""ErrorCode"" TEXT NULL,
@@ -1016,11 +1021,27 @@ WHERE ""DisabledModulesJson"" IS NULL
                 ""Outcome"" TEXT NULL,
                 ""RuleHintsJson"" TEXT NULL,
                 ""MappedFieldsJson"" TEXT NULL,
+                ""ReservedPages"" INTEGER NOT NULL DEFAULT 0,
                 ""CreatedAt"" TEXT NOT NULL,
                 ""CompletedAt"" TEXT NULL,
                 CONSTRAINT ""FK_DocumentCaptureAiMappings_DocumentCaptures_CompanyId_CaptureId""
                     FOREIGN KEY (""CompanyId"", ""CaptureId"") REFERENCES ""DocumentCaptures"" (""CompanyId"", ""Id"") ON DELETE CASCADE
             );";
+
+        private const string CaptureAiMappingConsentTableSql = @"
+            CREATE TABLE IF NOT EXISTS ""CaptureAiMappingConsents"" (
+                ""Id"" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""ConsentVersion"" TEXT NOT NULL,
+                ""ConsentedAt"" TEXT NOT NULL,
+                ""ConsentedByUserId"" TEXT NOT NULL,
+                ""RevokedAt"" TEXT NULL,
+                ""RevokedByUserId"" TEXT NULL
+            );";
+
+        private const string CaptureAiMappingConsentCompanyIndexSql = @"
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_CaptureAiMappingConsents_CompanyId""
+            ON ""CaptureAiMappingConsents"" (""CompanyId"");";
 
         private const string DocumentCaptureAiMappingUniqueIndexSql = @"
             CREATE UNIQUE INDEX IF NOT EXISTS ""IX_DocumentCaptureAiMappings_CompanyId_CaptureId_ExtractionGeneration""

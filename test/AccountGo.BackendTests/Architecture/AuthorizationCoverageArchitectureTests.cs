@@ -405,6 +405,7 @@ namespace AccountGo.BackendTests.Architecture
             // Api Controllers
             ["src/Api/Controllers/AdministrationController.cs"] = "governance: workspace administrative endpoints",
             ["src/Api/Controllers/BillingController.cs"] = "governance: workspace billing administration",
+            ["src/Api/Controllers/CaptureAiMappingSettingsController.cs"] = "governance: only the workspace Owner may agree to or withdraw AI document reading consent",
             ["src/Api/Controllers/FinancialsController.cs"] = "governance: chart of accounts replace requires Owner role in addition to permission",
             ["src/Api/Controllers/InvitationsController.cs"] = "governance: invitation role assignment",
             ["src/Api/Controllers/LinkedEntriesController.cs"] = "governance: linked entries management",

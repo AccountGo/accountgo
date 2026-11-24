@@ -150,7 +150,8 @@ public sealed class LocalOcrDocumentFieldExtractor : IDocumentFieldExtractor, ID
             // background job calls CaptureFieldMappingRunner, so a slow mapper can't delay a scan or hold the OCR admission slot.
             var extraction = new DocumentExtractionResult(parsed.FieldsJson, request.Kind, 1,
                 result.Warnings.Concat(parsed.Warnings).Distinct(StringComparer.Ordinal).Take(32).ToArray(),
-                rawText, ProviderName, CurrentProviderVersion);
+                rawText, ProviderName, CurrentProviderVersion,
+                TextPageCount: rawText.Length == 0 ? 0 : Math.Max(1, lines.Select(line => line.Page).Distinct().Count()));
             outcome = "ok";
             return extraction;
         }

@@ -73,8 +73,14 @@ public sealed class CaptureAiMappingTests : IDisposable
             contentHash.PadRight(64, 'c'), DateTime.UtcNow, CancellationToken.None);
     }
 
+    private readonly RecordingMeter _meter = new();
+
     private DocumentCaptureAiMappingProcessor Processor(ICaptureFieldMapper mapper, TimeProvider? clock = null) =>
-        new(_db, mapper, _policy, _limiter, Options.Create(_captureOptions), NullLogger<DocumentCaptureAiMappingProcessor>.Instance, _audit, clock);
+        new(_db, mapper, _policy, _limiter, Options.Create(_captureOptions), NullLogger<DocumentCaptureAiMappingProcessor>.Instance, _audit, clock, _meter);
+
+    private Task SetPageCountAsync(int captureId, int pages, int textPages = 0) =>
+        _db.DocumentCaptures.IgnoreQueryFilters().Where(c => c.Id == captureId)
+            .ExecuteUpdateAsync(set => set.SetProperty(c => c.PageCount, pages).SetProperty(c => c.TextPageCount, textPages));
 
     private Task<Core.Domain.DocumentCapture> CaptureAsync(int id) => _db.DocumentCaptures.IgnoreQueryFilters().AsNoTracking().SingleAsync(c => c.Id == id);
     private Task<DocumentCaptureAiMapping> JobAsync(int captureId) =>
@@ -642,6 +648,185 @@ public sealed class CaptureAiMappingTests : IDisposable
         Validate(o => o.Mapper = "fake", "Testing");
     }
 
+    // ---- metering: pages count once, only when text was sent and the result applied --------------------------------
+
+    [Fact]
+    public async Task AnAppliedJobReservesItsPagesOnceAndKeepsThem()
+    {
+        var capture = await AddReadyCaptureAsync();
+        await SetPageCountAsync(capture, 2);
+        await EnqueueAsync(capture);
+
+        await Processor(new FakeCaptureFieldMapper()).ProcessNextAsync(CancellationToken.None);
+
+        Assert.Equal([(1, 2)], _meter.Reserved);
+        Assert.Empty(_meter.Released);
+        Assert.Equal(2, (await JobAsync(capture)).ReservedPages);
+    }
+
+    [Fact]
+    [Trait("Rule", "AI-08")]
+    public async Task ATextLayerPdfMetersEveryPageWhoseTextWasRead()
+    {
+        var capture = await AddReadyCaptureAsync();
+        await SetPageCountAsync(capture, 6, textPages: 6);
+        await EnqueueAsync(capture);
+
+        await Processor(new FakeCaptureFieldMapper()).ProcessNextAsync(CancellationToken.None);
+
+        Assert.Equal([(1, 6)], _meter.Reserved);
+    }
+
+    [Fact]
+    [Trait("Rule", "AI-08")]
+    public async Task AScannedPdfMetersOnlyThePagesThatWereRead()
+    {
+        // Ten pages, three OCR'd: the other seven contributed no text, so they are not metered.
+        var capture = await AddReadyCaptureAsync();
+        await SetPageCountAsync(capture, 10, textPages: 3);
+        await EnqueueAsync(capture);
+
+        await Processor(new FakeCaptureFieldMapper()).ProcessNextAsync(CancellationToken.None);
+
+        Assert.Equal([(1, 3)], _meter.Reserved);
+    }
+
+    [Fact]
+    [Trait("Rule", "AI-08")]
+    public async Task ARowFromBeforeTextPageCountExistedMetersItsPageCountAndAtLeastOne()
+    {
+        var older = await AddReadyCaptureAsync(contentHash: "m");
+        await SetPageCountAsync(older, 4);
+        await EnqueueAsync(older, contentHash: "m");
+        var none = await AddReadyCaptureAsync(contentHash: "z");
+        await SetPageCountAsync(none, 0);
+        await EnqueueAsync(none, contentHash: "z");
+
+        var processor = Processor(new FakeCaptureFieldMapper());
+        await processor.ProcessNextAsync(CancellationToken.None);
+        await processor.ProcessNextAsync(CancellationToken.None);
+
+        Assert.Equal([(1, 4), (1, 1)], _meter.Reserved);
+    }
+
+    [Fact]
+    [Trait("Rule", "AI-08")]
+    public async Task ACacheHitNeverCountsAgainstTheCap()
+    {
+        var first = await AddReadyCaptureAsync();
+        await EnqueueAsync(first);
+        var processor = Processor(new FakeCaptureFieldMapper());
+        await processor.ProcessNextAsync(CancellationToken.None);
+        var second = await AddReadyCaptureAsync();
+        await EnqueueAsync(second);
+
+        await processor.ProcessNextAsync(CancellationToken.None);
+
+        Assert.Equal("cached", (await JobAsync(second)).Outcome);
+        Assert.Single(_meter.Reserved);
+        Assert.Equal(0, (await JobAsync(second)).ReservedPages);
+    }
+
+    [Fact]
+    [Trait("Rule", "AI-08")]
+    public async Task AJobOverTheCapIsSkippedWithoutCallingTheMapperOrChangingTheCapture()
+    {
+        _meter.AllowReserve = false;
+        var capture = await AddReadyCaptureAsync();
+        await EnqueueAsync(capture);
+        var mapper = new ScriptedMapper(MappedFields);
+
+        await Processor(mapper).ProcessNextAsync(CancellationToken.None);
+
+        Assert.Equal(0, mapper.Calls);
+        Assert.Equal(RuleFields, (await CaptureAsync(capture)).FieldsJson);
+        var job = await JobAsync(capture);
+        Assert.Equal("skipped", job.Status);
+        Assert.Equal("cap", job.Outcome);
+        Assert.Equal(0, job.ReservedPages);
+        Assert.Empty(_meter.Released);
+    }
+
+    [Fact]
+    [Trait("Rule", "AI-08")]
+    public async Task ARetriedJobNeverReservesTwice()
+    {
+        var capture = await AddReadyCaptureAsync();
+        await EnqueueAsync(capture);
+        var clock = new FixedClock(DateTimeOffset.UtcNow);
+        var fail = true;
+        var mapper = new ScriptedMapper((Func<string>)(() => fail ? throw new InvalidOperationException("down") : MappedFields));
+        var processor = Processor(mapper, clock);
+
+        await processor.ProcessNextAsync(CancellationToken.None);
+        Assert.Equal("queued", (await JobAsync(capture)).Status);
+        fail = false;
+        clock.Advance(TimeSpan.FromMinutes(1));
+        await processor.ProcessNextAsync(CancellationToken.None);
+
+        Assert.Equal("done", (await JobAsync(capture)).Status);
+        Assert.Single(_meter.Reserved);
+        Assert.Empty(_meter.Released);
+    }
+
+    [Fact]
+    [Trait("Rule", "AI-08")]
+    public async Task AJobThatFailsForGoodGivesItsPagesBackExactlyOnce()
+    {
+        var capture = await AddReadyCaptureAsync();
+        await EnqueueAsync(capture);
+        var clock = new FixedClock(DateTimeOffset.UtcNow);
+        var processor = Processor(new ScriptedMapper((Func<string>)(() => throw new InvalidOperationException("down"))), clock);
+
+        for (var attempt = 0; attempt < DocumentCaptureAiMappingProcessor.MaxAttempts; attempt++)
+        {
+            await processor.ProcessNextAsync(CancellationToken.None);
+            clock.Advance(TimeSpan.FromMinutes(1));
+        }
+        await processor.ProcessNextAsync(CancellationToken.None);
+
+        Assert.Equal("failed", (await JobAsync(capture)).Status);
+        Assert.Single(_meter.Reserved);
+        Assert.Equal(_meter.Reserved, _meter.Released);
+        Assert.Equal(0, (await JobAsync(capture)).ReservedPages);
+    }
+
+    [Fact]
+    public async Task ACaptureAcceptedWhileTheMapperRunsGivesItsPagesBack()
+    {
+        var capture = await AddReadyCaptureAsync();
+        await EnqueueAsync(capture);
+        var mapper = new ScriptedMapper(async () =>
+        {
+            await _db.DocumentCaptures.IgnoreQueryFilters().Where(c => c.Id == capture)
+                .ExecuteUpdateAsync(set => set.SetProperty(c => c.Status, "accepted").SetProperty(c => c.AcceptedAt, DateTime.UtcNow));
+            return MappedFields;
+        });
+
+        await Processor(mapper).ProcessNextAsync(CancellationToken.None);
+
+        Assert.Equal("changed", (await JobAsync(capture)).Outcome);
+        Assert.Single(_meter.Reserved);
+        Assert.Equal(_meter.Reserved, _meter.Released);
+    }
+
+    [Fact]
+    public async Task AJobWhoseLeaseExpiredAfterTheLastAttemptGivesItsReservedPagesBack()
+    {
+        var capture = await AddReadyCaptureAsync();
+        await EnqueueAsync(capture);
+        await _db.DocumentCaptureAiMappings.IgnoreQueryFilters().Where(j => j.CaptureId == capture).ExecuteUpdateAsync(set => set
+            .SetProperty(j => j.Status, "running").SetProperty(j => j.Attempts, DocumentCaptureAiMappingProcessor.MaxAttempts)
+            .SetProperty(j => j.LeaseUntil, DateTime.UtcNow.AddMinutes(-1)).SetProperty(j => j.ReservedPages, 2));
+        var processor = Processor(new ScriptedMapper(MappedFields));
+
+        await processor.ProcessNextAsync(CancellationToken.None);
+        await processor.ProcessNextAsync(CancellationToken.None);
+
+        Assert.Equal([(1, 2)], _meter.Released);
+        Assert.Equal(0, (await JobAsync(capture)).ReservedPages);
+    }
+
     // ---- fakes ----------------------------------------------------------------------------------------------------
 
     private sealed class MutableTenant(int companyId) : ITenantContext
@@ -679,6 +864,26 @@ public sealed class CaptureAiMappingTests : IDisposable
         {
             Calls++;
             return new CaptureMappingResult(await _fields(), Name, Version, Array.Empty<string>());
+        }
+    }
+
+    private sealed class RecordingMeter : ICaptureAiMappingMeter
+    {
+        public bool AllowReserve { get; set; } = true;
+        public List<(int CompanyId, int Pages)> Reserved { get; } = [];
+        public List<(int CompanyId, int Pages)> Released { get; } = [];
+
+        public Task<bool> ReserveAsync(int companyId, int pages, CancellationToken cancellationToken)
+        {
+            if (AllowReserve)
+                Reserved.Add((companyId, pages));
+            return Task.FromResult(AllowReserve);
+        }
+
+        public Task ReleaseAsync(int companyId, int pages, CancellationToken cancellationToken)
+        {
+            Released.Add((companyId, pages));
+            return Task.CompletedTask;
         }
     }
 

@@ -14,6 +14,7 @@ public partial class ApiDbContext
     public virtual DbSet<DocumentCaptureAttempt> DocumentCaptureAttempts { get; set; } = null!;
     public virtual DbSet<DocumentCaptureLink> DocumentCaptureLinks { get; set; } = null!;
     public virtual DbSet<DocumentCaptureAiMapping> DocumentCaptureAiMappings { get; set; } = null!;
+    public virtual DbSet<CaptureAiMappingConsent> CaptureAiMappingConsents { get; set; } = null!;
     public virtual DbSet<PartyAlias> PartyAliases { get; set; } = null!;
 
     private static void ConfigureDocumentCaptureModel(ModelBuilder builder)
@@ -101,6 +102,16 @@ public partial class ApiDbContext
                 .HasForeignKey(job => new { job.CompanyId, job.CaptureId })
                 .HasPrincipalKey(capture => new { capture.CompanyId, capture.Id })
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<CaptureAiMappingConsent>(entity =>
+        {
+            entity.ToTable("CaptureAiMappingConsents");
+            entity.HasKey(consent => consent.Id);
+            entity.Property(consent => consent.ConsentVersion).HasMaxLength(20).IsRequired();
+            entity.Property(consent => consent.ConsentedByUserId).HasMaxLength(450).IsRequired();
+            entity.Property(consent => consent.RevokedByUserId).HasMaxLength(450);
+            entity.HasIndex(consent => consent.CompanyId).IsUnique();
         });
 
         builder.Entity<DocumentCaptureLink>(entity =>

@@ -13,6 +13,15 @@ public sealed class FakeAllowAllCaptureAiMappingPolicy : ICaptureAiMappingPolicy
     public Task<bool> IsAllowedAsync(int companyId, string kind, CancellationToken cancellationToken) => Task.FromResult(true);
 }
 
+/// <summary>Development-only availability, so the setting can be exercised locally with the fake mapper. A reason from the closed set makes it unavailable.</summary>
+public sealed class FakeCaptureAiMappingAvailability(string? unavailableReason) : ICaptureAiMappingAvailability
+{
+    public Task<CaptureAiMappingAvailability> GetAsync(int companyId, CancellationToken cancellationToken) =>
+        Task.FromResult(CaptureAiMappingUnavailableReasons.IsKnown(unavailableReason)
+            ? CaptureAiMappingAvailability.Unavailable(unavailableReason!)
+            : CaptureAiMappingAvailability.Offered);
+}
+
 public static class CaptureAiMappingRegistration
 {
     /// <summary>
@@ -24,7 +33,13 @@ public static class CaptureAiMappingRegistration
     {
         var useFake = settings.Enabled && string.Equals(settings.Mapper, "fake", StringComparison.OrdinalIgnoreCase);
         if (useFake)
+        {
             services.TryAddSingleton<ICaptureAiMappingPolicy, FakeAllowAllCaptureAiMappingPolicy>();
+            services.TryAddSingleton<ICaptureAiMappingAvailability>(new FakeCaptureAiMappingAvailability(settings.FakeUnavailableReason));
+        }
+        services.TryAddSingleton<ICaptureAiMappingAvailability, NotOfferedCaptureAiMappingAvailability>();
+        services.TryAddSingleton<ICaptureAiMappingMeter, NoopCaptureAiMappingMeter>();
+        services.TryAddScoped<ICaptureAiMappingConsentStore, EfCaptureAiMappingConsentStore>();
         services.TryAddSingleton<ICaptureAiMappingPolicy, DisabledCaptureAiMappingPolicy>();
         services.AddSingleton<CaptureAiMappingRateLimiter>();
         services.AddSingleton<CaptureAiMappingSignal>();
