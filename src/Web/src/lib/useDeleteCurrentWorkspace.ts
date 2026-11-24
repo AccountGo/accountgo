@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
+import { isStepUpRequired } from './apiProblems';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { clearPersistedOrgSlug } from './storage';
@@ -28,7 +29,7 @@ export const useDeleteCurrentWorkspace = () => {
       });
       if (!response.ok) {
         const problem = await response.json().catch(() => null) as { code?: string; detail?: string; title?: string } | null;
-        if (response.status === 403 && problem?.code === 'mfa_step_up_required') {
+        if (isStepUpRequired(response.status, problem)) {
           setNeedsStepUp(true);
           return;
         }

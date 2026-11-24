@@ -21,6 +21,9 @@ import { InvoiceStatusBadge } from '../components/InvoiceStatusBadge';
 import { SalesTabs } from '../components/SalesTabs';
 import { TenantContextType, Invoice, InvoicingKPIs, RecordPaymentPayload } from '../types';
 import { useAuth } from '../auth/AuthContext';
+import { failureMessage, problemError } from '../lib/apiProblems';
+import { useLoadProblem } from '../lib/useLoadProblem';
+import { NoAccessOr } from '../components/NoAccess';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { invoiceTitle } from '../lib/invoiceNumber';
 import { localToday } from '../lib/businessDays';
@@ -86,25 +89,28 @@ export const Invoices: React.FC = () => {
   }, [currencySymbol]);
 
   // Fetch Invoices
+  const loadProblem = useLoadProblem();
   const fetchInvoices = useCallback(async (quiet = false) => {
     if (!quiet) setIsLoading(true);
     else setIsRefreshing(true);
     setErrorBanner(null);
+    loadProblem.reset();
 
     try {
       const res = await authFetch('/api/Sales/SalesInvoices');
       if (!res.ok) {
-        throw new Error(`Failed to load invoices (${res.status} ${res.statusText})`);
+        throw await problemError(res, 'Invoices could not be loaded.');
       }
       const data: Invoice[] = await res.json();
       setInvoices(Array.isArray(data) ? data : []);
     } catch (err: any) {
       console.error('Error fetching invoices:', err);
-      setErrorBanner(err.message || 'Failed to load invoices from backend.');
+      setErrorBanner(loadProblem.capture(err, 'Invoices could not be loaded.'));
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authFetch]);
 
   useEffect(() => {
@@ -234,8 +240,7 @@ export const Invoices: React.FC = () => {
       if (await periodConfirm.handleConflict(res, () => void handleSubmitPayment(null, true))) return;
 
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || `Payment recording failed (${res.status})`);
+        throw new Error(await failureMessage(res, 'The payment could not be recorded.'));
       }
 
       setSuccessBanner(`Payment of ${formatCurrency(parsedAmount)} recorded for ${invoiceTitle(paymentModalInvoice)}`);
@@ -267,8 +272,7 @@ export const Invoices: React.FC = () => {
       });
 
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || `Void failed (${res.status})`);
+        throw new Error(await failureMessage(res, 'The invoice could not be voided.'));
       }
 
       setSuccessBanner(`${invoiceTitle(voidModalInvoice)} marked as Void.`);
@@ -315,7 +319,8 @@ export const Invoices: React.FC = () => {
         }
       />
       <SalesTabs orgSlug={currentOrg.slug} />
-      <ReadOnlyModuleBanner module="sales" orgSlug={currentOrg.slug} />
+
+      <NoAccessOr denied={loadProblem.denied}>      <ReadOnlyModuleBanner module="sales" orgSlug={currentOrg.slug} />
       <UsageHint entitlements={entitlements} resource="salesDocuments" />
 
       {/* Success & Error Banners */}
@@ -613,6 +618,7 @@ export const Invoices: React.FC = () => {
           </div>
         )}
       </div>
+      </NoAccessOr>
 
       {/* Record Payment Modal */}
       <ModalShell

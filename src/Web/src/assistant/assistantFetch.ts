@@ -18,7 +18,7 @@ export async function assistantFetch(path: string, init?: RequestInit): Promise<
 export async function assistantFetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await assistantFetch(path, init);
   if (!res.ok) {
-    let detail = `HTTP ${res.status}`;
+    let detail = 'The assistant request could not be completed.';
     try {
       const body = (await res.json()) as { detail?: string; title?: string; message?: string };
       detail = body.detail || body.message || body.title || detail;
@@ -42,7 +42,7 @@ export async function assistantFetchStream(path: string, init?: RequestInit): Pr
     },
   });
   if (!res.ok) {
-    let detail = `HTTP ${res.status}`;
+    let detail = 'The assistant request could not be completed.';
     try {
       const body = (await res.json()) as { detail?: string; title?: string; message?: string };
       detail = body.detail || body.message || body.title || detail;

@@ -10,6 +10,9 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BalanceCheckDialog } from '../components/BalanceCheckDialog';
 import { canShowBalanceCheck } from '../lib/balanceCheck';
 import { useAuth } from '../auth/AuthContext';
+import { problemError } from '../lib/apiProblems';
+import { useLoadProblem } from '../lib/useLoadProblem';
+import { NoAccess } from '../components/NoAccess';
 import {
   announceStatementImportUpgrade,
   shouldShowUpgradeAvailableBadge,
@@ -75,10 +78,12 @@ const BankRegisterPage: React.FC = () => {
     [currentOrg.currency],
   );
 
+  const loadProblem = useLoadProblem();
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     setError(null);
+    loadProblem.reset();
     try {
       const q = new URLSearchParams({ page: '1', pageSize: '200' });
       if (from) q.set('from', from);
@@ -88,11 +93,8 @@ const BankRegisterPage: React.FC = () => {
         authFetch(`/api/Banking/Accounts/${id}/Register?${q}`),
         authFetch('/api/Banking/Accounts'),
       ]);
-      if (!accRes.ok) throw new Error('Bank account not found.');
-      if (!regRes.ok) {
-        const body = await regRes.json().catch(() => null);
-        throw new Error(body?.message || 'Could not load the register.');
-      }
+      if (!accRes.ok) throw await problemError(accRes, 'Bank account not found.');
+      if (!regRes.ok) throw await problemError(regRes, 'Could not load the register.');
       setAccount(await accRes.json());
       setRegister(await regRes.json());
       if (listRes.ok) {
@@ -100,12 +102,13 @@ const BankRegisterPage: React.FC = () => {
         setBanks(body.accounts ?? []);
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Could not load the register.');
+      setError(loadProblem.capture(err, 'Could not load the register.'));
       setAccount(null);
       setRegister(null);
     } finally {
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authFetch, id, from, to]);
 
   useEffect(() => {
@@ -190,7 +193,8 @@ const BankRegisterPage: React.FC = () => {
     return (
       <div className="space-y-4">
         <PageHeader title="Bank register" back={{ to: `/org/${currentOrg.slug}/banking`, label: 'Banking' }} />
-        {error && (
+        {loadProblem.denied && <NoAccess problem={loadProblem.denied} />}
+        {error && !loadProblem.denied && (
           <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 text-sm">{error}</div>
         )}
       </div>

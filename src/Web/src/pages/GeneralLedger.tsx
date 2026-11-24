@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useState } from 'react';
+import { failureMessage } from '../lib/apiProblems';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ChevronDown, ChevronRight, Download, Plus, RefreshCw } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
@@ -233,7 +234,7 @@ export default function GeneralLedger() {
       const [response, yearsResponse] = await Promise.all([
         authFetch(`/api/Financials/GeneralLedger${query}`), authFetch('/api/Administration/financialyears'),
       ]);
-      if (!response.ok || !yearsResponse.ok) throw new Error(`Unable to load General Ledger (HTTP ${!response.ok ? response.status : yearsResponse.status}).`);
+      if (!response.ok || !yearsResponse.ok) throw new Error(await failureMessage(!response.ok ? response : yearsResponse, 'The General Ledger could not be loaded.'));
       const page = parseLedgerPage(await response.json());
       const years: FinancialYear[] = await yearsResponse.json();
       if (!Array.isArray(years)) throw new Error('The ledger API returned an invalid response.');

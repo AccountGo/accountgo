@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { failureMessage } from './apiProblems';
 import { useAuth } from '../auth/AuthContext';
 import type { PlanKey } from '../types';
 
@@ -38,7 +39,7 @@ export function useBilling() {
   const reload = useCallback(async () => {
     try {
       const response = await authFetch('/api/billing/state');
-      if (!response.ok) throw new Error(`Could not load billing state (HTTP ${response.status}).`);
+      if (!response.ok) throw new Error(await failureMessage(response, 'Billing could not be loaded.'));
       const raw = await response.json();
       setBilling({
         billingEnabled: !!raw.billingEnabled,
@@ -69,7 +70,7 @@ export function useBilling() {
       body: JSON.stringify({ returnUrl }),
     });
     if (!response.ok) {
-      let message = `Unable to open billing portal (HTTP ${response.status}).`;
+      let message = 'The billing portal could not be opened.';
       try {
         const body = await response.json();
         if (body?.message) message = body.message;
@@ -93,7 +94,7 @@ export function useBilling() {
       body: JSON.stringify({ plan: planKey, billingInterval, returnUrl, confirmed: options?.confirmed === true }),
     });
     if (!response.ok) {
-      let message = `Unable to start upgrade (HTTP ${response.status}).`;
+      let message = 'The upgrade could not be started.';
       try {
         const body = await response.json();
         if (typeof body?.message === 'string' && body.message.trim()) message = body.message;

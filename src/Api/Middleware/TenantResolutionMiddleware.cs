@@ -303,7 +303,9 @@ namespace Api.Middleware
             {
                 Title = "Workspace not found",
                 Status = StatusCodes.Status404NotFound,
-                Detail = "The requested workspace was not found or you are not an active member."
+                Detail = "The requested workspace was not found or you are not an active member.",
+                // One body for "does not exist" and "not a member", so the code reveals nothing about which it is.
+                Extensions = { ["code"] = "WORKSPACE_NOT_FOUND" }
             };
             await context.Response.WriteAsJsonAsync(problem);
         }

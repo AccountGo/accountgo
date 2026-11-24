@@ -9,6 +9,7 @@ import {
   RotateCcw, SkipForward, X,
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
+import { problemError } from '../lib/apiProblems';
 import { usePermissions, ReadOnlyModuleBanner } from '../components/Gating';
 import { PageHeader, HeaderButton, HeaderMenu, StatusPill } from '../components/PageHeader';
 import { ModalShell } from '../components/ModalShell';
@@ -53,7 +54,7 @@ export const RecurringScheduleDetailPage: React.FC = () => {
         setSchedule(null);
         return;
       }
-      if (!schedRes.ok) throw new Error(`Failed to load the schedule (${schedRes.status}).`);
+      if (!schedRes.ok) throw await problemError(schedRes, 'The schedule could not be loaded.');
       setSchedule(normalizeRecurringDetail(await schedRes.json()));
       setOccurrences(occRes.ok ? (await occRes.json()).map(normalizeRecurringOccurrence) : []);
     } catch (err: any) {
@@ -84,7 +85,7 @@ export const RecurringScheduleDetailPage: React.FC = () => {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        throw new Error(data?.message || `The action could not be completed (${res.status}).`);
+        throw new Error(data?.message || 'The action could not be completed.');
       }
       // Run/skip return a body with an outcome; pause/resume/end return 204.
       let outcomeMsg = okMessage ?? 'Done.';

@@ -272,7 +272,7 @@ export const OrgLayout: React.FC = () => {
       }),
     });
     if (!response.ok) {
-      let message = `Unable to update subscription (HTTP ${response.status}).`;
+      let message = 'The subscription could not be updated.';
       try {
         const body = await response.json();
         if (body?.message) message = body.message;

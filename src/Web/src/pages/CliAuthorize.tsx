@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import React, { useCallback, useEffect, useState } from 'react';
+import { isStepUpRequired } from '../lib/apiProblems';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { Loader2, ShieldAlert, Terminal } from 'lucide-react';
@@ -67,7 +68,7 @@ export const CliAuthorize: React.FC = () => {
         }),
       });
       const body = await res.json().catch(() => null);
-      if (res.status === 403 && body?.code === 'mfa_step_up_required') {
+      if (isStepUpRequired(res.status, body)) {
         setError('Confirm your identity again, then return here to approve CLI access.');
         setBusy(false);
         return;

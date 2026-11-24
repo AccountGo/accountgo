@@ -28,6 +28,9 @@ import {
   RecordPaymentPayload,
 } from '../types';
 import { useAuth } from '../auth/AuthContext';
+import { failureMessage, problemError } from '../lib/apiProblems';
+import { useLoadProblem } from '../lib/useLoadProblem';
+import { NoAccess } from '../components/NoAccess';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { SendInvoiceDialog } from '../components/SendInvoiceDialog';
 import { ModalShell } from '../components/ModalShell';
@@ -129,15 +132,17 @@ export const InvoiceDetail: React.FC = () => {
   );
 
   // Fetch Invoice
+  const loadProblem = useLoadProblem();
   const fetchInvoice = useCallback(async () => {
     if (!invoiceId) return;
     setIsLoading(true);
     setErrorBanner(null);
+    loadProblem.reset();
 
     try {
       const res = await authFetch(`/api/Sales/SalesInvoice?id=${invoiceId}`);
       if (!res.ok) {
-        throw new Error(`Failed to load invoice ${shortRef(invoiceId)} (${res.status})`);
+        throw await problemError(res, `Invoice ${shortRef(invoiceId)} could not be loaded.`);
       }
       const data: Invoice = await res.json();
       setInvoice(data);
@@ -146,7 +151,7 @@ export const InvoiceDetail: React.FC = () => {
       }
     } catch (err: any) {
       console.error('Error loading invoice:', err);
-      setErrorBanner(err.message || 'Invoice not found.');
+      setErrorBanner(loadProblem.capture(err, 'Invoice not found.'));
     } finally {
       setIsLoading(false);
     }
@@ -161,7 +166,7 @@ export const InvoiceDetail: React.FC = () => {
   const fetchInvoicePdf = async (id: string, no: string | null) => {
     const res = await authFetch(`/api/Sales/SalesInvoicePdf?id=${id}`);
     if (!res.ok) {
-      throw new Error(`Could not generate the PDF (${res.status})`);
+      throw new Error(await failureMessage(res, 'The PDF could not be generated.'));
     }
     const blob = await res.blob();
     const fileName =
@@ -649,6 +654,14 @@ export const InvoiceDetail: React.FC = () => {
       <div className="flex flex-col items-center justify-center min-h-[50vh] text-[var(--text-muted)]">
         <Loader2 className="w-8 h-8 animate-spin text-[var(--brand-primary)] mb-3" />
         <p className="text-sm">Loading invoice details...</p>
+      </div>
+    );
+  }
+
+  if (loadProblem.denied) {
+    return (
+      <div className="space-y-6">
+        <NoAccess problem={loadProblem.denied} />
       </div>
     );
   }

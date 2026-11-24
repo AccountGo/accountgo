@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
+import { failureMessage } from '../lib/apiProblems';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { OnboardingChecklist } from '../components/OnboardingChecklist';
 import { OwnerFinancialAccessBanner } from '../components/OwnerFinancialAccessBanner';
@@ -143,7 +144,7 @@ export const Dashboard: React.FC = () => {
           setLoadError(null);
         } else {
           setSummary(null);
-          setLoadError(`Could not load dashboard (${res.status}).`);
+          setLoadError(await failureMessage(res, 'The dashboard could not be loaded.'));
         }
       } catch (err) {
         console.error('Failed to load dashboard summary:', err);

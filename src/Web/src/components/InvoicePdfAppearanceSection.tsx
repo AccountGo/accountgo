@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { isStepUpRequired } from '../lib/apiProblems';
 import { AlertCircle, RotateCcw, Save } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { getPasskeyAssertion, isWebAuthnSupported } from '../lib/webauthn';
@@ -224,7 +225,7 @@ export function InvoicePdfAppearanceSection({ canEdit }: { canEdit: boolean }) {
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) {
-        if (response.status === 403 && (!data || data.code === 'mfa_step_up_required')) {
+        if (response.status === 403 && (!data || isStepUpRequired(response.status, data))) {
           setNeedsStepUp(true);
           throw new Error('Verify your identity below, then retry this action.');
         }

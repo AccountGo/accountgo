@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { isStepUpRequired } from '../lib/apiProblems';
 import { Copy, Loader2, Mail, RefreshCw } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useEmailCapabilities } from '../lib/useEmailCapabilities';
@@ -52,7 +53,7 @@ export function EmailSettingsTab({ companyId }: { companyId: string }) {
         ...(body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        if (res.status === 403 && (!data || data.code === 'mfa_step_up_required')) {
+        if (res.status === 403 && (!data || isStepUpRequired(res.status, data))) {
           setNeedsStepUp(true);
           throw new Error('Verify your identity below, then retry this action.');
         }

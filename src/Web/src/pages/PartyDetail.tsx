@@ -26,6 +26,9 @@ import { ContactPerson, PartyBase, PaymentTermOption, TenantContextType } from '
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { PartyDocumentRow, PartyRole, partyRoles } from '../lib/partyRoles';
+import { problemError } from '../lib/apiProblems';
+import { useLoadProblem } from '../lib/useLoadProblem';
+import { NoAccess } from '../components/NoAccess';
 import { RecordHistoryButton, RecordHistoryPanel, useRecordHistory } from '../components/RecordHistoryPanel';
 
 /** One client or vendor: its details, what it owes or is owed, and its invoices or bills. */
@@ -61,10 +64,13 @@ export const PartyDetail: React.FC<{ role: PartyRole }> = ({ role }) => {
   const formatDate = (value?: string) =>
     value ? new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
 
+  const loadProblem = useLoadProblem();
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setIsLoading(true);
+      loadProblem.reset();
       try {
         const [partyRes, documentsRes, termsRes] = await Promise.all([
           authFetch(config.api.get(partyId ?? '')),
@@ -76,12 +82,12 @@ export const PartyDetail: React.FC<{ role: PartyRole }> = ({ role }) => {
           setNotFound(true);
           return;
         }
-        if (!partyRes.ok) throw new Error(`The ${config.noun} could not be loaded (${partyRes.status}).`);
+        if (!partyRes.ok) throw await problemError(partyRes, `The ${config.noun} could not be loaded.`);
         setParty(await partyRes.json());
         setDocuments(documentsRes.ok ? ((await documentsRes.json()) as unknown[]).map(config.toDocumentRow) : null);
         if (termsRes.ok) setPaymentTerms(await termsRes.json());
       } catch (err: any) {
-        if (!cancelled) setError(err.message || `The ${config.noun} could not be loaded.`);
+        if (!cancelled) setError(loadProblem.capture(err, `The ${config.noun} could not be loaded.`));
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -89,6 +95,7 @@ export const PartyDetail: React.FC<{ role: PartyRole }> = ({ role }) => {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authFetch, partyId, config]);
 
   // Newest first, as the API returns them.
@@ -150,6 +157,15 @@ export const PartyDetail: React.FC<{ role: PartyRole }> = ({ role }) => {
       <div className="py-24 flex flex-col items-center justify-center text-[var(--text-secondary)] gap-3">
         <Loader2 className="w-8 h-8 animate-spin text-[var(--brand-primary)]" />
         <p className="text-sm">Loading {config.noun}...</p>
+      </div>
+    );
+  }
+
+  if (loadProblem.denied) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={config.Plural} back={{ to: listPath, label: `Back to ${config.plural}` }} />
+        <NoAccess problem={loadProblem.denied} />
       </div>
     );
   }

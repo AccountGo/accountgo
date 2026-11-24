@@ -8,6 +8,9 @@ import { PartyBase, PaymentTermOption, TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { PartyRole, partyRoles } from '../lib/partyRoles';
+import { problemError } from '../lib/apiProblems';
+import { useLoadProblem } from '../lib/useLoadProblem';
+import { NoAccessOr } from '../components/NoAccess';
 
 /**
  * The clients a workspace invoices, with what each one owes, or the vendors it buys from, with what it owes each one.
@@ -26,6 +29,7 @@ export const Parties: React.FC<{ role: PartyRole }> = ({ role }) => {
   const [paymentTerms, setPaymentTerms] = useState<PaymentTermOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const loadProblem = useLoadProblem();
   const [query, setQuery] = useState('');
   const [view, setView] = useState<'active' | 'archived'>('active');
   const [isAdding, setIsAdding] = useState(false);
@@ -39,16 +43,18 @@ export const Parties: React.FC<{ role: PartyRole }> = ({ role }) => {
   const load = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    loadProblem.reset();
     try {
       const [partiesRes, termsRes] = await Promise.all([authFetch(config.api.list), authFetch('/api/Common/PaymentTerms')]);
-      if (!partiesRes.ok) throw new Error(`${config.Plural} could not be loaded (${partiesRes.status}).`);
+      if (!partiesRes.ok) throw await problemError(partiesRes, `${config.Plural} could not be loaded.`);
       setParties(await partiesRes.json());
       if (termsRes.ok) setPaymentTerms(await termsRes.json());
     } catch (err: any) {
-      setError(err.message || `${config.Plural} could not be loaded.`);
+      setError(loadProblem.capture(err, `${config.Plural} could not be loaded.`));
     } finally {
       setIsLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authFetch, config]);
 
   useEffect(() => {
@@ -79,6 +85,8 @@ export const Parties: React.FC<{ role: PartyRole }> = ({ role }) => {
         actions={canManage && <HeaderButton label={`New ${config.noun}`} icon={UserPlus} variant="primary" onClick={() => setIsAdding(true)} />}
       />
       <Tabs orgSlug={currentOrg.slug} />
+
+      <NoAccessOr denied={loadProblem.denied}>
 
       {error && (
         <div role="alert" className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-sm flex items-center justify-between">
@@ -206,6 +214,7 @@ export const Parties: React.FC<{ role: PartyRole }> = ({ role }) => {
           </div>
         )}
       </div>
+      </NoAccessOr>
 
       {isAdding && (
         <PartyFormDialog

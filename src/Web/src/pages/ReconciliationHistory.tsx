@@ -6,6 +6,9 @@ import { ModalShell } from '../components/ModalShell';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { canReviewReconciliation, reviewStatusText } from '../lib/reconciliationReview';
 import { useAuth } from '../auth/AuthContext';
+import { problemError } from '../lib/apiProblems';
+import { useLoadProblem } from '../lib/useLoadProblem';
+import { NoAccessOr } from '../components/NoAccess';
 import { useTenantContext } from '../components/Gating';
 import type { TenantContextType } from '../types';
 import type { BankAccount, BankReconciliationListItem } from '../types/banking';
@@ -39,9 +42,11 @@ const ReconciliationHistoryPage: React.FC = () => {
     [currentOrg.currency],
   );
 
+  const loadProblem = useLoadProblem();
+
   const loadBanks = useCallback(async () => {
     const res = await authFetch('/api/Banking/Accounts');
-    if (!res.ok) throw new Error('Could not load bank accounts.');
+    if (!res.ok) throw await problemError(res, 'Could not load bank accounts.');
     const body = await res.json();
     const accounts: BankAccount[] = (body.accounts ?? []).filter((a: BankAccount) => !a.archivedAt);
     setBanks(accounts);
@@ -54,10 +59,7 @@ const ReconciliationHistoryPage: React.FC = () => {
       return;
     }
     const res = await authFetch(`/api/Banking/Reconciliations?bankId=${bankId}`);
-    if (!res.ok) {
-      const body = await res.json().catch(() => null);
-      throw new Error(body?.message || 'Could not load reconciliations.');
-    }
+    if (!res.ok) throw await problemError(res, 'Could not load reconciliations.');
     setItems(await res.json());
   }, [authFetch, bankId]);
 
@@ -65,14 +67,16 @@ const ReconciliationHistoryPage: React.FC = () => {
     void (async () => {
       setLoading(true);
       setError(null);
+      loadProblem.reset();
       try {
         await loadBanks();
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : 'Could not load.');
+        setError(loadProblem.capture(err, 'Could not load.'));
       } finally {
         setLoading(false);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadBanks]);
 
   useEffect(() => {
@@ -82,7 +86,7 @@ const ReconciliationHistoryPage: React.FC = () => {
       try {
         await loadHistory();
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : 'Could not load history.');
+        setError(loadProblem.capture(err, 'Could not load history.'));
         setItems([]);
       }
     })();
@@ -159,6 +163,7 @@ const ReconciliationHistoryPage: React.FC = () => {
 
       <BankingTabs active="reconcile" orgSlug={currentOrg.slug} />
 
+      <NoAccessOr denied={loadProblem.denied}>
       {error && (
         <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 text-sm flex gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -296,6 +301,7 @@ const ReconciliationHistoryPage: React.FC = () => {
           onCancel={() => setReviewTarget(null)}
         />
       )}
+      </NoAccessOr>
 
       {undoTarget && (
         <ModalShell

@@ -9,6 +9,9 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ReadOnlyModuleBanner, usePermissions } from '../components/Gating';
 import { Bill, TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
+import { problemError } from '../lib/apiProblems';
+import { useLoadProblem } from '../lib/useLoadProblem';
+import { NoAccessOr } from '../components/NoAccess';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { BillTitle, billTitle } from '../lib/billTitle';
 import { useCapabilities } from '../lib/entitlements';
@@ -59,22 +62,25 @@ export const Bills: React.FC = () => {
   const newBillPath = `/org/${currentOrg.slug}/purchases/new`;
   const billPath = (id: string) => `/org/${currentOrg.slug}/purchases/${id}`;
 
+  const loadProblem = useLoadProblem();
   const load = useCallback(
     async (quiet = false) => {
       if (quiet) setIsRefreshing(true);
       else setIsLoading(true);
       setError(null);
+      loadProblem.reset();
       try {
         const res = await authFetch('/api/Purchasing/Bills');
-        if (!res.ok) throw new Error(`Bills could not be loaded (${res.status}).`);
+        if (!res.ok) throw await problemError(res, 'Bills could not be loaded.');
         setBills(await res.json());
       } catch (err: any) {
-        setError(err.message || 'Bills could not be loaded.');
+        setError(loadProblem.capture(err, 'Bills could not be loaded.'));
       } finally {
         setIsLoading(false);
         setIsRefreshing(false);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [authFetch]
   );
 
@@ -165,7 +171,8 @@ export const Bills: React.FC = () => {
         }
       />
       <PurchasesTabs orgSlug={currentOrg.slug} />
-      {incoming.capabilities?.canReview && (
+
+      <NoAccessOr denied={loadProblem.denied}>      {incoming.capabilities?.canReview && (
         <Link className="inline-block text-sm font-semibold text-[var(--brand-primary)] underline"
           to={`/org/${currentOrg.slug}/banking/needs-review?direction=out`}>
           Review incoming{incoming.summary ? ` (${incoming.summary.purchasePendingCount})` : ''}
@@ -364,6 +371,7 @@ export const Bills: React.FC = () => {
           </div>
         )}
       </div>
+      </NoAccessOr>
 
       {paying && (
         <PayBillDialog

@@ -5,6 +5,9 @@ import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { BankingTabs } from '../components/BankingTabs';
 import { BankTransactionDialog } from '../components/BankTransactionDialog';
 import { useAuth } from '../auth/AuthContext';
+import { problemError } from '../lib/apiProblems';
+import { useLoadProblem } from '../lib/useLoadProblem';
+import { NoAccessOr } from '../components/NoAccess';
 import { useTenantContext } from '../components/Gating';
 import type { TenantContextType } from '../types';
 import type { BankAccount, BankTransaction } from '../types/banking';
@@ -32,9 +35,11 @@ const BankingTransactionsPage: React.FC = () => {
     [currentOrg.currency],
   );
 
+  const loadProblem = useLoadProblem();
+
   const loadBanks = useCallback(async () => {
     const res = await authFetch('/api/Banking/Accounts');
-    if (!res.ok) throw new Error('Could not load bank accounts.');
+    if (!res.ok) throw await problemError(res, 'Could not load bank accounts.');
     const body = await res.json();
     const accounts: BankAccount[] = (body.accounts ?? []).filter((a: BankAccount) => !a.archivedAt);
     setBanks(accounts);
@@ -47,10 +52,7 @@ const BankingTransactionsPage: React.FC = () => {
       return;
     }
     const res = await authFetch(`/api/Banking/Transactions?bankId=${bankId}`);
-    if (!res.ok) {
-      const body = await res.json().catch(() => null);
-      throw new Error(body?.message || 'Could not load transactions.');
-    }
+    if (!res.ok) throw await problemError(res, 'Could not load transactions.');
     const body = await res.json();
     setRows(body.transactions ?? []);
   }, [authFetch, bankId]);
@@ -59,14 +61,16 @@ const BankingTransactionsPage: React.FC = () => {
     void (async () => {
       setLoading(true);
       setError(null);
+      loadProblem.reset();
       try {
         await loadBanks();
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : 'Could not load.');
+        setError(loadProblem.capture(err, 'Could not load.'));
       } finally {
         setLoading(false);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadBanks]);
 
   useEffect(() => {
@@ -76,7 +80,7 @@ const BankingTransactionsPage: React.FC = () => {
       try {
         await loadTx();
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : 'Could not load transactions.');
+        setError(loadProblem.capture(err, 'Could not load transactions.'));
         setRows([]);
       }
     })();
@@ -103,6 +107,7 @@ const BankingTransactionsPage: React.FC = () => {
 
       <BankingTabs active="transactions" orgSlug={currentOrg.slug} />
 
+      <NoAccessOr denied={loadProblem.denied}>
       {error && (
         <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 text-sm flex gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -165,6 +170,7 @@ const BankingTransactionsPage: React.FC = () => {
           </table>
         </div>
       )}
+      </NoAccessOr>
 
       {dialogOpen && selectedBank && (
         <BankTransactionDialog
