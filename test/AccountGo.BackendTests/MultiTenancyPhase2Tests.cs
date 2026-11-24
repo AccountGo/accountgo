@@ -652,6 +652,9 @@ namespace AccountGo.BackendTests
                 "DocumentCaptureService.cs",
                 // Retention and purge enumerate workspaces and capture rows with explicit company and lifecycle predicates.
                 "DocumentCaptureRetentionService.cs",
+                // AI field-mapping worker claims and applies jobs across workspaces by job id, with explicit company and generation predicates; it has no request tenant.
+                "DocumentCaptureAiMappingProcessor.cs",
+                "CaptureAiMappingQueue.cs",
                 // Assistant pseudonym TTL purge sweeps expired rows across workspaces with an explicit ExpiresAt <= utcNow predicate.
                 "AssistantPseudonymRetentionService.cs"
             };
