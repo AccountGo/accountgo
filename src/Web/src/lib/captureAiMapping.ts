@@ -21,13 +21,13 @@ export const AI_DISCLOSURE_URL = 'https://www.accountgo.dev/legal/ai-disclosure/
 export const AI_MAPPING_CONSENT_TEXT = 'Text from your scanned documents is sent to AccountGo Assistant to improve field reading.';
 
 /**
- * The setting is shown when the host offers it, and also when it is offered but blocked for this workspace (turned off by support, or the
- * allowance not set up), so the owner sees why instead of a toggle that does nothing. Not offered, or not on the plan: hidden entirely.
+ * The setting is shown when the host offers it, and also when support turned it off for this workspace, so the owner sees why instead of
+ * a toggle that does nothing. Not offered, not on the plan, or the allowance not set up (an operator state, not a workspace one): hidden.
  */
 export function isCaptureAiMappingVisible(settings: CaptureAiMappingSettings | null): boolean {
   if (!settings) return false;
   if (settings.available) return true;
-  return settings.unavailableReason === 'turned_off_by_support' || settings.unavailableReason === 'cap_not_set';
+  return settings.unavailableReason === 'turned_off_by_support';
 }
 
 export function describeUnavailableReason(reason: CaptureAiMappingUnavailableReason | null): string {

@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Api.Data.Migrations.ApiDb
 {
     [DbContext(typeof(ApiDbContext))]
-    [Migration("20261124021008_CaptureAiMappingConsent")]
+    [Migration("20261124053351_CaptureAiMappingConsent")]
     partial class CaptureAiMappingConsent
     {
         /// <inheritdoc />
@@ -962,6 +962,9 @@ namespace Api.Data.Migrations.ApiDb
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("TextPageCount")
+                        .HasColumnType("int");
 
                     b.Property<string>("WarningsJson")
                         .HasMaxLength(16384)

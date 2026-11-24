@@ -675,6 +675,7 @@ public sealed class DocumentCaptureService(
                 .SetProperty(c => c.FieldsWipedAt, now)
                 .SetProperty(c => c.FieldsJson, emptyFields)
                 .SetProperty(c => c.RawText, (string?)null)
+                .SetProperty(c => c.TextPageCount, 0)
                 .SetProperty(c => c.WarningsJson, (string?)null), cancellationToken).ConfigureAwait(false);
         if (updated != 1)
             throw new DocumentCaptureServiceException(409, "DOCUMENT_STATE_CONFLICT");
@@ -766,6 +767,7 @@ public sealed class DocumentCaptureService(
                     .SetProperty(c => c.FieldsJson, canonical)
                     .SetProperty(c => c.WarningsJson, warningsJson)
                     .SetProperty(c => c.RawText, rawText)
+                    .SetProperty(c => c.TextPageCount, string.IsNullOrEmpty(rawText) ? 0 : Math.Max(1, extracted.TextPageCount))
                     .SetProperty(c => c.DetectedKind, extracted.DetectedKind)
                     .SetProperty(c => c.DetectedDocumentCount, extracted.DetectedDocumentCount)
                     .SetProperty(c => c.ProviderName, extracted.ProviderName)

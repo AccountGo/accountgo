@@ -54,7 +54,7 @@ public sealed record CaptureAiMappingConsentRecord(string ConsentVersion, DateTi
 
 public interface ICaptureAiMappingConsentStore
 {
-    /// <summary>Reads a workspace's consent by explicit company id. Safe off-request: the host policy and the background worker have no tenant.</summary>
+    /// <summary>Reads a workspace's consent by explicit company id. The only member that may bypass the tenant filter, because the host policy and the background worker have no tenant. Grant and revoke are request-only.</summary>
     Task<CaptureAiMappingConsentRecord?> GetAsync(int companyId, CancellationToken cancellationToken);
 
     /// <summary>Records consent to the current notice. Returns false (and changes nothing) when current consent already exists.</summary>
@@ -79,7 +79,7 @@ public sealed class EfCaptureAiMappingConsentStore(ApiDbContext db, TimeProvider
         var now = _clock.GetUtcNow().UtcDateTime;
         var version = CaptureAiMappingConsentNotice.CurrentVersion;
         // Replace a revoked or out-of-date consent in one conditional update, so two owners clicking at once record one change.
-        var replaced = await db.CaptureAiMappingConsents.IgnoreQueryFilters()
+        var replaced = await db.CaptureAiMappingConsents
             .Where(consent => consent.CompanyId == companyId && (consent.RevokedAt != null || consent.ConsentVersion != version))
             .ExecuteUpdateAsync(set => set.SetProperty(consent => consent.ConsentVersion, version)
                 .SetProperty(consent => consent.ConsentedAt, now)
@@ -88,7 +88,7 @@ public sealed class EfCaptureAiMappingConsentStore(ApiDbContext db, TimeProvider
                 .SetProperty(consent => consent.RevokedByUserId, (string?)null), cancellationToken).ConfigureAwait(false);
         if (replaced == 1)
             return true;
-        if (await db.CaptureAiMappingConsents.IgnoreQueryFilters().AnyAsync(consent => consent.CompanyId == companyId, cancellationToken).ConfigureAwait(false))
+        if (await db.CaptureAiMappingConsents.AnyAsync(consent => consent.CompanyId == companyId, cancellationToken).ConfigureAwait(false))
             return false; // current consent already exists
 
         db.CaptureAiMappingConsents.Add(new CaptureAiMappingConsent
@@ -105,9 +105,12 @@ public sealed class EfCaptureAiMappingConsentStore(ApiDbContext db, TimeProvider
         }
         catch (DbUpdateException)
         {
-            // A concurrent grant won the unique (company) index: the consent exists, so this call changed nothing.
+            // Only the unique (company) index race is expected: a concurrent grant won, so this call changed nothing.
+            // Anything else (connection, other constraint) must surface, so re-check that the row exists.
             db.ChangeTracker.Clear();
-            return false;
+            if (await db.CaptureAiMappingConsents.AnyAsync(consent => consent.CompanyId == companyId, cancellationToken).ConfigureAwait(false))
+                return false;
+            throw;
         }
     }
 
@@ -115,7 +118,7 @@ public sealed class EfCaptureAiMappingConsentStore(ApiDbContext db, TimeProvider
     {
         var now = _clock.GetUtcNow().UtcDateTime;
         // One conditional update: revoking twice, or racing a grant, is safe.
-        var revoked = await db.CaptureAiMappingConsents.IgnoreQueryFilters()
+        var revoked = await db.CaptureAiMappingConsents
             .Where(consent => consent.CompanyId == companyId && consent.RevokedAt == null)
             .ExecuteUpdateAsync(set => set.SetProperty(consent => consent.RevokedAt, now).SetProperty(consent => consent.RevokedByUserId, userId),
                 cancellationToken).ConfigureAwait(false);

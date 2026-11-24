@@ -97,7 +97,7 @@ export const CaptureAiMappingSettingsTab: React.FC<Props> = ({ settings, update 
           {settings.enabled ? 'On.' : 'Off.'} Only the workspace owner can change this.
         </p>
       )}
-      {settings.available && settings.needsReconsent && !settings.enabled && (
+      {settings.available && settings.canManage && settings.needsReconsent && !settings.enabled && (
         <p role="status" className="text-sm text-[var(--text-secondary)]">The wording changed since you agreed. Turn it on again to continue.</p>
       )}
       {settings.enabled && settings.consentedAt && (

@@ -89,8 +89,8 @@ export const Settings: React.FC = () => {
   const isWorkspaceAdminRole = currentOrg.role === 'Owner' || currentOrg.role === 'Admin';
   const [searchParams, setSearchParams] = useSearchParams();
   const integrations = useIntegrations();
-  const aiMapping = useCaptureAiMappingSettings(!personal, currentOrg.id);
-  const showAiMapping = !personal && isCaptureAiMappingVisible(aiMapping.settings);
+  const aiMapping = useCaptureAiMappingSettings(true, currentOrg.id);
+  const showAiMapping = isCaptureAiMappingVisible(aiMapping.settings);
   const capabilities = useOptionalCapabilities();
   // Plan-dependent: without a loaded plan snapshot the Activity tab stays hidden rather than guess.
   const auditAccess = auditAccessLevel(capabilities?.entitlements ?? null, hasPermission);

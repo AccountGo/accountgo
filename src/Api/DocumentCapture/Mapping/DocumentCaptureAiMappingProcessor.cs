@@ -48,8 +48,6 @@ public sealed class DocumentCaptureAiMappingProcessor(
     TimeProvider? timeProvider = null,
     ICaptureAiMappingMeter? meter = null)
 {
-    /// <summary>The most pages of one document whose text can reach the mapper (the OCR page cap), so the most one job meters.</summary>
-    public const int MaxMeteredPages = 3;
     private readonly ICaptureAiMappingMeter _meter = meter ?? new NoopCaptureAiMappingMeter();
     public const int MaxAttempts = 3;
     public static readonly TimeSpan Lease = TimeSpan.FromSeconds(30);
@@ -129,7 +127,7 @@ public sealed class DocumentCaptureAiMappingProcessor(
             .Select(c => new
             {
                 c.PublicId, c.Status, c.ExtractionGeneration, c.AcceptedAt, c.RejectedAt, c.FieldsWipedAt,
-                c.FieldsJson, c.WarningsJson, c.RawText, c.SchemaVersion, c.PageCount,
+                c.FieldsJson, c.WarningsJson, c.RawText, c.TextPageCount, c.SchemaVersion, c.PageCount,
                 CompanyPublicId = db.Companies.IgnoreQueryFilters().Where(company => company.Id == companyId).Select(company => company.PublicId).First()
             })
             .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
@@ -178,7 +176,7 @@ public sealed class DocumentCaptureAiMappingProcessor(
         else
         {
             // Pages count only when their text is actually sent: reserved here, after the policy and a cache miss, once per job.
-            if (!await ReserveAsync(jobId, companyId, capture.PageCount, cancellationToken).ConfigureAwait(false))
+            if (!await ReserveAsync(jobId, companyId, capture.TextPageCount, capture.PageCount, cancellationToken).ConfigureAwait(false))
             {
                 await FinishAsync(jobId, "skipped", "cap", null, null, started, null, cancellationToken).ConfigureAwait(false);
                 return ("skipped", null, null);
@@ -283,13 +281,16 @@ public sealed class DocumentCaptureAiMappingProcessor(
         return JsonSerializer.Serialize(all.Select(DocumentCaptureWarningCodes.Sanitize).Distinct(StringComparer.Ordinal).Take(32));
     }
 
-    private async Task<bool> ReserveAsync(int jobId, int companyId, int pageCount, CancellationToken cancellationToken)
+    private async Task<bool> ReserveAsync(int jobId, int companyId, int textPageCount, int pageCount, CancellationToken cancellationToken)
     {
         var already = await db.DocumentCaptureAiMappings.IgnoreQueryFilters().AsNoTracking()
             .Where(job => job.Id == jobId).Select(job => job.ReservedPages).FirstAsync(cancellationToken).ConfigureAwait(false);
         if (already > 0)
             return true;
-        var pages = Math.Clamp(pageCount, 1, MaxMeteredPages);
+        // Meter the pages whose text was read at extraction (the text layer of every page plus the few scanned pages that were OCR'd).
+        // The MaxLines cut below can drop text from late pages; that is accepted, because the unit metered is pages read. Rows
+        // written before TextPageCount existed hold 0 and fall back to the document's page count.
+        var pages = textPageCount > 0 ? textPageCount : Math.Max(pageCount, 1);
         if (!await _meter.ReserveAsync(companyId, pages, cancellationToken).ConfigureAwait(false))
             return false;
         var recorded = await db.DocumentCaptureAiMappings.IgnoreQueryFilters()

@@ -258,6 +258,7 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
         capture.FieldsWipedAt = utcNow;
         capture.FieldsJson = DocumentCaptureFieldSchemas.EmptyFieldsJsonForKind(capture.Kind);
         capture.RawText = null;
+        capture.TextPageCount = 0;
         capture.WarningsJson = null;
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }

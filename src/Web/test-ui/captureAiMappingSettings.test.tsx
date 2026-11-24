@@ -125,10 +125,17 @@ describe('AI field reading setting', () => {
     expect(screen.getByRole('status').textContent).toContain('wording changed');
   });
 
+  it('does not tell a non-owner to turn it on again, because they cannot', () => {
+    render(<CaptureAiMappingSettingsTab settings={{ ...base, canManage: false, needsReconsent: true }} update={vi.fn()} />);
+
+    expect(screen.queryByText(/Turn it on again/)).toBeNull();
+    expect(screen.getByRole('status').textContent).toContain('Only the workspace owner can change this');
+  });
+
   it.each([
     [{ available: true, unavailableReason: null }, true],
     [{ available: false, unavailableReason: 'turned_off_by_support' }, true],
-    [{ available: false, unavailableReason: 'cap_not_set' }, true],
+    [{ available: false, unavailableReason: 'cap_not_set' }, false],
     [{ available: false, unavailableReason: 'plan' }, false],
     [{ available: false, unavailableReason: 'not_offered' }, false],
   ] as const)('visibility of the Documents tab for %j is %s', (partial, visible) => {
@@ -162,7 +169,7 @@ describe('AI field reading setting', () => {
     expect(JSON.parse(put?.[1].body)).toEqual({ enabled: true });
   });
 
-  it('does not call the API for a personal-books workspace', () => {
+  it('does not call the API while the hook is disabled', () => {
     renderHook(() => useCaptureAiMappingSettings(false, 'ws-1'));
 
     expect(authFetch).not.toHaveBeenCalled();

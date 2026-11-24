@@ -655,7 +655,7 @@ namespace AccountGo.BackendTests
                 // AI field-mapping worker claims and applies jobs across workspaces by job id, with explicit company and generation predicates; it has no request tenant.
                 "DocumentCaptureAiMappingProcessor.cs",
                 "CaptureAiMappingQueue.cs",
-                // Consent is read by explicit company id off-request (the host policy and the worker have no tenant); every query carries a CompanyId predicate.
+                // Only the consent read bypasses the tenant filter, by explicit company id off-request (the host policy and the worker have no tenant); grant and revoke are request-only.
                 "CaptureAiMappingSeams.cs",
                 // Assistant pseudonym TTL purge sweeps expired rows across workspaces with an explicit ExpiresAt <= utcNow predicate.
                 "AssistantPseudonymRetentionService.cs"

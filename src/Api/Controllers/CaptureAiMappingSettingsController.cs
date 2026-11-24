@@ -73,7 +73,7 @@ public sealed class CaptureAiMappingSettingsController(
     }
 
     private async Task<CaptureAiMappingAvailability> GetAvailabilityAsync(int companyId, CancellationToken cancellationToken) =>
-        options.Value.Enabled
+        options.Value.Enabled && options.Value.AiMapping.Enabled
             ? await availability.GetAsync(companyId, cancellationToken).ConfigureAwait(false)
             : CaptureAiMappingAvailability.Unavailable(CaptureAiMappingUnavailableReasons.NotOffered);
 

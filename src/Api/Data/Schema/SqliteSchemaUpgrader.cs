@@ -916,6 +916,7 @@ WHERE ""DisabledModulesJson"" IS NULL
             }
 
             AddColumnIfMissing(connection, "DocumentCaptureLinks", "TaxTreatment", "TEXT NULL");
+            AddColumnIfMissing(connection, "DocumentCaptures", "TextPageCount", "INTEGER NOT NULL DEFAULT 0");
             AddColumnIfMissing(connection, "DocumentCaptureAiMappings", "ReservedPages", "INTEGER NOT NULL DEFAULT 0");
 
             using (var command = connection.CreateCommand())
@@ -952,6 +953,7 @@ WHERE ""DisabledModulesJson"" IS NULL
                 ""FieldsJson"" TEXT NULL,
                 ""AcceptedFieldsJson"" TEXT NULL,
                 ""RawText"" TEXT NULL,
+                ""TextPageCount"" INTEGER NOT NULL DEFAULT 0,
                 ""ProviderName"" TEXT NULL,
                 ""ProviderVersion"" TEXT NULL,
                 ""ErrorCode"" TEXT NULL,

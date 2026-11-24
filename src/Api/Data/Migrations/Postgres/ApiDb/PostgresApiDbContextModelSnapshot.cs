@@ -959,6 +959,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<int>("TextPageCount")
+                        .HasColumnType("integer");
+
                     b.Property<string>("WarningsJson")
                         .HasMaxLength(16384)
                         .HasColumnType("character varying(16384)");

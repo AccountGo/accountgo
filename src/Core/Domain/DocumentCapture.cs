@@ -34,6 +34,8 @@ public sealed class DocumentCapture : BaseEntity, ICompanyOwned, IHasPublicId
     public string? FieldsJson { get; set; }
     public string? AcceptedFieldsJson { get; set; }
     public string? RawText { get; set; }
+    /// <summary>The distinct pages whose text lines are kept in <see cref="RawText"/> (0 when there is none, or for rows written before this column existed).</summary>
+    public int TextPageCount { get; set; }
     public string? ProviderName { get; set; }
     public string? ProviderVersion { get; set; }
     public string? ErrorCode { get; set; }

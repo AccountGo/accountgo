@@ -78,8 +78,9 @@ public sealed class CaptureAiMappingTests : IDisposable
     private DocumentCaptureAiMappingProcessor Processor(ICaptureFieldMapper mapper, TimeProvider? clock = null) =>
         new(_db, mapper, _policy, _limiter, Options.Create(_captureOptions), NullLogger<DocumentCaptureAiMappingProcessor>.Instance, _audit, clock, _meter);
 
-    private Task SetPageCountAsync(int captureId, int pages) =>
-        _db.DocumentCaptures.IgnoreQueryFilters().Where(c => c.Id == captureId).ExecuteUpdateAsync(set => set.SetProperty(c => c.PageCount, pages));
+    private Task SetPageCountAsync(int captureId, int pages, int textPages = 0) =>
+        _db.DocumentCaptures.IgnoreQueryFilters().Where(c => c.Id == captureId)
+            .ExecuteUpdateAsync(set => set.SetProperty(c => c.PageCount, pages).SetProperty(c => c.TextPageCount, textPages));
 
     private Task<Core.Domain.DocumentCapture> CaptureAsync(int id) => _db.DocumentCaptures.IgnoreQueryFilters().AsNoTracking().SingleAsync(c => c.Id == id);
     private Task<DocumentCaptureAiMapping> JobAsync(int captureId) =>
@@ -664,11 +665,39 @@ public sealed class CaptureAiMappingTests : IDisposable
     }
 
     [Fact]
-    public async Task PagesAreCappedAtTheOcrPageLimitAndAreAtLeastOne()
+    [Trait("Rule", "AI-08")]
+    public async Task ATextLayerPdfMetersEveryPageWhoseTextWasRead()
     {
-        var many = await AddReadyCaptureAsync(contentHash: "m");
-        await SetPageCountAsync(many, 10);
-        await EnqueueAsync(many, contentHash: "m");
+        var capture = await AddReadyCaptureAsync();
+        await SetPageCountAsync(capture, 6, textPages: 6);
+        await EnqueueAsync(capture);
+
+        await Processor(new FakeCaptureFieldMapper()).ProcessNextAsync(CancellationToken.None);
+
+        Assert.Equal([(1, 6)], _meter.Reserved);
+    }
+
+    [Fact]
+    [Trait("Rule", "AI-08")]
+    public async Task AScannedPdfMetersOnlyThePagesThatWereRead()
+    {
+        // Ten pages, three OCR'd: the other seven contributed no text, so they are not metered.
+        var capture = await AddReadyCaptureAsync();
+        await SetPageCountAsync(capture, 10, textPages: 3);
+        await EnqueueAsync(capture);
+
+        await Processor(new FakeCaptureFieldMapper()).ProcessNextAsync(CancellationToken.None);
+
+        Assert.Equal([(1, 3)], _meter.Reserved);
+    }
+
+    [Fact]
+    [Trait("Rule", "AI-08")]
+    public async Task ARowFromBeforeTextPageCountExistedMetersItsPageCountAndAtLeastOne()
+    {
+        var older = await AddReadyCaptureAsync(contentHash: "m");
+        await SetPageCountAsync(older, 4);
+        await EnqueueAsync(older, contentHash: "m");
         var none = await AddReadyCaptureAsync(contentHash: "z");
         await SetPageCountAsync(none, 0);
         await EnqueueAsync(none, contentHash: "z");
@@ -677,7 +706,7 @@ public sealed class CaptureAiMappingTests : IDisposable
         await processor.ProcessNextAsync(CancellationToken.None);
         await processor.ProcessNextAsync(CancellationToken.None);
 
-        Assert.Equal([(1, DocumentCaptureAiMappingProcessor.MaxMeteredPages), (1, 1)], _meter.Reserved);
+        Assert.Equal([(1, 4), (1, 1)], _meter.Reserved);
     }
 
     [Fact]

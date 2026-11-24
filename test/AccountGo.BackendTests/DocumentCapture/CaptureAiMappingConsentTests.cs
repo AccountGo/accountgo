@@ -28,7 +28,7 @@ public sealed class CaptureAiMappingConsentTests : IDisposable
     private readonly ApplicationIdentityDbContext _identity;
     private readonly RecordingAudit _audit = new();
     private readonly FixedAvailability _availability = new(CaptureAiMappingAvailability.Offered);
-    private readonly DocumentCaptureOptions _options = new() { Enabled = true };
+    private readonly DocumentCaptureOptions _options = new() { Enabled = true, AiMapping = { Enabled = true } };
 
     public CaptureAiMappingConsentTests()
     {
@@ -246,6 +246,39 @@ public sealed class CaptureAiMappingConsentTests : IDisposable
 
         Assert.False(view.GetProperty("available").GetBoolean());
         Assert.Equal("not_offered", view.GetProperty("unavailableReason").GetString());
+    }
+
+    [Fact]
+    public async Task WithAiMappingOffInConfigurationNothingIsOfferedEvenWhenTheHostOffersIt()
+    {
+        _options.AiMapping.Enabled = false;
+
+        var view = Body(await Controller().Get(CancellationToken.None));
+        Assert.False(view.GetProperty("available").GetBoolean());
+        Assert.Equal("not_offered", view.GetProperty("unavailableReason").GetString());
+
+        Assert.Equal(409, StatusOf(await Controller().Put(new(true), CancellationToken.None)));
+        Assert.Empty(await _db.CaptureAiMappingConsents.IgnoreQueryFilters().ToListAsync());
+    }
+
+    [Fact]
+    public async Task AGrantFailureThatIsNotTheUniqueIndexRaceSurfacesInsteadOfLookingLikeAnAlreadyGrantedConsent()
+    {
+        // A table that cannot take the insert: the save fails, no consent row exists, so the failure must not be swallowed.
+        await _db.Database.ExecuteSqlRawAsync("DROP TABLE \"CaptureAiMappingConsents\"");
+        await _db.Database.ExecuteSqlRawAsync("CREATE TABLE \"CaptureAiMappingConsents\" (\"Id\" INTEGER PRIMARY KEY AUTOINCREMENT, \"CompanyId\" INTEGER NOT NULL, \"ConsentVersion\" TEXT NOT NULL, \"ConsentedAt\" TEXT NOT NULL, \"ConsentedByUserId\" TEXT NOT NULL, \"RevokedAt\" TEXT NULL, \"RevokedByUserId\" TEXT NULL, CHECK (\"CompanyId\" < 0))");
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => Store().GrantAsync(1, "owner-1", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task GrantAndRevokeKeepTheTenantFilterSoTheyNeverTouchAnotherWorkspace()
+    {
+        await Store().GrantAsync(1, "owner-1", CancellationToken.None);
+        _tenant.CompanyIdValue = 2;
+
+        Assert.False(await Store().RevokeAsync(1, "owner-2", CancellationToken.None));
+        Assert.True((await Store().GetAsync(1, CancellationToken.None))!.IsCurrent);
     }
 
     [Fact]

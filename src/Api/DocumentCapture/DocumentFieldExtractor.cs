@@ -21,7 +21,8 @@ public sealed record DocumentExtractionResult(
     IReadOnlyList<string> Warnings,
     string? RawText,
     string ProviderName,
-    string ProviderVersion);
+    string ProviderVersion,
+    int TextPageCount = 0);
 
 public interface IDocumentFieldExtractor
 {

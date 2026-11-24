@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Api.Data.Migrations.Postgres.ApiDb
 {
     [DbContext(typeof(PostgresApiDbContext))]
-    [Migration("20261124021015_CaptureAiMappingConsent")]
+    [Migration("20261124053424_CaptureAiMappingConsent")]
     partial class CaptureAiMappingConsent
     {
         /// <inheritdoc />
@@ -961,6 +961,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<int>("TextPageCount")
+                        .HasColumnType("integer");
 
                     b.Property<string>("WarningsJson")
                         .HasMaxLength(16384)

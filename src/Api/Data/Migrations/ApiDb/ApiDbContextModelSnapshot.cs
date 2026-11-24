@@ -960,6 +960,9 @@ namespace Api.Data.Migrations.ApiDb
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<int>("TextPageCount")
+                        .HasColumnType("int");
+
                     b.Property<string>("WarningsJson")
                         .HasMaxLength(16384)
                         .HasColumnType("nvarchar(max)");
