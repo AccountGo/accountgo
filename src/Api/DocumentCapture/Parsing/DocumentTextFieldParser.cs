@@ -18,7 +18,7 @@ public sealed record ParsedFields(string FieldsJson, IReadOnlyList<string> Warni
 /// </summary>
 public static class DocumentTextFieldParser
 {
-    public const string RulesVersion = "rules-3";
+    public const string RulesVersion = "rules-4";
 
     private const int MaxTotalInputChars = 8_000;
     private static readonly TimeSpan DefaultParseDeadline = TimeSpan.FromMilliseconds(500);
@@ -201,6 +201,28 @@ public static class DocumentTextFieldParser
     {
         "http", "https", "ftp", "ftps", "mailto", "tel", "file", "data", "ws", "wss", "javascript"
     };
+
+    /// <summary>
+    /// Section headers that often print as <c>Label:</c> with the value on the next line.
+    /// </summary>
+    private static readonly HashSet<string> AssistantNextLineLabels = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "from", "to", "bill to", "billed to", "ship to", "sold to", "invoice to",
+        "vendor", "supplier", "merchant", "customer", "client", "payee", "payer",
+    };
+
+    // Longest-first: "Total Due" / "Sub Total" before bare "Total" / "Tax".
+    private static readonly Regex AssistantLineLabeledValueRegex = new(
+        @"^(?<label>Invoice\s+(?:Number|No\.?|#)|Inv\.?\s*(?:Number|No\.?|#)|Order\s+(?:Number|No\.?|#)|Invoice\s+Date|Due\s+Date|Payment\s+Due|Total\s+Due|Amount\s+Due|Balance\s+Due|Sub\s*-?\s*Total|Grand\s*Total|Tax(?:\s+Total)?|Total|Reference(?:\s+(?:No\.?|Number|#))?|Ref\.?|PO\s+(?:Number|No\.?|#)|Account(?:\s+(?:Number|No\.?))?|ACC\s*#|BSB\s*#|IBAN|SWIFT|BIC|Vendor|Supplier|Customer|Client)(?:\s*[:#]\s*|\s+)(?<value>.+)$",
+        LinearI);
+
+    // Mid-line labels when PDFium merges columns (e.g. "DEMO Co Order Number 12345").
+    private static readonly Regex AssistantEmbeddedLabeledValueRegex = new(
+        @"(?:^|[\s|;])(?<label>Invoice\s+(?:Number|No\.?|#)|Order\s+(?:Number|No\.?|#)|Invoice\s+Date|Due\s+Date|Total\s+Due|Amount\s+Due)(?:\s*[:#]?\s+|\s+)(?<value>[A-Za-z0-9$€£฿][^\n]{0,200})",
+        LinearI);
+
+    // Narrower than TaxHeaderExclusionRegex (which also matches bare "number"/"id" and would reject Invoice Number).
+    private static readonly Regex TaxInvoiceTitleRegex = new(@"tax\s*invoice|ใบกำกับภาษี", LinearI);
 
     public static ParsedFields Parse(string kind, IReadOnlyList<TextLine> lines) =>
         Parse(kind, lines, TimeProvider.System, DefaultParseDeadline);
@@ -971,41 +993,193 @@ public static class DocumentTextFieldParser
         return hints;
     }
 
-    // K13: label must have >= 2 letters, not be a URL scheme, and next char after ':' must not be '/'.
+    // A-01 / K13: colon pairs, space-separated labels, next-line section headers; financial flatten when still empty.
     private static Dictionary<string, object?> ParseAssistantAttachment(List<NormalizedLine> lines, Func<bool> isTimedOut)
     {
         var items = new List<Dictionary<string, object?>>();
+        var seenLabels = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        void TryAdd(string? label, string? value)
+        {
+            if (items.Count >= DocumentCaptureFieldSchemas.MaxAssistantFields || isTimedOut())
+                return;
+            if (string.IsNullOrWhiteSpace(label) || string.IsNullOrWhiteSpace(value))
+                return;
+
+            var safeLabel = Truncate(label.Trim(), 200);
+            var safeValue = Truncate(value.Trim(), DocumentCaptureFieldSchemas.MaxTextLength);
+            if (safeLabel.Length == 0 || safeValue.Length == 0)
+                return;
+            if (CountLetters(safeLabel) < 2 || UrlSchemes.Contains(safeLabel))
+                return;
+            if (!seenLabels.Add(safeLabel))
+                return;
+
+            items.Add(new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["label"] = safeLabel,
+                ["value"] = safeValue,
+            });
+        }
+
+        // Pass 1: colon-separated pairs; empty section headers take the next line as value.
+        for (var i = 0; i < lines.Count; i++)
+        {
+            if (items.Count >= DocumentCaptureFieldSchemas.MaxAssistantFields || isTimedOut())
+                break;
+
+            var text = lines[i].Text;
+            var colon = text.IndexOf(':', StringComparison.Ordinal);
+            if (colon <= 0)
+                continue;
+            if (colon < text.Length - 1 && text[colon + 1] == '/')
+                continue;
+
+            var label = text[..colon].Trim();
+            var value = colon < text.Length - 1 ? text[(colon + 1)..].Trim() : string.Empty;
+            if (string.IsNullOrEmpty(value)
+                && AssistantNextLineLabels.Contains(label)
+                && i + 1 < lines.Count)
+            {
+                var next = lines[i + 1].Text.Trim();
+                if (!string.IsNullOrEmpty(next)
+                    && !AssistantNextLineLabels.Contains(next.TrimEnd(':').Trim())
+                    && !UrlSchemes.Contains(next.TrimEnd(':').Trim()))
+                {
+                    value = next;
+                }
+            }
+
+            TryAdd(label, value);
+        }
+
+        // Pass 2: space-separated / mid-line labelled values (common invoice layouts without ':').
         foreach (var line in lines)
         {
             if (items.Count >= DocumentCaptureFieldSchemas.MaxAssistantFields || isTimedOut())
                 break;
 
-            var colon = line.Text.IndexOf(':', StringComparison.Ordinal);
-            if (colon <= 0 || colon >= line.Text.Length - 1)
-                continue;
-
-            if (line.Text[colon + 1] == '/')
-                continue;
-
-            var label = line.Text[..colon].Trim();
-            var value = line.Text[(colon + 1)..].Trim();
-            if (string.IsNullOrEmpty(label) || string.IsNullOrEmpty(value))
-                continue;
-
-            if (CountLetters(label) < 2 || UrlSchemes.Contains(label))
-                continue;
-
-            items.Add(new Dictionary<string, object?>(StringComparer.Ordinal)
+            var anchored = AssistantLineLabeledValueRegex.Match(line.Text);
+            if (anchored.Success)
             {
-                ["label"] = Truncate(label, 200),
-                ["value"] = Truncate(value, DocumentCaptureFieldSchemas.MaxTextLength),
-            });
+                var label = anchored.Groups["label"].Value;
+                var value = anchored.Groups["value"].Value;
+                if (!IsRejectedAssistantAmountPair(label, value))
+                    TryAdd(label, value);
+                continue;
+            }
+
+            var embedded = AssistantEmbeddedLabeledValueRegex.Match(line.Text);
+            if (embedded.Success)
+            {
+                var label = embedded.Groups["label"].Value;
+                var value = embedded.Groups["value"].Value;
+                if (!IsRejectedAssistantAmountPair(label, value))
+                    TryAdd(label, value);
+            }
+        }
+
+        // Pass 3: fill gaps from purchase-invoice heuristics (always; skips labels already present).
+        if (!isTimedOut())
+        {
+            var financialWarnings = new List<string>();
+            var financial = ParseFinancial(lines, isSales: false, financialWarnings, isTimedOut);
+            AppendFinancialHintsAsAssistantFields(items, seenLabels, financial, isTimedOut);
         }
 
         return new Dictionary<string, object?>(StringComparer.Ordinal)
         {
             ["fields"] = items,
         };
+    }
+
+    /// <summary>
+    /// Reject space-label pairs that are document titles or non-amount totals
+    /// (e.g. <c>Tax Invoice</c>, <c>Total Qty 5</c>) so they cannot block a later real amount.
+    /// Do not reuse <see cref="TaxHeaderExclusionRegex"/> here: it matches bare "number"/"id" and would
+    /// drop legitimate <c>Invoice Number</c> / <c>Order Number</c> lines.
+    /// </summary>
+    private static bool IsRejectedAssistantAmountPair(string label, string value)
+    {
+        var combined = label + " " + value;
+        if (TaxInvoiceTitleRegex.IsMatch(combined))
+            return true;
+
+        var isAmountLikeLabel =
+            TotalKeywordRegex.IsMatch(label)
+            || SubtotalLabelRegex.IsMatch(label)
+            || label.Equals("Tax", StringComparison.OrdinalIgnoreCase)
+            || label.Equals("Total", StringComparison.OrdinalIgnoreCase);
+
+        if (!isAmountLikeLabel)
+            return false;
+
+        // NotTotalKeyword is for excluding subtotal/qty lines when reading a grand Total label.
+        // Do not apply it to Sub Total / Tax labels themselves.
+        if ((label.Equals("Total", StringComparison.OrdinalIgnoreCase)
+                || label.Equals("Grand Total", StringComparison.OrdinalIgnoreCase))
+            && NotTotalKeywordRegex.IsMatch(combined))
+        {
+            return true;
+        }
+
+        return !DateAndAmountParser.ContainsDigit(value);
+    }
+
+    private static bool IsRejectedFinancialPartyValue(string value)
+    {
+        var trimmed = value.Trim().TrimEnd(':');
+        if (trimmed.Length == 0)
+            return true;
+        if (AssistantNextLineLabels.Contains(trimmed))
+            return true;
+        if (trimmed.Contains("://", StringComparison.Ordinal))
+            return true;
+        var colon = trimmed.IndexOf(':');
+        if (colon > 0 && UrlSchemes.Contains(trimmed[..colon]))
+            return true;
+        return false;
+    }
+
+    private static void AppendFinancialHintsAsAssistantFields(
+        List<Dictionary<string, object?>> items,
+        HashSet<string> seenLabels,
+        Dictionary<string, object?> financial,
+        Func<bool> isTimedOut)
+    {
+        void TryAdd(string label, object? raw, bool partyValue = false)
+        {
+            if (items.Count >= DocumentCaptureFieldSchemas.MaxAssistantFields || isTimedOut())
+                return;
+            if (raw is not string value || string.IsNullOrWhiteSpace(value))
+                return;
+            if (partyValue && IsRejectedFinancialPartyValue(value))
+                return;
+            if (!seenLabels.Add(label))
+                return;
+
+            items.Add(new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["label"] = label,
+                ["value"] = Truncate(value.Trim(), DocumentCaptureFieldSchemas.MaxTextLength),
+            });
+        }
+
+        TryAdd("Vendor", financial.GetValueOrDefault("vendorName"), partyValue: true);
+        TryAdd("Customer", financial.GetValueOrDefault("customerName"), partyValue: true);
+        TryAdd("Invoice number", financial.GetValueOrDefault("vendorInvoiceNo")
+            ?? financial.GetValueOrDefault("sourceInvoiceNo"));
+        TryAdd("Date", financial.GetValueOrDefault("date"));
+        TryAdd("Due date", financial.GetValueOrDefault("dueDate"));
+        TryAdd("Currency", financial.GetValueOrDefault("currency"));
+        TryAdd("Reference", financial.GetValueOrDefault("referenceNo"));
+
+        if (financial.GetValueOrDefault("sourceTotals") is Dictionary<string, object?> totals)
+        {
+            TryAdd("Subtotal", totals.GetValueOrDefault("subtotal"));
+            TryAdd("Tax", totals.GetValueOrDefault("taxTotal"));
+            TryAdd("Total", totals.GetValueOrDefault("grandTotal"));
+        }
     }
 
     private static int CountLetters(string text)
