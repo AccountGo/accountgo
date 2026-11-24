@@ -45,8 +45,12 @@ public sealed class DocumentCaptureAiMappingProcessor(
     IOptions<DocumentCaptureOptions> options,
     ILogger<DocumentCaptureAiMappingProcessor> logger,
     ISecurityAuditService? audit = null,
-    TimeProvider? timeProvider = null)
+    TimeProvider? timeProvider = null,
+    ICaptureAiMappingMeter? meter = null)
 {
+    /// <summary>The most pages of one document whose text can reach the mapper (the OCR page cap), so the most one job meters.</summary>
+    public const int MaxMeteredPages = 3;
+    private readonly ICaptureAiMappingMeter _meter = meter ?? new NoopCaptureAiMappingMeter();
     public const int MaxAttempts = 3;
     public static readonly TimeSpan Lease = TimeSpan.FromSeconds(30);
     public static readonly TimeSpan RetryBackoff = TimeSpan.FromSeconds(10);
@@ -65,6 +69,12 @@ public sealed class DocumentCaptureAiMappingProcessor(
             .Where(job => job.Status == "running" && job.LeaseUntil < now && job.Attempts >= MaxAttempts)
             .ExecuteUpdateAsync(set => set.SetProperty(job => job.Status, "failed").SetProperty(job => job.Outcome, "attempts")
                 .SetProperty(job => job.CompletedAt, now), cancellationToken).ConfigureAwait(false);
+        // A job that ran out of attempts never applied, so any pages it reserved go back.
+        var exhausted = await db.DocumentCaptureAiMappings.IgnoreQueryFilters().AsNoTracking()
+            .Where(job => job.Status == "failed" && job.Outcome == "attempts" && job.ReservedPages > 0)
+            .Select(job => job.Id).Take(20).ToListAsync(cancellationToken).ConfigureAwait(false);
+        foreach (var exhaustedId in exhausted)
+            await ReleaseReservedAsync(exhaustedId, cancellationToken).ConfigureAwait(false);
 
         var candidate = await db.DocumentCaptureAiMappings.IgnoreQueryFilters().AsNoTracking()
             .Where(job => job.Attempts < MaxAttempts
@@ -119,7 +129,7 @@ public sealed class DocumentCaptureAiMappingProcessor(
             .Select(c => new
             {
                 c.PublicId, c.Status, c.ExtractionGeneration, c.AcceptedAt, c.RejectedAt, c.FieldsWipedAt,
-                c.FieldsJson, c.WarningsJson, c.RawText, c.SchemaVersion,
+                c.FieldsJson, c.WarningsJson, c.RawText, c.SchemaVersion, c.PageCount,
                 CompanyPublicId = db.Companies.IgnoreQueryFilters().Where(company => company.Id == companyId).Select(company => company.PublicId).First()
             })
             .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
@@ -167,6 +177,13 @@ public sealed class DocumentCaptureAiMappingProcessor(
         }
         else
         {
+            // Pages count only when their text is actually sent: reserved here, after the policy and a cache miss, once per job.
+            if (!await ReserveAsync(jobId, companyId, capture.PageCount, cancellationToken).ConfigureAwait(false))
+            {
+                await FinishAsync(jobId, "skipped", "cap", null, null, started, null, cancellationToken).ConfigureAwait(false);
+                return ("skipped", null, null);
+            }
+
             var lines = (capture.RawText ?? string.Empty).Split('\n', StringSplitOptions.RemoveEmptyEntries)
                 .Take(options.Value.AiMapping.MaxLines)
                 .Select((text, index) => new TextLine(1, text, 0, index, 1, index + 1, TextLineSource.Ocr))
@@ -266,11 +283,53 @@ public sealed class DocumentCaptureAiMappingProcessor(
         return JsonSerializer.Serialize(all.Select(DocumentCaptureWarningCodes.Sanitize).Distinct(StringComparer.Ordinal).Take(32));
     }
 
+    private async Task<bool> ReserveAsync(int jobId, int companyId, int pageCount, CancellationToken cancellationToken)
+    {
+        var already = await db.DocumentCaptureAiMappings.IgnoreQueryFilters().AsNoTracking()
+            .Where(job => job.Id == jobId).Select(job => job.ReservedPages).FirstAsync(cancellationToken).ConfigureAwait(false);
+        if (already > 0)
+            return true;
+        var pages = Math.Clamp(pageCount, 1, MaxMeteredPages);
+        if (!await _meter.ReserveAsync(companyId, pages, cancellationToken).ConfigureAwait(false))
+            return false;
+        var recorded = await db.DocumentCaptureAiMappings.IgnoreQueryFilters()
+            .Where(job => job.Id == jobId && job.ReservedPages == 0)
+            .ExecuteUpdateAsync(set => set.SetProperty(job => job.ReservedPages, pages), cancellationToken).ConfigureAwait(false);
+        if (recorded != 1)
+            await _meter.ReleaseAsync(companyId, pages, cancellationToken).ConfigureAwait(false); // another run recorded first
+        return true;
+    }
+
+    /// <summary>Gives back a job's reserved pages exactly once: the job's own counter is cleared by the same conditional update that decides who releases.</summary>
+    private async Task ReleaseReservedAsync(int jobId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var job = await db.DocumentCaptureAiMappings.IgnoreQueryFilters().AsNoTracking()
+                .Where(j => j.Id == jobId).Select(j => new { j.CompanyId, j.ReservedPages }).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+            if (job is null || job.ReservedPages <= 0)
+                return;
+            var reserved = job.ReservedPages;
+            var cleared = await db.DocumentCaptureAiMappings.IgnoreQueryFilters()
+                .Where(j => j.Id == jobId && j.ReservedPages == reserved)
+                .ExecuteUpdateAsync(set => set.SetProperty(j => j.ReservedPages, 0), cancellationToken).ConfigureAwait(false);
+            if (cleared == 1)
+                await _meter.ReleaseAsync(job.CompanyId, reserved, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning("Capture AI mapping page release failed. JobId={JobId} FailureType={FailureType}", jobId, ex.GetType().Name);
+        }
+    }
+
     private async Task FinishAsync(int jobId, string status, string outcome, string? mapperName, string? mapperVersion, long started,
         string? hintsJson, CancellationToken cancellationToken, bool requeue = false, string? mappedFields = null, int attempts = 0)
     {
         var latency = (int)_clock.GetElapsedTime(started).TotalMilliseconds;
         var now = _clock.GetUtcNow().UtcDateTime;
+        // A job that ends without applying (skipped or failed) must not count against the cap.
+        if (!requeue && status is "failed" or "skipped")
+            await ReleaseReservedAsync(jobId, cancellationToken).ConfigureAwait(false);
         await db.DocumentCaptureAiMappings.IgnoreQueryFilters().Where(job => job.Id == jobId)
             .ExecuteUpdateAsync(set => set
                 .SetProperty(job => job.Status, status)

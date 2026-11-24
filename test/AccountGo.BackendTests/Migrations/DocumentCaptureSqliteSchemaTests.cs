@@ -74,6 +74,29 @@ public sealed class DocumentCaptureSqliteSchemaTests
         Assert.Equal(1, ScalarInt(connection, "SELECT COUNT(*) FROM \"DocumentCaptureLinks\" WHERE \"TaxTreatment\" IS NULL;"));
     }
 
+    [Fact]
+    public void Upgrade_AddsReservedPagesToExistingMappingJobsAndCreatesTheConsentTableOnce()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+
+        using (var db = new ApiDbContext(new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(connection).Options))
+        {
+            db.Database.EnsureCreated();
+        }
+
+        // A database from before this change: no consent table, and mapping jobs without the reserved-pages column.
+        Execute(connection, "PRAGMA foreign_keys = OFF; DROP TABLE \"CaptureAiMappingConsents\"; ALTER TABLE \"DocumentCaptureAiMappings\" DROP COLUMN \"ReservedPages\";");
+
+        SqliteSchemaUpgrader.Upgrade(connection);
+        SqliteSchemaUpgrader.Upgrade(connection);
+
+        Assert.Equal(1, ScalarInt(connection, "SELECT COUNT(*) FROM pragma_table_info('DocumentCaptureAiMappings') WHERE name = 'ReservedPages';"));
+        Assert.Equal(1, ScalarInt(connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'CaptureAiMappingConsents';"));
+        Assert.Contains("UNIQUE", ScalarText(connection,
+            "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'IX_CaptureAiMappingConsents_CompanyId';"), StringComparison.OrdinalIgnoreCase);
+    }
+
     private static void Execute(SqliteConnection connection, string sql)
     {
         using var command = connection.CreateCommand();

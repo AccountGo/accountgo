@@ -275,6 +275,45 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.ToTable("RecordChanges", (string)null);
                 });
 
+            modelBuilder.Entity("Core.Domain.CaptureAiMappingConsent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ConsentVersion")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("ConsentedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ConsentedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("RevokedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId")
+                        .IsUnique();
+
+                    b.ToTable("CaptureAiMappingConsents", (string)null);
+                });
+
             modelBuilder.Entity("Core.Domain.Company", b =>
                 {
                     b.Property<int>("Id")
@@ -1006,6 +1045,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Property<string>("Outcome")
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
+
+                    b.Property<int>("ReservedPages")
+                        .HasColumnType("integer");
 
                     b.Property<string>("RuleHintsJson")
                         .HasMaxLength(16384)

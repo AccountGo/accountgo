@@ -22,6 +22,8 @@ public sealed class DocumentCaptureAiMappingOptions
     public int MaxLines { get; set; } = 200;
     /// <summary>A per-instance safety cap; jobs over it stay queued.</summary>
     public int MaxMappingsPerMinute { get; set; } = 30;
+    /// <summary>With the fake mapper only (development and tests): report the setting as unavailable for this reason, to exercise the hidden state.</summary>
+    public string? FakeUnavailableReason { get; set; }
 
     internal void Validate(IHostEnvironment environment)
     {

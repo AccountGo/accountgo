@@ -93,9 +93,26 @@ public sealed class DocumentCaptureAiMapping : BaseEntity, ICompanyOwned
     public string? RuleHintsJson { get; set; }
     /// <summary>The stored (guarded and masked) mapped fields, kept so an identical document in the same company needs no second call. Bounded.</summary>
     public string? MappedFieldsJson { get; set; }
+    /// <summary>Pages reserved against the host's usage meter for this job; 0 when none. Makes a retried job unable to reserve twice and a release idempotent.</summary>
+    public int ReservedPages { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
     public DocumentCapture Capture { get; set; } = null!;
+}
+
+/// <summary>
+/// A workspace owner's consent to send the text of scanned documents to the field mapper. One row per workspace; a revoke keeps the row
+/// as evidence and a later grant replaces the consent. <see cref="ConsentVersion"/> is the notice wording the owner agreed to, so a
+/// changed wording asks again.
+/// </summary>
+public sealed class CaptureAiMappingConsent : BaseEntity, ICompanyOwned
+{
+    public int CompanyId { get; set; }
+    public string ConsentVersion { get; set; } = string.Empty;
+    public DateTime ConsentedAt { get; set; }
+    public string ConsentedByUserId { get; set; } = string.Empty;
+    public DateTime? RevokedAt { get; set; }
+    public string? RevokedByUserId { get; set; }
 }
 
 public sealed class DocumentCaptureLink : BaseEntity, ICompanyOwned

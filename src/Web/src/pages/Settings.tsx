@@ -51,6 +51,8 @@ import { PartnersSettingsCard } from '../components/PartnersSettingsCard';
 import { SettingsNav, SettingsNavGroup } from '../components/SettingsNav';
 import { ModalShell } from '../components/ModalShell';
 import { IntegrationsSettingsTab } from '../components/IntegrationsSettingsTab';
+import { CaptureAiMappingSettingsTab } from '../components/CaptureAiMappingSettingsTab';
+import { isCaptureAiMappingVisible, useCaptureAiMappingSettings } from '../lib/captureAiMapping';
 import { useIntegrations } from '../lib/integrations';
 import { useOptionalCapabilities } from '../lib/entitlements';
 import { activityTabMode, auditAccessLevel } from '../lib/auditAccess';
@@ -87,12 +89,14 @@ export const Settings: React.FC = () => {
   const isWorkspaceAdminRole = currentOrg.role === 'Owner' || currentOrg.role === 'Admin';
   const [searchParams, setSearchParams] = useSearchParams();
   const integrations = useIntegrations();
+  const aiMapping = useCaptureAiMappingSettings(!personal, currentOrg.id);
+  const showAiMapping = !personal && isCaptureAiMappingVisible(aiMapping.settings);
   const capabilities = useOptionalCapabilities();
   // Plan-dependent: without a loaded plan snapshot the Activity tab stays hidden rather than guess.
   const auditAccess = auditAccessLevel(capabilities?.entitlements ?? null, hasPermission);
   const activityMode = capabilities?.entitlements ? activityTabMode(auditAccess, personal) : 'hidden';
 
-  type TabKey = 'general' | 'invoices' | 'email' | 'taxes' | 'financials' | 'partners' | 'whitelabel' | 'subscription' | 'roles' | 'activity' | 'approvals' | 'integrations';
+  type TabKey = 'general' | 'invoices' | 'email' | 'taxes' | 'financials' | 'partners' | 'whitelabel' | 'subscription' | 'roles' | 'activity' | 'approvals' | 'integrations' | 'documents';
 
   const handleTabChange = (tab: TabKey) => {
     setSearchParams(tab === 'general' ? {} : { tab });
@@ -118,6 +122,7 @@ export const Settings: React.FC = () => {
     ...(hasFinancials
       ? [{ label: 'Accounting', items: [{ key: 'financials' as const, label: personal ? 'Books' : 'Financial Rules & Banking', icon: Coins }, ...(!personal && currentOrg.entityType?.toLowerCase() === 'partnership' ? [{ key: 'partners' as const, label: 'Partners', icon: Users }] : [])] }]
       : []),
+    ...(showAiMapping ? [{ label: 'Documents', items: [{ key: 'documents' as const, label: 'Document capture', icon: FileText }] }] : []),
     {
       label: 'Access & Billing',
       items: [
@@ -820,6 +825,12 @@ export const Settings: React.FC = () => {
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+
+          {currentTab === 'documents' && showAiMapping && aiMapping.settings && (
+            <div role="tabpanel" id="panel-documents" aria-labelledby="tab-documents" tabIndex={0} className="focus:outline-none">
+              <CaptureAiMappingSettingsTab settings={aiMapping.settings} update={aiMapping.update} />
             </div>
           )}
 
