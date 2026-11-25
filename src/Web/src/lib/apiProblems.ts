@@ -167,6 +167,8 @@ export function describeProblem(problem: ClassifiedProblem | null, fallback: str
     case 'session-expired':
       return 'Your session ended. Sign in again to continue.';
     case 'permission-denied':
+      // A short summary for a failed action; the notice beside it carries the roles and the next step.
+      return "You don't have access to do that.";
     case 'unknown-forbidden':
       return "You don't have access to this.";
     case 'plan-required':
@@ -181,6 +183,17 @@ export function describeProblem(problem: ClassifiedProblem | null, fallback: str
     default:
       return fallback;
   }
+}
+
+/**
+ * The server's own sentence for a problem (detail, message or title), except for a permission denial: the server's wording there names
+ * the permission key, so it is replaced by the short line. For callers that read a problem body themselves.
+ */
+export function problemText(status: number, body: unknown, fallback: string): string {
+  const record = asRecord(body);
+  const classified = classifyApiProblem(status, body);
+  if (classified?.category === 'permission-denied') return describeProblem(classified, fallback);
+  return text(record?.detail) ?? text(record?.message) ?? text(record?.title) ?? fallback;
 }
 
 /** A load or action failure that carries its classification, so a page can swap in the "No access" view. */

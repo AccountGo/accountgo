@@ -17,6 +17,8 @@ import { firstPlanWithModule } from '../lib/planFeatures';
 import { IntegrationsProvider } from '../lib/integrations';
 import { setEntitlementWorkspace } from '../lib/entitlementEvents';
 import { refreshWorkspaceAccess, throttledRefresh } from '../lib/permissionRefresh';
+import { useActionDenialRefresh } from '../lib/useActionDenialRefresh';
+import { ActionDenialRegion } from '../components/ActionDenialRegion';
 
 export function evaluateHasPermission(
   userPermissions: readonly string[] | undefined,
@@ -465,6 +467,8 @@ const OrgWorkspaceShell: React.FC<OrgWorkspaceShellProps> = ({
   setIsMobileOpen,
   toggleSidebarCollapse,
 }) => {
+  useActionDenialRefresh(refreshPermissions);
+
   const caps = useCapabilities();
   const hasModule = caps.canModule;
   const canWrite = caps.canWrite;
@@ -591,6 +595,9 @@ const OrgWorkspaceShell: React.FC<OrgWorkspaceShellProps> = ({
             </div>
           </AssistantMount>
         </div>
+
+        {/* Quiet, non-modal notices for actions the server refused; above the phone bottom bar and the safe-area inset. */}
+        <ActionDenialRegion currentOrg={currentOrg} />
       </div>
     </AssistantProvider>
     </IntegrationsProvider>

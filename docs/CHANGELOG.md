@@ -25,6 +25,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - Scanned bills and invoices now suggest existing vendors and customers even when the name is written differently, and remember your choices.
 - Rejected document scans and scans left unused for 24 hours are now deleted, including the extracted details.
 - Pages you can't open now explain why and how to get access, instead of showing an error code.
+- Actions you can't take now say which role you need and how to get it, instead of a generic error.
 
 ### Fixed
 

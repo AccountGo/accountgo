@@ -1,14 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { ShieldAlert } from 'lucide-react';
-import { useAuth } from '../auth/AuthContext';
-import { joinRoleNames, useAccessDirectory } from '../lib/accessDirectory';
+import { joinRoleNames } from '../lib/accessDirectory';
+import { useAccessNextStep } from '../lib/useAccessNextStep';
 import type { ClassifiedProblem } from '../lib/apiProblems';
 import { areaForPermission } from '../lib/permissionLabels';
 import type { TenantContextType } from '../types';
-
-const BASE = '/api/organizations/current';
-type RequestState = 'idle' | 'sending' | 'sent' | 'failed';
 
 /**
  * Shown in place of a page that could not load because the viewer's roles do not include it. It says what is locked, which roles
@@ -16,48 +13,16 @@ type RequestState = 'idle' | 'sending' | 'sent' | 'failed';
  */
 export const NoAccess: React.FC<{ problem: ClassifiedProblem; headingLevel?: 1 | 2; area?: string }> = ({ problem, headingLevel = 2, area: areaName }) => {
   const { currentOrg } = useOutletContext<TenantContextType>();
-  const { authFetch } = useAuth();
   const headingRef = useRef<HTMLHeadingElement>(null);
   // Pages keep their own title as the h1, so inside a page this is an h2; only a full-page use passes 1.
   const Heading = headingLevel === 1 ? 'h1' : 'h2';
-  // A ref, not state: two clicks before the next render must still send one request.
-  const sentRef = useRef(false);
-  const [requestState, setRequestState] = useState<RequestState>('idle');
-  const directory = useAccessDirectory(problem.requiredAnyOf ?? problem.requiredPermission);
-
   const area = areaName ?? areaForPermission(problem.requiredPermission) ?? 'this page';
-  const role = currentOrg.role;
-  const isAdmin = role === 'Owner' || role === 'Admin';
-  const slug = encodeURIComponent(currentOrg.slug);
-  const chosen = directory.grantingRoles[0];
-  const grant = chosen ? `&grant=${encodeURIComponent(chosen.name)}` : '';
-  const roleNames = directory.grantingRoles.map((r) => r.displayName);
-  const adminList = directory.adminNames.length > 0 ? joinRoleNames(directory.adminNames) : null;
-  const requested = requestState === 'sent' || directory.pendingRequest;
+  const step = useAccessNextStep(problem.requiredAnyOf ?? problem.requiredPermission, currentOrg, area);
+  const { directory, isAdmin, slug, roleNames, adminList, requested, requestState, adminAction, canAsk, askAdmin } = step;
 
   useEffect(() => {
     headingRef.current?.focus();
   }, []);
-
-  const askAdmin = async () => {
-    if (!chosen || sentRef.current || requestState === 'sending' || requested) return;
-    sentRef.current = true;
-    setRequestState('sending');
-    try {
-      const res = await authFetch(`${BASE}/access-requests`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        // The workspace's own request flow decides: the admin can approve it, change it or decline it.
-        body: JSON.stringify({ securityRoleIds: [chosen.id], reason: `Needs access to ${area}` }),
-      });
-      sentRef.current = res.ok;
-      if (res.ok) directory.markRequested(chosen.id);
-      setRequestState(res.ok ? 'sent' : 'failed');
-    } catch {
-      sentRef.current = false;
-      setRequestState('failed');
-    }
-  };
 
   const linkClass = 'inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold';
   const primaryLink = `${linkClass} bg-[var(--brand-primary)] text-white`;
@@ -82,25 +47,18 @@ export const NoAccess: React.FC<{ problem: ClassifiedProblem; headingLevel?: 1 |
         </p>
       )}
 
-      {directory.loaded && isAdmin && (
-        <p className="text-sm text-[var(--text-secondary)]">
-          {directory.activeMemberCount <= 1 ? 'You can give yourself the access you need.' : 'You can request the roles you need.'}
-        </p>
-      )}
+      {adminAction && <p className="text-sm text-[var(--text-secondary)]">{adminAction.hint}</p>}
       {directory.loaded && !isAdmin && adminList && (
         <p className="text-sm text-[var(--text-secondary)]">Ask {adminList} for access.</p>
       )}
 
       <div className="flex flex-wrap gap-3 pt-1">
-        {directory.loaded && isAdmin && (
-          <Link
-            className={primaryLink}
-            to={`/org/${slug}/members?access=${directory.activeMemberCount <= 1 ? 'setup' : 'request'}${grant}`}
-          >
-            {directory.activeMemberCount <= 1 ? 'Set up my access' : 'Request functional roles'}
+        {adminAction && (
+          <Link className={primaryLink} to={adminAction.to}>
+            {adminAction.label}
           </Link>
         )}
-        {directory.loaded && !isAdmin && chosen && (
+        {canAsk && (
           <button type="button" className={`${primaryLink} disabled:opacity-60`} disabled={requestState === 'sending' || requested} onClick={() => void askAdmin()}>
             {requestState === 'sending' ? 'Sending…' : 'Ask an admin for access'}
           </button>

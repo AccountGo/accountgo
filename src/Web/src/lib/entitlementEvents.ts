@@ -27,6 +27,11 @@ export function isActivePersonalBooks(slug: string | null): boolean {
 
 let suppressDenialDepth = 0;
 
+/** True while a flow that shows its own denial copy has switched the shared announcements off. */
+export function isDenialAnnouncementSuppressed(): boolean {
+  return suppressDenialDepth > 0;
+}
+
 /** Temporarily skip the shared plan-limit dialog (wizard / transfer show their own copy). */
 export async function withSuppressedEntitlementDenial<T>(fn: () => Promise<T>): Promise<T> {
   suppressDenialDepth += 1;

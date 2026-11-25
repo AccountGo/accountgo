@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { problemText } from '../lib/apiProblems';
 import { AlertCircle, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import type { JournalApprovalSummary, WorkspaceOperatingPolicySummary } from '../types';
@@ -34,7 +35,7 @@ export function describeJournalApprovalMode(mode?: string | null): string {
 
 export async function readJournalApprovalProblem(response: Response): Promise<JournalApprovalPolicyError> {
   const problem: ProblemBody | null = await response.json().catch(() => null);
-  const message = problem?.detail || problem?.message || problem?.title || 'The request could not be completed.';
+  const message = problemText(response.status, problem, 'The request could not be completed.');
   return { message, reasonCode: problem?.reasonCode };
 }
 

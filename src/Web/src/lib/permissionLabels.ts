@@ -47,6 +47,34 @@ export function permissionResource(permission: string): string {
   return permission.split('.').slice(0, 2).join('.');
 }
 
+const ACTION_VERBS: Record<string, string> = {
+  view: 'view',
+  create: 'create',
+  manage: 'change',
+  post: 'post',
+  reverse: 'reverse',
+  apply: 'apply',
+  close: 'close',
+  reconcile: 'reconcile',
+  undo: 'undo',
+};
+
+/** What the member was trying to do, from the permission's last segment ("purchases.bills.post" -> "post"); null when unknown. */
+export function verbForPermission(permission: string | null | undefined): string | null {
+  if (!permission) return null;
+  const parts = permission.split('.');
+  const last = parts[parts.length - 1];
+  // "banking.reconcile" and "reports.view" end in the action itself; others end in it after the resource.
+  return ACTION_VERBS[last] ?? null;
+}
+
+/** "post Bills", "change Vendors", or null when either part is unknown (callers then say "do that"). */
+export function actionPhrase(permission: string | null | undefined): string | null {
+  const verb = verbForPermission(permission);
+  const area = areaForPermission(permission);
+  return verb && area ? `${verb} ${area}` : null;
+}
+
 /** The area name for a permission, or null when it has none (callers then say "this page", never the raw key). */
 export function areaForPermission(permission: string | null | undefined): string | null {
   if (!permission) return null;

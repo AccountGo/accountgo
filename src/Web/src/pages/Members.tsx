@@ -17,6 +17,7 @@ import { useAuth } from '../auth/AuthContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { useCapabilities } from '../lib/entitlements';
+import { problemText } from '../lib/apiProblems';
 import {
   CUSTOM_PRESET_KEY,
   buildAccessPresets,
@@ -79,7 +80,9 @@ async function requireSuccess(response: Response): Promise<void> {
   try {
     const problem: { detail?: string; title?: string; message?: string; reasonCode?: string; policyRevision?: number } = JSON.parse(text);
     problemMessage = problem.detail || problem.message || problem.title;
-    message = problemMessage || message;
+    // A permission denial's own sentence names the permission key; say it plainly instead.
+    message = problemText(response.status, problem, '') || message;
+    if (message === "You don't have access to do that.") problemMessage = undefined;
     reasonCode = problem.reasonCode;
     policyRevision = problem.policyRevision;
   } catch {
