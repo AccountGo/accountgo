@@ -22,6 +22,18 @@
 
 ---
 
+## Invoicing and accounting in one place
+
+AccountGo is an open-source accounting and ERP application for small businesses and teams. Manage invoices and bills, maintain a double-entry general ledger, and review financial reports across separate workspaces.
+
+![AccountGo financial dashboard](docs/screenshots/11-local-dashboard.png)
+
+[See more screenshots](docs/readme/showcase.md) · [Run locally](#quick-start-with-a-coding-agent) · [Self-hosting guide](docs/readme/deployment.md) · [Contribute](#contributing)
+
+If AccountGo is useful to you, consider starring the repository to follow its development.
+
+---
+
 ## Live Deployments
 
 - **Web Application (SPA)**: [https://app.accountgo.dev](https://app.accountgo.dev)
@@ -38,6 +50,12 @@ Re-architected for modern cloud infrastructure, AccountGo combines a high-perfor
 ---
 
 ## Quick Start with a Coding Agent
+
+Give a coding agent this short prompt to set up the local app with SQLite:
+
+```text
+Clone https://github.com/AccountGo/accountgo if needed. Follow .agents/skills/accountgo-local-dev/SKILL.md to run the API and web app locally with SQLite. Verify both local URLs and tell me how to open the app.
+```
 
 Paste this prompt into **Gemini, Claude, Codex**, or your preferred coding agent to clone, configure (SQLite by default), build, and run AccountGo locally:
 

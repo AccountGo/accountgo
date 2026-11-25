@@ -21,6 +21,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ### Changed
 
+- The GitHub README now introduces the accounting workspace and offers a concise local setup prompt.
 - Attach a document to the assistant from the message box; the file is read on our servers and only masked fields reach the AI.
 - Scanned bills and invoices now suggest existing vendors and customers even when the name is written differently, and remember your choices.
 - Rejected document scans and scans left unused for 24 hours are now deleted, including the extracted details.
