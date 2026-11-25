@@ -26,6 +26,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - Rejected document scans and scans left unused for 24 hours are now deleted, including the extracted details.
 - Pages you can't open now explain why and how to get access, instead of showing an error code.
 - Actions you can't take now say which role you need and how to get it, instead of a generic error.
+- Error messages no longer show internal permission names.
 
 ### Fixed
 

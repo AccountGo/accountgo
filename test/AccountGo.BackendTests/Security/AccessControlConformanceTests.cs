@@ -763,6 +763,54 @@ namespace AccountGo.BackendTests.Security
         // =====================================================================
 
         [Fact]
+        public async Task ProblemDetails_NeverNameInternalKeys_ButKeepThemInExtensions()
+        {
+            var slug = "ac-generic-" + Guid.NewGuid().ToString("N")[..6];
+            var owner = await _fixture.CreateUser($"gen-owner-{slug}@example.com");
+            var member = await _fixture.CreateUser($"gen-member-{slug}@example.com");
+            var companyId = await _fixture.CreateWorkspaceWithZeroFunctionalRoles(owner.Token, "Generic Org", slug);
+            await _fixture.AssignFunctionalRolesDirectAsync(companyId, owner.Id, new[] { "Accountant" });
+            await _fixture.AddMemberDirectAsync(companyId, member.Id, CompanyMemberRole.Member, new[] { "Auditor / Viewer" });
+
+            // 1. Permission denial: the filter's own problem carries the key only in the extension.
+            var denied = Api.Filters.RequirePermissionAttribute.Denied(SystemPermissions.PurchasesBillsPost, "POL-X", "1");
+            var deniedProblem = Assert.IsType<Microsoft.AspNetCore.Mvc.ProblemDetails>(denied.Value);
+            Assert.Equal(StatusCodes.Status403Forbidden, denied.StatusCode);
+            Assert.Equal("PERMISSION_DENIED", deniedProblem.Extensions["code"]);
+            Assert.Equal(SystemPermissions.PurchasesBillsPost, deniedProblem.Extensions["requiredPermission"]);
+            Assert.Equal("POL-X", deniedProblem.Extensions["policyId"]);
+            Assert.DoesNotContain(SystemPermissions.PurchasesBillsPost, deniedProblem.Detail);
+            Assert.DoesNotContain("POL-X", deniedProblem.Detail);
+
+            // 2. Through a real endpoint: a member without the permission gets a body with no dotted key in the detail.
+            var res = await _fixture.Send(HttpMethod.Get, "/api/Financials/ExportStructure", token: member.Token, org: slug);
+            Assert.Equal(HttpStatusCode.Forbidden, res.StatusCode);
+            using var body = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+            var detail = body.RootElement.GetProperty("detail").GetString() ?? string.Empty;
+            Assert.Equal("Your current access doesn't include this action.", detail);
+            Assert.DoesNotContain("financials.", detail);
+            Assert.Equal("financials.accounts.manage", body.RootElement.GetProperty("requiredPermission").GetString());
+
+            // 3. Workflow-state denial: no operation key and no internal state name.
+            using var scope = _fixture.Factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            var entitlements = scope.ServiceProvider.GetRequiredService<IEntitlementService>();
+            var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+            using (tenant.ImpersonateUser(companyId, owner.Id, slug, CompanyMemberRole.Owner))
+            {
+                var authService = new AccessAuthorizationService(tenant, entitlements, db);
+                var decision = authService.Authorize(
+                    AccessOperationCatalog.ForPermission(SystemPermissions.FinancialsJournalPost),
+                    new AccessResourceContext { WorkspaceCompanyId = companyId, ResourceCompanyId = companyId, WorkflowState = "PeriodLocked" });
+                Assert.False(decision.Allowed);
+                Assert.Equal(AccessReasonCode.WorkflowStateInvalid, decision.ReasonCode);
+                Assert.DoesNotContain(AccessOperationCatalog.FinancialsJournalPost, decision.SafeMessage);
+                Assert.DoesNotContain("PeriodLocked", decision.SafeMessage);
+                Assert.Equal("This action isn't available in the record's current state.", decision.SafeMessage);
+            }
+        }
+
+        [Fact]
         public async Task AC8_PlatformAdmin_StaffOperator_TransportGate_AndServicePrincipals_CannotAcquireWorkspaceFinancialAccess_WhileScopedServicePolicyWorks()
         {
             var slug = "ac8-domains-" + Guid.NewGuid().ToString("N")[..6];

@@ -427,7 +427,8 @@ namespace AccountGo.BackendTests.Architecture
             ["src/Web/src/pages/Dashboard.tsx"] = "governance: workspace management widget visibility",
             ["src/Web/src/pages/JournalEntries.tsx"] = "governance: independent journal review requires Owner or Admin in addition to post permission",
             ["src/Web/src/pages/Members.tsx"] = "governance: workspace member management and ownership transfer",
-            ["src/Web/src/components/NoAccess.tsx"] = "governance: picks the next step on the No-access page (set up own access, request roles, or ask an admin); display only, the API decides every request",
+            ["src/Web/src/components/ActionDenialRegion.tsx"] = "governance: names the next step in the refused-action notice (set up own access, request roles, or ask an admin); display only, the API decides every request",
+            ["src/Web/src/lib/useAccessNextStep.ts"] = "governance: shared next-step choice for No-access and the refused-action notice; display only, the API decides every request",
             ["src/Web/src/lib/accessDirectory.ts"] = "governance: lists the workspace owners and admins by name for the ask-an-admin step; display only",
             ["src/Web/src/pages/Settings.tsx"] = "governance: workspace administration settings tabs",
         };
