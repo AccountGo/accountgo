@@ -1032,7 +1032,8 @@ namespace Api.Authorization
                         policy.PolicyVersion,
                         StatusCodes.Status400BadRequest,
                         "Invalid workflow state",
-                        $"Operation '{policy.OperationKey}' cannot be executed when the resource is in state '{resource.WorkflowState}'.");
+                        // No operation key or internal state name in the text: pages print this sentence. The policy id and code stay in the problem's extensions.
+                        "This action isn't available in the record's current state.");
                 }
             }
 

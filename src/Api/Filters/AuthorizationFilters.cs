@@ -292,14 +292,17 @@ namespace Api.Filters
             return null;
         }
 
-        /// <summary>The 403 for a missing permission; also for actions that need a permission only in some cases.</summary>
+        /// <summary>
+        /// The 403 for a missing permission; also for actions that need a permission only in some cases. The detail is deliberately generic:
+        /// pages print it, and it must not show internal permission names. The key is in the <c>requiredPermission</c> extension for clients.
+        /// </summary>
         public static ObjectResult Denied(string permission, string? policyId = null, string? policyVersion = null)
         {
             var problem = new ProblemDetails
             {
                 Type = "https://accountgo.ph/errors/permission-denied",
                 Title = "Access Denied",
-                Detail = $"You do not have the required permission '{permission}' to perform this action.",
+                Detail = "Your current access doesn't include this action.",
                 Status = StatusCodes.Status403Forbidden
             };
             problem.Extensions["code"] = "PERMISSION_DENIED";
