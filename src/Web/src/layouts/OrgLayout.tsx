@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, Outlet, useNavigate, Link, useLocation } from 'react-router-dom';
 import { Building2, AlertCircle, ArrowLeft, RefreshCw } from 'lucide-react';
 import { OrgDetails, TenantContextType, WhitelabelConfig, SidebarMode, UserProfile, ModuleKey, PlanKey, SubscriptionInfo, Organization } from '../types';
@@ -16,6 +16,7 @@ import { usePlanCatalog } from '../lib/usePlanCatalog';
 import { firstPlanWithModule } from '../lib/planFeatures';
 import { IntegrationsProvider } from '../lib/integrations';
 import { setEntitlementWorkspace } from '../lib/entitlementEvents';
+import { refreshWorkspaceAccess, throttledRefresh } from '../lib/permissionRefresh';
 
 export function evaluateHasPermission(
   userPermissions: readonly string[] | undefined,
@@ -241,6 +242,24 @@ export const OrgLayout: React.FC = () => {
     ));
   }, [currentOrg]);
 
+  // The latest workspace and updater, so the refresh below stays one stable function for every caller.
+  const currentOrgRef = useRef(currentOrg);
+  currentOrgRef.current = currentOrg;
+  const updateCurrentOrgRef = useRef(updateCurrentOrg);
+  updateCurrentOrgRef.current = updateCurrentOrg;
+  const userId = userProfile.id;
+  const refreshPermissions = useCallback((): Promise<boolean> => {
+    const shown = currentOrgRef.current;
+    if (!shown) return Promise.resolve(false);
+    return throttledRefresh(`${shown.slug}\u0000${userId}`, () =>
+      refreshWorkspaceAccess({
+        fetchCurrent: () => authFetch('/api/organizations/current'),
+        getCurrent: () => currentOrgRef.current,
+        apply: (updates) => updateCurrentOrgRef.current(updates),
+      }),
+    );
+  }, [authFetch, userId]);
+
   const updateOrgWhitelabel = (config: WhitelabelConfig) => {
     if (!currentOrg) return;
     const updated = {
@@ -391,6 +410,7 @@ export const OrgLayout: React.FC = () => {
         hasPermission={hasPermission}
         switchOrg={switchOrg}
         updateCurrentOrg={updateCurrentOrg}
+        refreshPermissions={refreshPermissions}
         updateOrgWhitelabel={updateOrgWhitelabel}
         updateSubscription={updateSubscription}
         sidebarMode={sidebarMode}
@@ -412,6 +432,7 @@ interface OrgWorkspaceShellProps {
   hasPermission: (permission: string | string[]) => boolean;
   switchOrg: (slug: string) => void;
   updateCurrentOrg: (updates: Partial<OrgDetails>) => void;
+  refreshPermissions: () => Promise<boolean>;
   updateOrgWhitelabel: (config: WhitelabelConfig) => void;
   updateSubscription: (
     newPlan: PlanKey,
@@ -434,6 +455,7 @@ const OrgWorkspaceShell: React.FC<OrgWorkspaceShellProps> = ({
   hasPermission,
   switchOrg,
   updateCurrentOrg,
+  refreshPermissions,
   updateOrgWhitelabel,
   updateSubscription,
   sidebarMode,
@@ -487,6 +509,7 @@ const OrgWorkspaceShell: React.FC<OrgWorkspaceShellProps> = ({
     userPermissions,
     switchOrg,
     updateCurrentOrg,
+    refreshPermissions,
     updateOrgWhitelabel,
     updateSubscription,
     hasModule,

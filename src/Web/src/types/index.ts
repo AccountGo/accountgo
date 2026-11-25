@@ -252,6 +252,8 @@ export interface TenantContextType {
   switchOrg: (slug: string) => void;
   updateCurrentOrg: (updates: Partial<OrgDetails>) => void;
   updateOrgWhitelabel?: (config: WhitelabelConfig) => void;
+  /** Re-reads the member's role and permissions from the server (at most once a minute per workspace and user); true when they changed. */
+  refreshPermissions?: () => Promise<boolean>;
   updateSubscription?: (
     plan: PlanKey,
     activeModules?: ModuleKey[],
