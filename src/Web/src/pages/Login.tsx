@@ -1044,6 +1044,9 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
             mfaToken={mfaChallengeData.mfaToken}
             methods={mfaChallengeData.methods}
             onSuccess={async (authResponse) => {
+              // Own navigation before the session flips to authenticated, so the "already signed in"
+              // redirect effect cannot race the post-auth hand-off (invitation acceptance / routing).
+              verificationOwnsNavigation.current = true;
               completeSession(authResponse);
               await handlePostAuthSuccess();
             }}
@@ -1060,6 +1063,9 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
           <MfaEnrollWizard
             enrollToken={mfaEnrollData.mfaToken}
             onSuccess={async (authResponse) => {
+              // Own navigation before the session flips to authenticated, so the "already signed in"
+              // redirect effect cannot race the post-auth hand-off (invitation acceptance / routing).
+              verificationOwnsNavigation.current = true;
               completeSession(authResponse);
               await handlePostAuthSuccess();
             }}

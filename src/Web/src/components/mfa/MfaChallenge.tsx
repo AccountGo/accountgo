@@ -2,11 +2,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import { AuthResponse } from '../../types/auth';
 import { ShieldCheck, Key, ArrowRight, ArrowLeft, Loader2, AlertCircle, HelpCircle, Fingerprint } from 'lucide-react';
 import { getPasskeyAssertion, isWebAuthnSupported } from '../../lib/webauthn';
+import { MfaSubmitStage, runMfaSignIn } from '../../lib/mfaSubmission';
 
 interface MfaChallengeProps {
   mfaToken: string;
   methods: string[];
-  onSuccess: (authResponse: AuthResponse) => void;
+  /** Establishes the session and routes onward. Awaited — the challenge stays locked until it settles. */
+  onSuccess: (authResponse: AuthResponse) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -23,10 +25,38 @@ export const MfaChallenge: React.FC<MfaChallengeProps> = ({
   const [totpDigits, setTotpDigits] = useState<string[]>(['', '', '', '', '', '']);
   const [recoveryCode, setRecoveryCode] = useState<string>('');
   const [rememberDevice, setRememberDevice] = useState<boolean>(false);
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [stage, setStage] = useState<MfaSubmitStage>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const isSubmitting = stage !== 'idle';
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  // Synchronous re-entry guard: React state updates are async, so a fast double click (or TOTP
+  // auto-submit racing a button click) could otherwise start two verifications.
+  const inFlightRef = useRef(false);
+
+  const runSubmission = async (
+    verify: (report: (s: MfaSubmitStage) => void) => Promise<AuthResponse>,
+    fallbackError: string,
+    initialStage: MfaSubmitStage = 'verifying'
+  ) => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+    setErrorMessage(null);
+    setStage(initialStage);
+
+    const ok = await runMfaSignIn<AuthResponse>({
+      verify,
+      onSuccess,
+      setStage,
+      onError: setErrorMessage,
+      fallbackError,
+    });
+    // Only release the lock on failure. On success the parent navigates away; keeping the
+    // controls disabled prevents a second passkey ceremony while the hand-off is still in flight.
+    if (!ok) inFlightRef.current = false;
+  };
+
+  const readJson = async (res: Response) => res.json().catch(() => null);
 
   useEffect(() => {
     if (mode === 'totp') {
@@ -36,51 +66,48 @@ export const MfaChallenge: React.FC<MfaChallengeProps> = ({
     }
   }, [mode]);
 
-  const submitPasskey = async () => {
-    setIsSubmitting(true);
-    setErrorMessage(null);
+  const submitPasskey = () =>
+    runSubmission(
+      async (report) => {
+        const beginRes = await fetch('/api/auth/mfa/webauthn/assertion/options', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${mfaToken}`,
+          },
+        });
 
-    try {
-      const beginRes = await fetch('/api/auth/mfa/webauthn/assertion/options', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${mfaToken}`,
-        },
-      });
+        const options = await readJson(beginRes);
+        if (!beginRes.ok) {
+          throw new Error(options?.detail || options?.title || 'Failed to initialize passkey challenge.');
+        }
 
-      const options = await beginRes.json().catch(() => null);
-      if (!beginRes.ok) {
-        throw new Error(options?.detail || options?.title || 'Failed to initialize passkey challenge.');
-      }
+        const assertion = await getPasskeyAssertion(options);
 
-      const assertion = await getPasskeyAssertion(options);
+        // The biometric / security-key step is done; the rest is network-bound.
+        report('verifying');
+        const completeRes = await fetch('/api/auth/mfa/webauthn/assertion/complete', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${mfaToken}`,
+          },
+          body: JSON.stringify({
+            assertion,
+            rememberDevice,
+          }),
+          credentials: 'include',
+        });
 
-      const completeRes = await fetch('/api/auth/mfa/webauthn/assertion/complete', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${mfaToken}`,
-        },
-        body: JSON.stringify({
-          assertion,
-          rememberDevice,
-        }),
-        credentials: 'include',
-      });
-
-      const data = await completeRes.json().catch(() => null);
-      if (!completeRes.ok) {
-        throw new Error(data?.detail || data?.title || 'Passkey verification failed.');
-      }
-
-      onSuccess(data as AuthResponse);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Passkey verification failed.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+        const data = await readJson(completeRes);
+        if (!completeRes.ok) {
+          throw new Error(data?.detail || data?.title || 'Passkey verification failed.');
+        }
+        return data as AuthResponse;
+      },
+      'Passkey verification failed.',
+      'prompting'
+    );
 
   const handleTotpChange = (index: number, val: string) => {
     const numericVal = val.replace(/\D/g, '');
@@ -135,10 +162,7 @@ export const MfaChallenge: React.FC<MfaChallengeProps> = ({
     const code = codeToVerify || totpDigits.join('');
     if (code.length !== 6 || isSubmitting) return;
 
-    setIsSubmitting(true);
-    setErrorMessage(null);
-
-    try {
+    await runSubmission(async () => {
       const res = await fetch('/api/auth/mfa/totp/verify', {
         method: 'POST',
         headers: {
@@ -152,28 +176,19 @@ export const MfaChallenge: React.FC<MfaChallengeProps> = ({
         credentials: 'include',
       });
 
-      const data = await res.json().catch(() => null);
-
+      const data = await readJson(res);
       if (!res.ok) {
         throw new Error(data?.detail || data?.title || 'Invalid verification code.');
       }
-
-      onSuccess(data as AuthResponse);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Verification failed. Please try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
+      return data as AuthResponse;
+    }, 'Verification failed. Please try again.');
   };
 
   const submitRecovery = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!recoveryCode.trim() || isSubmitting) return;
 
-    setIsSubmitting(true);
-    setErrorMessage(null);
-
-    try {
+    await runSubmission(async () => {
       const res = await fetch('/api/auth/mfa/recovery/verify', {
         method: 'POST',
         headers: {
@@ -186,18 +201,12 @@ export const MfaChallenge: React.FC<MfaChallengeProps> = ({
         credentials: 'include',
       });
 
-      const data = await res.json().catch(() => null);
-
+      const data = await readJson(res);
       if (!res.ok) {
         throw new Error(data?.detail || data?.title || 'Invalid or already used recovery code.');
       }
-
-      onSuccess(data as AuthResponse);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Recovery failed. Please check the code.');
-    } finally {
-      setIsSubmitting(false);
-    }
+      return data as AuthResponse;
+    }, 'Recovery failed. Please check the code.');
   };
 
   return (
@@ -211,7 +220,8 @@ export const MfaChallenge: React.FC<MfaChallengeProps> = ({
         <button
           type="button"
           onClick={onCancel}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-[var(--brand-subtle)] text-[var(--brand-primary)] ring-1 ring-[var(--brand-ring)]/30 hover:bg-[var(--brand-subtle)]/80 transition-all cursor-pointer"
+          disabled={stage === 'verifying' || stage === 'signing-in'}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-[var(--brand-subtle)] text-[var(--brand-primary)] ring-1 ring-[var(--brand-ring)]/30 hover:bg-[var(--brand-subtle)]/80 disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Back</span>
@@ -283,7 +293,13 @@ export const MfaChallenge: React.FC<MfaChallengeProps> = ({
             {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Waiting for Passkey...</span>
+                <span>
+                  {stage === 'prompting'
+                    ? 'Waiting for Passkey...'
+                    : stage === 'verifying'
+                    ? 'Verifying Passkey...'
+                    : 'Signing you in...'}
+                </span>
               </>
             ) : (
               <>
@@ -366,7 +382,7 @@ export const MfaChallenge: React.FC<MfaChallengeProps> = ({
             {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Verifying...</span>
+                <span>{stage === 'signing-in' ? 'Signing you in...' : 'Verifying...'}</span>
               </>
             ) : (
               <>
@@ -445,7 +461,7 @@ export const MfaChallenge: React.FC<MfaChallengeProps> = ({
             {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Verifying Recovery Code...</span>
+                <span>{stage === 'signing-in' ? 'Signing you in...' : 'Verifying Recovery Code...'}</span>
               </>
             ) : (
               <>

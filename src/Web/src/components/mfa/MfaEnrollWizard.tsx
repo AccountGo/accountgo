@@ -28,7 +28,8 @@ interface MfaEnrollWizardProps {
    * Profile typically passes `['totp']`; login forced-enroll omits this (defaults to both).
    */
   allowedMethods?: MfaEnrollMethod[];
-  onSuccess?: (authResponse: AuthResponse) => void;
+  /** Establishes the session and routes onward. Awaited — the wizard stays locked until it settles. */
+  onSuccess?: (authResponse: AuthResponse) => void | Promise<void>;
   onComplete?: () => void;
   onCancel?: () => void;
 }
@@ -61,6 +62,7 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
 
   const [isLoading, setIsLoading] = useState<boolean>(totpAllowed);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isSigningIn, setIsSigningIn] = useState<boolean>(false);
   const [copiedKey, setCopiedKey] = useState<boolean>(false);
   const [copiedCodes, setCopiedCodes] = useState<boolean>(false);
   const [acknowledgedCodes, setAcknowledgedCodes] = useState<boolean>(false);
@@ -190,8 +192,10 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
   };
 
   const handlePasskeyEnroll = async () => {
+    if (isSubmitting) return;
     setIsSubmitting(true);
     setErrorMessage(null);
+    let handedOff = false;
 
     try {
       const beginRes = await mfaFetch('/api/auth/mfa/webauthn/register/options', {
@@ -227,20 +231,34 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
         }
         setStep(3);
       } else if (data.authResponse && onSuccess) {
-        onSuccess(data.authResponse);
+        setIsSigningIn(true);
+        await onSuccess(data.authResponse);
+        // Keep the button locked: the parent navigates away once the session hand-off completes.
+        handedOff = true;
       } else if (onComplete) {
         onComplete();
       }
     } catch (err: any) {
+      setIsSigningIn(false);
       setErrorMessage(err.message || 'Passkey registration failed.');
     } finally {
-      setIsSubmitting(false);
+      if (!handedOff) setIsSubmitting(false);
     }
   };
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
+    if (isSubmitting) return;
     if (fullAuthResponse && onSuccess) {
-      onSuccess(fullAuthResponse);
+      setIsSubmitting(true);
+      setIsSigningIn(true);
+      setErrorMessage(null);
+      try {
+        await onSuccess(fullAuthResponse);
+      } catch (err: any) {
+        setIsSigningIn(false);
+        setIsSubmitting(false);
+        setErrorMessage(err.message || 'We could not finish signing you in. Please try again.');
+      }
     } else if (onComplete) {
       onComplete();
     }
@@ -364,7 +382,7 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Registering Passkey...</span>
+                    <span>{isSigningIn ? 'Signing you in...' : 'Registering Passkey...'}</span>
                   </>
                 ) : (
                   <>
@@ -546,12 +564,21 @@ export const MfaEnrollWizard: React.FC<MfaEnrollWizardProps> = ({
 
           <button
             type="button"
-            disabled={!acknowledgedCodes}
+            disabled={!acknowledgedCodes || isSubmitting}
             onClick={handleFinish}
             className="w-full py-3 px-4 rounded-xl bg-[var(--brand-primary)] text-[var(--brand-text)] font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-[var(--brand-primary)]/25 hover:brightness-110 active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer"
           >
-            <span>Done & Continue</span>
-            <ArrowRight className="w-4 h-4" />
+            {isSigningIn ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Signing you in...</span>
+              </>
+            ) : (
+              <>
+                <span>Done & Continue</span>
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
           </button>
         </div>
       )}

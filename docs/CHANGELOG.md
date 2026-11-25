@@ -33,6 +33,8 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ### Fixed
 
+- Two-step sign-in with a passkey, authenticator code or recovery code keeps its button disabled and shows "Verifying…" then "Signing you in…" until you are signed in, so on a slow connection it no longer looks like nothing happened and invites a second attempt. Errors that come up while finishing sign-in, such as an expired invitation, now show on screen.
+
 - Scanned bills and invoices now read `From:` / `To:` party labels (and strip merged `Order Number` text), and the first scan after a container start no longer drops dates and totals under a cold-start parse timeout.
 
 - Assistant document attachments now extract invoice-style fields even when the PDF uses space-separated labels instead of `Label: Value`, and fall back to masked extracted text when structured fields are still empty.
