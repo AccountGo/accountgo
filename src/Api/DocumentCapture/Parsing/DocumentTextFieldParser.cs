@@ -18,7 +18,7 @@ public sealed record ParsedFields(string FieldsJson, IReadOnlyList<string> Warni
 /// </summary>
 public static class DocumentTextFieldParser
 {
-    public const string RulesVersion = "rules-4";
+    public const string RulesVersion = "rules-5";
 
     private const int MaxTotalInputChars = 8_000;
     private static readonly TimeSpan DefaultParseDeadline = TimeSpan.FromMilliseconds(500);
@@ -122,22 +122,31 @@ public static class DocumentTextFieldParser
         LinearI);
 
     private static readonly Regex BillToLabelRegex = new(
-        @"^(?:bill(?:ed)?\s*to|sold\s*to|customer\s*name|client\s*name|customer|client)(?:\s*[:#\-]\s*(.*)|\s*)$",
+        @"^(?:bill(?:ed)?\s*to|sold\s*to|invoice\s*to|ship\s*to|to|customer\s*name|client\s*name|customer|client)(?:\s*[:#\-]\s*(.*)|\s*)$",
         LinearI);
 
     // E9: BILLED TO / BILL TO / CUSTOMER followed directly by a merged right-column label phrase (not a customer name).
     private static readonly Regex BillToWithTrailingLabelRegex = new(
-        @"^(?:bill(?:ed)?\s*to|sold\s*to|customer\s*name|client\s*name|customer|client)\s+(?:issue\s*date|invoice\s*date|due\s*date|payment\s*due|invoice\s*(?:no\.?|number|#)|terms|date)\b",
+        @"^(?:bill(?:ed)?\s*to|sold\s*to|invoice\s*to|ship\s*to|to|customer\s*name|client\s*name|customer|client)\s+(?:issue\s*date|invoice\s*date|due\s*date|payment\s*due|order\s*(?:no\.?|number|#)|invoice\s*(?:no\.?|number|#)|terms|date)\b",
         LinearI);
 
-    // E9: strip trailing merged right-column label phrase from customer candidate lines.
+    // Issuer labels (From / Vendor / …) for purchase and expense bills when the top-block scan stops on title/invoice-number lines.
+    private static readonly Regex IssuerLabelRegex = new(
+        @"^(?:from|vendor(?:\s*name)?|supplier(?:\s*name)?|sold\s*by|merchant)(?:\s*[:#\-]\s*(.*)|\s*)$",
+        LinearI);
+
+    private static readonly Regex IssuerWithTrailingLabelRegex = new(
+        @"^(?:from|vendor(?:\s*name)?|supplier(?:\s*name)?|sold\s*by|merchant)\s+(?:issue\s*date|invoice\s*date|due\s*date|payment\s*due|order\s*(?:no\.?|number|#)|invoice\s*(?:no\.?|number|#)|terms|date)\b",
+        LinearI);
+
+    // E9: strip trailing merged right-column label phrase from party candidate lines.
     private static readonly Regex TrailingColumnLabelPhraseRegex = new(
-        @"\b(?:issue\s*date|invoice\s*date|due\s*date|payment\s*due|invoice\s*(?:no\.?|number|#)|terms|date)\b.*$",
+        @"\b(?:issue\s*date|invoice\s*date|due\s*date|payment\s*due|order\s*(?:no\.?|number|#)|invoice\s*(?:no\.?|number|#)|terms|date)\b.*$",
         LinearI);
 
     // E6: stop vendor scanning once recipient/customer section begins.
     private static readonly Regex VendorBlockStopRegex = new(
-        @"^(?:bill(?:ed)?\s*to|ship\s*to|customer)\b",
+        @"^(?:bill(?:ed)?\s*to|ship\s*to|invoice\s*to|sold\s*to|to|customer)\b",
         LinearI);
 
     private static readonly Regex VendorPenaltyRegex = new(
@@ -226,6 +235,35 @@ public static class DocumentTextFieldParser
 
     public static ParsedFields Parse(string kind, IReadOnlyList<TextLine> lines) =>
         Parse(kind, lines, TimeProvider.System, DefaultParseDeadline);
+
+    /// <summary>
+    /// Forces JIT of parser and amount/date regexes so the first live capture does not burn the
+    /// cooperative deadline on cold static initialization (G-03 / PARSE_TRUNCATED).
+    /// </summary>
+    public static void Warmup()
+    {
+        TextLine L(string text, int y) => new(1, text, 0, y, 100, y + 1, TextLineSource.Ocr);
+        var lines = new TextLine[]
+        {
+            L("Warmup Co Ltd", 0),
+            L("From:", 1),
+            L("Warmup Vendor LLC Order Number 1", 2),
+            L("To:", 3),
+            L("Warmup Customer LLC", 4),
+            L("Invoice Number WARM-1", 5),
+            L("Invoice Date January 1, 2020", 6),
+            L("Due Date January 15, 2020", 7),
+            L("Consulting services 1 10.00 10.00", 8),
+            L("Sub Total 10.00", 9),
+            L("Tax 1.00", 10),
+            L("Total EUR 11.00", 11),
+            L("IBAN: DE89370400440532013000", 12),
+        };
+        var warmDeadline = TimeSpan.FromSeconds(15);
+        string[] kinds = ["purchase-invoice", "sales-invoice", "expense-receipt", "assistant-attachment", "bank"];
+        foreach (var kind in kinds)
+            _ = Parse(kind, lines, TimeProvider.System, warmDeadline);
+    }
 
     internal static ParsedFields Parse(
         string kind,
@@ -607,6 +645,11 @@ public static class DocumentTextFieldParser
     //   or as a height tie-breaker (>= 1.3x height) among candidates with the same legal-suffix status.
     private static string? ExtractVendorName(List<NormalizedLine> lines)
     {
+        var texts = lines.Select(l => l.Text).ToList();
+        var labeled = ExtractLabeledParty(texts, IssuerLabelRegex, IssuerWithTrailingLabelRegex, skipBillToExclusions: true);
+        if (!string.IsNullOrWhiteSpace(labeled))
+            return labeled;
+
         var page1 = lines.Where(l => l.Page <= 1).Take(12).ToList();
         var candidates = page1.Count > 0 ? page1 : lines.Take(12).ToList();
         if (candidates.Count == 0)
@@ -703,17 +746,26 @@ public static class DocumentTextFieldParser
         return false;
     }
 
-    // K12 + E9: anchored labels, skip Customer Service/ID, ignore merged right-column label phrases, reject digit-heavy / phone-like candidates.
-    private static string? ExtractSalesCustomer(List<string> lines)
+    // K12 + E9 + V-08: anchored recipient labels (including bare To:), skip Customer Service/ID,
+    // ignore merged right-column label phrases, reject digit-heavy / phone-like candidates.
+    private static string? ExtractSalesCustomer(List<string> lines) =>
+        ExtractLabeledParty(lines, BillToLabelRegex, BillToWithTrailingLabelRegex, skipBillToExclusions: false);
+
+    // V-08: shared labeled-party scan for issuer (From/Vendor) and recipient (Bill To/To).
+    private static string? ExtractLabeledParty(
+        List<string> lines,
+        Regex labelRegex,
+        Regex trailingLabelRegex,
+        bool skipBillToExclusions)
     {
         for (var i = 0; i < lines.Count; i++)
         {
             var line = lines[i];
-            if (BillToExclusionRegex.IsMatch(line))
+            if (!skipBillToExclusions && BillToExclusionRegex.IsMatch(line))
                 continue;
 
-            var m = BillToLabelRegex.Match(line);
-            var matchedWithTrailingLabel = !m.Success && BillToWithTrailingLabelRegex.IsMatch(line);
+            var m = labelRegex.Match(line);
+            var matchedWithTrailingLabel = !m.Success && trailingLabelRegex.IsMatch(line);
             if (!m.Success && !matchedWithTrailingLabel)
                 continue;
 

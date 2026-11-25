@@ -911,23 +911,7 @@ public sealed class DocumentTextFieldParserTests(ITestOutputHelper output)
     public void Parse_AssistantAttachment_ProdStyleWordPressInvoiceExtractsFields()
     {
         // Invented layout matching the production Sliced Invoices / WordPress sample shape (merged columns, no colons).
-        var root = ParseAndValidate("assistant-attachment",
-        [
-            Line("Invoice"),
-            Line("Invoice Number INV-3337"),
-            Line("From:"),
-            Line("DEMO - Sliced Invoices Order Number 12345"),
-            Line("Suite 5A-1204 Invoice Date January 25, 2016"),
-            Line("123 Somewhere Street"),
-            Line("Due Date January 31, 2016"),
-            Line("Your City AZ 12345"),
-            Line("Total Due $93.50"),
-            Line("To:"),
-            Line("Test Business"),
-            Line("Sub Total $85.00d"),
-            Line("Tax $8.50i"),
-            Line("Total $93.50a"),
-        ], out _);
+        var root = ParseAndValidate("assistant-attachment", WordPressStyleInvoiceLines(), out _);
 
         var map = root.GetProperty("fields").EnumerateArray()
             .ToDictionary(
@@ -942,6 +926,74 @@ public sealed class DocumentTextFieldParserTests(ITestOutputHelper output)
         Assert.Equal("$93.50", map["Total Due"]);
         Assert.True(map.ContainsKey("Date") || map.ContainsKey("Invoice Date") || map.ContainsKey("Due Date"));
     }
+
+    [Theory]
+    [InlineData("purchase-invoice")]
+    [InlineData("expense-receipt")]
+    [InlineData("sales-invoice")]
+    [Trait("Rule", "V-06")]
+    [Trait("Rule", "V-07")]
+    [Trait("Rule", "V-08")]
+    [Trait("Rule", "T-03")]
+    [Trait("Rule", "D-03")]
+    [Trait("Rule", "N-01")]
+    public void Parse_Financial_ProdStyleWordPressInvoiceExtractsPartiesAndTotals(string kind)
+    {
+        DocumentTextFieldParser.Warmup();
+        var root = ParseAndValidate(kind, WordPressStyleInvoiceLines(), out var warnings);
+
+        Assert.DoesNotContain("PARSE_TRUNCATED", warnings);
+        Assert.Equal("INV-3337",
+            root.GetProperty(kind == "sales-invoice" ? "sourceInvoiceNo" : "vendorInvoiceNo").GetString());
+        Assert.Equal("2016-01-25", root.GetProperty("date").GetString());
+        Assert.Equal("2016-01-31", root.GetProperty("dueDate").GetString());
+
+        var totals = root.GetProperty("sourceTotals");
+        Assert.Equal("93.50", totals.GetProperty("grandTotal").GetString());
+        Assert.Equal("85.00", totals.GetProperty("subtotal").GetString());
+        Assert.Equal("8.50", totals.GetProperty("taxTotal").GetString());
+
+        if (kind == "sales-invoice")
+            Assert.Equal("Test Business", root.GetProperty("customerName").GetString());
+        else
+            Assert.Equal("DEMO - Sliced Invoices", root.GetProperty("vendorName").GetString());
+    }
+
+    [Fact]
+    [Trait("Rule", "V-08")]
+    public void Parse_PurchaseInvoice_V08_PrefersFromLabelOverTopBlockTitle()
+    {
+        var root = ParseAndValidate("purchase-invoice",
+        [
+            Line("Invoice"),
+            Line("Invoice Number INV-9001"),
+            Line("From:"),
+            Line("Harbor Supplies Ltd Order Number 55"),
+            Line("Date: 2026-03-01"),
+            Line("Total: EUR 12.00"),
+        ], out _);
+
+        Assert.Equal("Harbor Supplies Ltd", root.GetProperty("vendorName").GetString());
+        Assert.Equal("INV-9001", root.GetProperty("vendorInvoiceNo").GetString());
+    }
+
+    private static TextLine[] WordPressStyleInvoiceLines() =>
+    [
+        Line("Invoice"),
+        Line("Invoice Number INV-3337"),
+        Line("From:"),
+        Line("DEMO - Sliced Invoices Order Number 12345"),
+        Line("Suite 5A-1204 Invoice Date January 25, 2016"),
+        Line("123 Somewhere Street"),
+        Line("Due Date January 31, 2016"),
+        Line("Your City AZ 12345"),
+        Line("Total Due $93.50"),
+        Line("To:"),
+        Line("Test Business"),
+        Line("Sub Total $85.00d"),
+        Line("Tax $8.50i"),
+        Line("Total $93.50a"),
+    ];
 
     // --- L1: tendered amounts and amountPaid > grandTotal + 0.01 omit amountPaid ---
 
