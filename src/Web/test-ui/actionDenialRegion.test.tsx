@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { MemoryRouter, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ActionDenialRegion, MAX_ACTION_NOTICES } from '../src/components/ActionDenialRegion';
+import { actionNotices } from '../src/lib/actionDenialNotices';
 import { clearAccessDirectoryCache } from '../src/lib/accessDirectory';
 import { PERMISSION_DENIED_EVENT, type PermissionDeniedDetail } from '../src/lib/permissionDenialEvents';
 
@@ -44,8 +45,8 @@ const org = { id: '1', slug: 'acme', role: 'Owner' as string };
 
 const mount = (currentOrg = org) => render(<MemoryRouter initialEntries={['/org/acme/purchases']}><Nav /><ActionDenialRegion currentOrg={currentOrg} /></MemoryRouter>);
 
-beforeEach(() => { authUser.id = 'me'; clearAccessDirectoryCache(); org.role = 'Owner'; serve([owner]); });
-afterEach(() => { cleanup(); vi.clearAllMocks(); });
+beforeEach(() => { authUser.id = 'me'; clearAccessDirectoryCache(); actionNotices.reset(); org.role = 'Owner'; serve([owner]); });
+afterEach(() => { cleanup(); vi.clearAllMocks(); actionNotices.reset(); });
 
 describe('ActionDenialRegion', () => {
   it('is a polite live region that exists before any notice and is never a dialog', async () => {
@@ -188,6 +189,28 @@ describe('ActionDenialRegion', () => {
     deny('sales.invoices.post');
     await screen.findByTestId('action-denial-notice');
     view.rerender(<MemoryRouter initialEntries={['/org/acme/purchases']}><Nav /><ActionDenialRegion currentOrg={{ ...org, id: '2', slug: 'other' }} /></MemoryRouter>);
+    await waitFor(() => expect(screen.queryByTestId('action-denial-notice')).toBeNull());
+  });
+
+  it('keeps its notices when the region remounts inside the same context, as it does when a permission refresh remounts the shell', async () => {
+    const first = mount();
+    deny('purchases.bills.post');
+    await screen.findByTestId('action-denial-notice');
+
+    first.unmount();
+    mount(); // same user, workspace and route
+
+    expect(await screen.findByTestId('action-denial-notice')).toBeTruthy();
+  });
+
+  it('clears the notices when a different user signs in on the same page', async () => {
+    const view = mount();
+    deny('purchases.bills.post');
+    expect(await screen.findByTestId('action-denial-notice')).toBeTruthy();
+
+    view.unmount();
+    authUser.id = 'someone-else';
+    mount();
     await waitFor(() => expect(screen.queryByTestId('action-denial-notice')).toBeNull());
   });
 

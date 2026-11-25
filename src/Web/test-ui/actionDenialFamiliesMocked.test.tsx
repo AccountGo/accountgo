@@ -6,6 +6,7 @@ import { ActionDenialRegion } from '../src/components/ActionDenialRegion';
 import { BooksLockCard } from '../src/components/BooksLockCard';
 import { Members } from '../src/pages/Members';
 import { clearAccessDirectoryCache } from '../src/lib/accessDirectory';
+import { actionNotices } from '../src/lib/actionDenialNotices';
 import { announcePermissionDenial } from '../src/lib/permissionDenialEvents';
 
 // The financials and members families, with the same behaviour as the real authFetch (it announces a permission denial for
@@ -63,7 +64,7 @@ const readableText = () => {
 };
 const RAW_KEY = /\b(?:sales|purchases|financials|banking|inventory|admin|reports)\.[a-z_]+(?:\.[a-z_]+)?\b/;
 
-beforeEach(() => { clearAccessDirectoryCache(); server.writes = []; server.writeMethod = 'POST'; });
+beforeEach(() => { clearAccessDirectoryCache(); actionNotices.reset(); server.writes = []; server.writeMethod = 'POST'; });
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe('a server permission denial on a real action shows the notice (financials and members)', () => {

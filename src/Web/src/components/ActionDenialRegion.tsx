@@ -1,50 +1,32 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useSyncExternalStore } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ShieldAlert, X } from 'lucide-react';
 import { joinRoleNames } from '../lib/accessDirectory';
 import type { ClassifiedProblem } from '../lib/apiProblems';
-import { PERMISSION_DENIED_EVENT, type PermissionDeniedDetail } from '../lib/permissionDenialEvents';
+import { MAX_ACTION_NOTICES, actionNotices } from '../lib/actionDenialNotices';
+import { useAuth } from '../auth/AuthContext';
 import { actionPhrase, areaForPermission } from '../lib/permissionLabels';
 import { useAccessNextStep } from '../lib/useAccessNextStep';
 import type { OrgDetails } from '../types';
 
-export const MAX_ACTION_NOTICES = 3;
-
-interface Notice {
-  id: number;
-  problem: ClassifiedProblem;
-}
-
-let nextId = 1;
+export { MAX_ACTION_NOTICES };
 
 /**
  * Where "you can't do that" lands when the server refuses an action the member just tried (a button that was still visible, or one
  * their roles lost mid-session). It is a quiet, polite live region: never a modal, never takes focus, one notice per permission,
- * at most three, each dismissible. It stays until dismissed, the route changes, the workspace changes or the member signs out
- * (the shell unmounts): a timed notice would fail people who read slowly or use a screen reader.
+ * at most three, each dismissible. It stays until dismissed, the route changes, the workspace changes or the member signs out:
+ * a timed notice would fail people who read slowly or use a screen reader. The notices are held outside React
+ * (lib/actionDenialNotices), so a permission refresh that remounts the shell does not lose them.
  */
 export const ActionDenialRegion: React.FC<{ currentOrg: Pick<OrgDetails, 'id' | 'slug' | 'role'> }> = ({ currentOrg }) => {
-  const [notices, setNotices] = useState<Notice[]>([]);
+  const notices = useSyncExternalStore(actionNotices.subscribe, actionNotices.getSnapshot, actionNotices.getSnapshot);
   const location = useLocation();
+  const { user } = useAuth();
 
+  // A new page, workspace or signed-in user starts clean; a remount inside the same context does not.
   useEffect(() => {
-    const onDenied = (event: Event) => {
-      const detail = (event as CustomEvent<PermissionDeniedDetail>).detail;
-      if (!detail?.action) return; // a denied read is explained by its page
-      const key = detail.problem.requiredPermission ?? '';
-      setNotices((current) => {
-        const kept = current.filter((notice) => (notice.problem.requiredPermission ?? '') !== key);
-        return [...kept, { id: nextId++, problem: detail.problem }].slice(-MAX_ACTION_NOTICES);
-      });
-    };
-    window.addEventListener(PERMISSION_DENIED_EVENT, onDenied);
-    return () => window.removeEventListener(PERMISSION_DENIED_EVENT, onDenied);
-  }, []);
-
-  // A new page or workspace starts clean.
-  useEffect(() => {
-    setNotices([]);
-  }, [location.pathname, currentOrg.id]);
+    actionNotices.enter(`${user?.id ?? ''}|${currentOrg.id}|${location.pathname}`);
+  }, [user?.id, currentOrg.id, location.pathname]);
 
   return (
     <div
@@ -59,7 +41,7 @@ export const ActionDenialRegion: React.FC<{ currentOrg: Pick<OrgDetails, 'id' | 
           key={notice.id}
           problem={notice.problem}
           currentOrg={currentOrg}
-          onDismiss={() => setNotices((current) => current.filter((candidate) => candidate.id !== notice.id))}
+          onDismiss={() => actionNotices.dismiss(notice.id)}
         />
       ))}
     </div>

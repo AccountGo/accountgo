@@ -7,6 +7,7 @@ import { ActionDenialRegion } from '../src/components/ActionDenialRegion';
 import { BankAccountFormDialog } from '../src/components/BankAccountFormDialog';
 import { PartyFormDialog } from '../src/components/PartyFormDialog';
 import { clearAccessDirectoryCache } from '../src/lib/accessDirectory';
+import { actionNotices } from '../src/lib/actionDenialNotices';
 
 // One real component per page family, under the real authFetch (via AuthProvider), with the server refusing the action:
 // the member gets the quiet notice (not a plan dialog, not an extra modal, not a raw permission key).
@@ -83,7 +84,7 @@ async function expectQuietNotice(sentence: RegExp) {
 
 const submit = (container: HTMLElement) => fireEvent.click(container.querySelector('button[type="submit"]') as HTMLButtonElement);
 
-beforeEach(() => { clearAccessDirectoryCache(); writeMethod = 'POST'; });
+beforeEach(() => { clearAccessDirectoryCache(); actionNotices.reset(); writeMethod = 'POST'; });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe('a server permission denial on a real action shows the notice', () => {
