@@ -14,7 +14,7 @@ type RequestState = 'idle' | 'sending' | 'sent' | 'failed';
  * Shown in place of a page that could not load because the viewer's roles do not include it. It says what is locked, which roles
  * open it and what to do next. It never shows data, and never says whether a record exists (a missing record is a plain "not found").
  */
-export const NoAccess: React.FC<{ problem: ClassifiedProblem; headingLevel?: 1 | 2 }> = ({ problem, headingLevel = 2 }) => {
+export const NoAccess: React.FC<{ problem: ClassifiedProblem; headingLevel?: 1 | 2; area?: string }> = ({ problem, headingLevel = 2, area: areaName }) => {
   const { currentOrg } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -23,9 +23,9 @@ export const NoAccess: React.FC<{ problem: ClassifiedProblem; headingLevel?: 1 |
   // A ref, not state: two clicks before the next render must still send one request.
   const sentRef = useRef(false);
   const [requestState, setRequestState] = useState<RequestState>('idle');
-  const directory = useAccessDirectory(problem.requiredPermission);
+  const directory = useAccessDirectory(problem.requiredAnyOf ?? problem.requiredPermission);
 
-  const area = areaForPermission(problem.requiredPermission) ?? 'this page';
+  const area = areaName ?? areaForPermission(problem.requiredPermission) ?? 'this page';
   const role = currentOrg.role;
   const isAdmin = role === 'Owner' || role === 'Admin';
   const slug = encodeURIComponent(currentOrg.slug);

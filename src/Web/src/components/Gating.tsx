@@ -2,6 +2,7 @@ import React from 'react';
 import { useOutletContext, Link } from 'react-router-dom';
 import { Lock, Sparkles, ArrowRight, ShieldAlert } from 'lucide-react';
 import { ModuleKey, TenantContextType } from '../types';
+import { NoAccess } from './NoAccess';
 import {
   FEATURE_BANKING_STATEMENT_IMPORT,
   useCapabilities,
@@ -374,24 +375,24 @@ export const ModuleLockedCard: React.FC<{ module: ModuleKey; orgSlug?: string }>
   );
 };
 
+/**
+ * Shown in place of an area or action the member's roles do not include. It is the "No access" view (which says what is locked and
+ * how to get it) and never prints a permission key. A value that is not a permission key falls back to the role notice.
+ */
 export const PermissionDeniedCard: React.FC<{ permission?: string }> = ({ permission }) => {
-  return (
-    <div className="w-full max-w-md mx-auto my-12 p-8 rounded-3xl bg-[var(--bg-surface)] backdrop-blur-2xl shadow-xl text-center animate-fade-in">
-      <div className="w-14 h-14 mx-auto mb-5 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
-        <ShieldAlert className="w-7 h-7" />
-      </div>
-
-      <h3 className="text-xl font-bold text-[var(--text-main)] mb-2">
-        Access Restricted
-      </h3>
-
-      <p className="text-sm text-[var(--text-secondary)] leading-relaxed mb-6">
-        Your role does not have the necessary permissions ({permission || 'authorized role'}) to access this action.
-      </p>
-
-      <p className="text-xs text-[var(--text-muted)]">
-        Contact your workspace administrator to request access.
-      </p>
-    </div>
-  );
+  if (permission && /^[a-z_]+(\.[a-z_]+)+$/.test(permission)) {
+    return <NoAccess problem={{ category: 'permission-denied', status: 403, requiredPermission: permission }} />;
+  }
+  return <RoleRestrictedCard />;
 };
+
+/** For the few areas that follow the workspace role (Owner or Admin), not a functional permission. Names no key or policy. */
+export const RoleRestrictedCard: React.FC = () => (
+  <section data-testid="role-restricted" className="w-full max-w-md mx-auto my-12 p-8 rounded-3xl bg-[var(--bg-surface)] shadow-xl text-center space-y-3">
+    <div className="w-14 h-14 mx-auto rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center" aria-hidden="true">
+      <ShieldAlert className="w-7 h-7" />
+    </div>
+    <h2 className="text-xl font-bold text-[var(--text-main)]">This area is for workspace owners and admins</h2>
+    <p className="text-sm text-[var(--text-secondary)] leading-relaxed">Ask an owner or admin of this workspace if you need something changed here.</p>
+  </section>
+);

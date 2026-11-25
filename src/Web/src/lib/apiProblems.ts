@@ -84,6 +84,8 @@ export interface ClassifiedProblem {
   code?: string;
   /** For permission-denied: the permission the server says is missing. */
   requiredPermission?: string;
+  /** For a denial raised by the client route guard: every permission that would have opened the page (any one of them). */
+  requiredAnyOf?: string[];
   requestId?: string;
   title?: string;
   detail?: string;

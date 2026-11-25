@@ -2,8 +2,9 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Members } from '../src/pages/Members';
 
-const { authFetch, currentOrg, caller, hasModule, urlSearch, setSearchParams } = vi.hoisted(() => ({
+const { authFetch, currentOrg, caller, hasModule, urlSearch, setSearchParams, refreshHolder } = vi.hoisted(() => ({
   authFetch: vi.fn(),
+  refreshHolder: { fn: undefined as undefined | ((options?: { force?: boolean }) => Promise<boolean>) },
   urlSearch: { value: '' },
   setSearchParams: vi.fn(),
   currentOrg: { id: '1', name: 'Test workspace', slug: 'test' },
@@ -15,7 +16,7 @@ vi.mock('../src/auth/AuthContext', () => ({
   useAuth: () => ({ authFetch, user: { id: 'owner', email: 'owner@example.com' } }),
 }));
 vi.mock('react-router-dom', () => ({
-  useOutletContext: () => ({ currentOrg, hasModule }),
+  useOutletContext: () => ({ currentOrg, hasModule, refreshPermissions: refreshHolder.fn }),
   useNavigate: () => vi.fn(),
   useSearchParams: () => [new URLSearchParams(urlSearch.value), setSearchParams],
 }));
@@ -24,6 +25,7 @@ vi.mock('../src/lib/entitlements', () => ({
 }));
 
 beforeEach(() => {
+  refreshHolder.fn = undefined;
   urlSearch.value = '';
   caller.role = 'Owner';
   hasModule.mockImplementation((_module: string) => true);
@@ -475,4 +477,24 @@ it('clears the link parameters and opens no form when the role catalog cannot be
   expect(next.get('access')).toBeNull();
   expect(next.get('grant')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Save and activate roles' })).toBeNull();
+});
+
+it('re-reads the member\'s permissions through the shared forced refresh after setting up their own access', async () => {
+  const refresh = vi.fn(async (_options?: { force?: boolean }) => true);
+  refreshHolder.fn = refresh;
+  authFetch.mockImplementation(async (url: string, options?: RequestInit) => {
+    if (options?.method === 'POST') return new Response(null, { status: 200 });
+    const value = url === '/api/organizations/current' ? { role: 'Owner' }
+      : url.endsWith('/access-setup/status') ? { ownerCanManageOwnAccess: true, isEligibleForBootstrap: false }
+      : url.endsWith('/security-roles') ? [{ id: '3', name: 'Accountant', displayName: 'Accountant' }]
+      : [];
+    return new Response(JSON.stringify(value), { status: 200 });
+  });
+  render(<Members />);
+  fireEvent.click((await screen.findAllByRole('button', { name: 'Set up my access' }))[0]);
+  fireEvent.click(screen.getByLabelText('Accountant'));
+  fireEvent.click(screen.getByRole('button', { name: 'Save and activate roles' }));
+
+  await waitFor(() => expect(refresh).toHaveBeenCalledWith({ force: true }));
+  expect(refresh).toHaveBeenCalledTimes(1);
 });

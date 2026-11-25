@@ -55,9 +55,10 @@ function permissionNames(role: RawRole): string[] {
  * The roles that grant a permission, least powerful first (fewest permissions, then by name). "Full workspace access" only
  * leads when it is the only role that grants it.
  */
-export function grantingRolesFor(roles: RawRole[], permission: string): GrantingRole[] {
+export function grantingRolesFor(roles: RawRole[], permission: string | string[]): GrantingRole[] {
+  const wanted = Array.isArray(permission) ? permission : [permission];
   const granting = roles
-    .filter((role) => role.id && permissionNames(role).includes(permission))
+    .filter((role) => role.id && permissionNames(role).some((name) => wanted.includes(name)))
     .map((role) => ({
       id: role.id as string,
       name: role.name ?? '',
@@ -113,7 +114,7 @@ export function clearAccessDirectoryCache(): void {
  * Members and the role catalog are read once per workspace and shared (a page that shows "No access" several times, or a
  * redraw, does not fetch again). A failure is remembered for the same minute, so there is no retry loop.
  */
-export function useAccessDirectory(permission: string | null | undefined, enabled = true): AccessDirectory & { markRequested: (roleId: string) => void } {
+export function useAccessDirectory(permission: string | string[] | null | undefined, enabled = true): AccessDirectory & { markRequested: (roleId: string) => void } {
   const { authFetch, user } = useAuth();
   const slug = (typeof window === 'undefined' ? null : getOrgSlugFromLocation()) ?? '';
   const [fetched, setFetched] = useState<Fetched | null | undefined>(undefined);
@@ -161,7 +162,7 @@ export function useAccessDirectory(permission: string | null | undefined, enable
   if (!fetched) {
     return { grantingRoles: [], adminNames: [], activeMemberCount: 0, pendingRequest: false, loaded: false, markRequested };
   }
-  const grantingRoles = permission ? grantingRolesFor(fetched.roles, permission) : [];
+  const grantingRoles = permission && permission.length > 0 ? grantingRolesFor(fetched.roles, permission) : [];
   const chosen = grantingRoles[0];
   const pendingRequest = Boolean(
     chosen

@@ -1,5 +1,5 @@
 import React from 'react';
-import { createBrowserRouter, RouterProvider, Navigate, Link, useParams, useSearchParams } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate, Link, useParams, useSearchParams, type RouteObject } from 'react-router-dom';
 import OrgLayout from './layouts/OrgLayout';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
@@ -42,11 +42,13 @@ import ReconcilePage from './pages/Reconcile';
 import NotFound from './pages/NotFound';
 import ProtectedRoute from './components/ProtectedRoute';
 import {
-  PermissionDeniedCard,
+  RoleRestrictedCard,
   RequiresModule,
   RequiresStatementImport,
   useTenantContext,
 } from './components/Gating';
+import { RouteGuard } from './components/RouteGuard';
+import { publicInWorkspace, requires, requiresAny } from './lib/routeAccess';
 import { useAuth } from './auth/AuthContext';
 import { getPersistedOrgSlug } from './lib/storage';
 import { Loader2 } from 'lucide-react';
@@ -83,7 +85,7 @@ const WorkspaceSettings: React.FC = () => {
     return <><h1 className="text-xl font-bold mb-4">Organization Settings</h1><IntegrationsSettingsTab /></>;
   return currentOrg.role === 'Owner' || currentOrg.role === 'Admin'
     ? <Settings />
-    : <PermissionDeniedCard permission="Owner or Admin" />;
+    : <RoleRestrictedCard />;
 };
 
 // Accounting and invoicing each get a product-shaped dashboard.
@@ -98,7 +100,359 @@ const LegacyInventoryRedirect: React.FC = () => {
   return <Navigate to={itemId ? `${base}/${itemId}` : base} replace />;
 };
 
-const router = createBrowserRouter([
+/**
+ * The routes inside a workspace. Each one declares what it needs from the member (`handle.access`): a permission, one of several,
+ * or `publicInWorkspace` with a reason. A test fails if one declares nothing, so a new page cannot ship without an answer.
+ */
+export const orgRoutes: RouteObject[] = [
+  {
+    path: '',
+    element: <Navigate to="dashboard" replace />,
+  },
+  {
+    path: 'dashboard',
+    handle: publicInWorkspace('Landing page and the way back from every No-access view; guarding it would loop.'),
+    element: <WorkspaceHome />,
+  },
+  {
+    path: 'settings',
+    handle: publicInWorkspace('Gated by its own Owner/Admin check, with permission checks per tab inside.'),
+    element: <WorkspaceSettings />,
+  },
+  {
+    path: 'financials',
+    handle: requires('financials.journal.view', 'General ledger'),
+    element: (
+      <RequiresModule module="financials">
+        <RouteGuard><GeneralLedger /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'financials/journals',
+    handle: requires('financials.journal.view', 'Journal entries'),
+    element: (
+      <RequiresModule module="financials">
+        <RouteGuard><JournalEntries /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'financials/year-end',
+    handle: requiresAny(['financials.accounts.view', 'financials.periods.close'], 'Year-end close'),
+    element: (
+      <RequiresModule module="financials">
+        <RouteGuard><YearEndClosePage /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'financials/accounts',
+    handle: requires('financials.accounts.view', 'Chart of accounts'),
+    element: (
+      <RequiresModule module="financials">
+        <RouteGuard><ChartOfAccounts /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'banking',
+    handle: requires('banking.accounts.view', 'Banking'),
+    element: (
+      <RequiresModule module={['sales', 'purchases', 'financials']}>
+        <RouteGuard><Banking /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'banking/transactions',
+    handle: requires('banking.accounts.view', 'Bank transactions'),
+    element: (
+      <RequiresModule module="financials">
+        <RouteGuard><BankingTransactionsPage /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'banking/reconcile',
+    handle: requires('banking.accounts.view', 'Bank reconciliation'),
+    element: (
+      <RequiresModule module="financials">
+        <RouteGuard><ReconciliationHistoryPage /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'banking/:bankId/reconcile/:reconId',
+    handle: requires('banking.accounts.view', 'Bank reconciliation'),
+    element: (
+      <RequiresModule module="financials">
+        <RouteGuard><ReconcilePage /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'banking/:bankId/reconcile',
+    handle: requires('banking.accounts.view', 'Bank reconciliation'),
+    element: (
+      <RequiresModule module="financials">
+        <RouteGuard><ReconcilePage /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'banking/needs-review',
+    handle: requires('banking.accounts.view', 'Incoming review'),
+    element: <RequiresStatementImport><RouteGuard><IncomingReview /></RouteGuard></RequiresStatementImport>,
+  },
+  {
+    path: 'banking/:bankId/statement-import',
+    handle: requires('banking.accounts.view', 'Statement import'),
+    element: (
+      <RequiresStatementImport>
+        <RouteGuard><BankStatementImportPage /></RouteGuard>
+      </RequiresStatementImport>
+    ),
+  },
+  {
+    path: 'banking/:bankId',
+    handle: requires('banking.accounts.view', 'Bank account'),
+    element: (
+      <RequiresModule module={['sales', 'purchases', 'financials']}>
+        <RouteGuard><BankRegisterPage /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'sales',
+    handle: requires('sales.invoices.view', 'Invoices'),
+    element: (
+      <RequiresModule module="sales">
+        <RouteGuard><Invoices /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'sales/new',
+    handle: requires('sales.invoices.create', 'New invoice'),
+    element: (
+      <RequiresModule module="sales">
+        <RouteGuard><InvoiceEdit /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'sales/clients',
+    handle: requires('sales.customers.view', 'Clients'),
+    element: (
+      <RequiresModule module="sales">
+        <RouteGuard><Parties role="client" /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'sales/clients/:partyId',
+    handle: requires('sales.customers.view', 'Clients'),
+    element: (
+      <RequiresModule module="sales">
+        <RouteGuard><PartyDetail role="client" /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'sales/recurring',
+    handle: requires('sales.invoices.view', 'Recurring invoices'),
+    element: (
+      <RequiresModule module="sales">
+        <RouteGuard><RecurringSchedules /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'sales/recurring/new',
+    handle: requires('sales.invoices.create', 'Recurring invoices'),
+    element: (
+      <RequiresModule module="sales">
+        <RouteGuard><RecurringScheduleEdit /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'sales/recurring/:scheduleId',
+    handle: requires('sales.invoices.view', 'Recurring invoices'),
+    element: (
+      <RequiresModule module="sales">
+        <RouteGuard><RecurringScheduleDetailPage /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'sales/recurring/:scheduleId/edit',
+    handle: requires('sales.invoices.create', 'Recurring invoices'),
+    element: (
+      <RequiresModule module="sales">
+        <RouteGuard><RecurringScheduleEdit isEdit={true} /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'sales/credits',
+    handle: requires('sales.credits.view', 'Sales credits'),
+    element: (
+      <RequiresModule module="sales">
+        <RouteGuard><CreditsAndSettlements side="sales" /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'purchases/credits',
+    handle: requires('purchases.credits.view', 'Vendor credits'),
+    element: (
+      <RequiresModule module="purchases">
+        <RouteGuard><CreditsAndSettlements side="purchasing" /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'sales/:invoiceId',
+    handle: requires('sales.invoices.view', 'Invoices'),
+    element: (
+      <RequiresModule module="sales">
+        <RouteGuard><InvoiceDetail /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'sales/:invoiceId/edit',
+    handle: requires('sales.invoices.create', 'Invoices'),
+    element: (
+      <RequiresModule module="sales">
+        <RouteGuard><InvoiceEdit isEdit={true} /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'items',
+    handle: requires('inventory.items.view', 'Products and services'),
+    element: (
+      <RequiresModule module={['sales', 'purchases']}>
+        <RouteGuard><ProductsServices /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'items/inventory',
+    handle: requires('inventory.items.view', 'Stock'),
+    element: (
+      <RequiresModule module="inventory">
+        <RouteGuard><Inventory /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'items/inventory/:itemId',
+    handle: requires('inventory.items.view', 'Stock'),
+    element: (
+      <RequiresModule module="inventory">
+        <RouteGuard><Inventory /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'inventory',
+    handle: publicInWorkspace('Redirects to the stock page and loads no data.'),
+    element: <LegacyInventoryRedirect />,
+  },
+  {
+    path: 'inventory/:itemId',
+    handle: publicInWorkspace('Redirects to the stock page and loads no data.'),
+    element: <LegacyInventoryRedirect />,
+  },
+  {
+    path: 'purchases',
+    handle: requires('purchases.bills.view', 'Bills'),
+    element: (
+      <RequiresModule module="purchases">
+        <RouteGuard><Bills /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'purchases/new',
+    handle: requires('purchases.bills.create', 'New bill'),
+    element: (
+      <RequiresModule module="purchases">
+        <RouteGuard><BillEdit /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'purchases/:billId',
+    handle: requires('purchases.bills.view', 'Bills'),
+    element: (
+      <RequiresModule module="purchases">
+        <RouteGuard><BillDetail /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'purchases/:billId/edit',
+    handle: requires('purchases.bills.create', 'Bills'),
+    element: (
+      <RequiresModule module="purchases">
+        <RouteGuard><BillEdit isEdit={true} /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'purchases/vendors',
+    handle: requires('purchases.vendors.view', 'Vendors'),
+    element: (
+      <RequiresModule module="purchases">
+        <RouteGuard><Parties role="vendor" /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'purchases/vendors/:partyId',
+    handle: requires('purchases.vendors.view', 'Vendors'),
+    element: (
+      <RequiresModule module="purchases">
+        <RouteGuard><PartyDetail role="vendor" /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'reports',
+    handle: requires('reports.view', 'Reports'),
+    element: (
+      <RequiresModule module="reports">
+        <RouteGuard><Reports /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'tax',
+    handle: requires('reports.view', 'Tax'),
+    element: (
+      <RequiresModule module={['sales', 'purchases', 'financials', 'reports']}>
+        <RouteGuard><Tax /></RouteGuard>
+      </RequiresModule>
+    ),
+  },
+  {
+    path: 'members',
+    handle: publicInWorkspace('Every member may view the member list, and it hosts the access request and setup flows.'),
+    element: <Members />,
+  },
+  {
+    path: 'profile',
+    handle: publicInWorkspace("The signed-in user's own account."),
+    element: <Profile />,
+  },
+];
+
+export const appRoutes: RouteObject[] = [
   {
     path: '/',
     element: <RootRedirect />,
@@ -148,312 +502,7 @@ const router = createBrowserRouter([
       {
         path: '/org/:orgSlug',
         element: <OrgLayout />,
-        children: [
-          {
-            path: '',
-            element: <Navigate to="dashboard" replace />,
-          },
-          {
-            path: 'dashboard',
-            element: <WorkspaceHome />,
-          },
-          {
-            path: 'settings',
-            element: <WorkspaceSettings />,
-          },
-          {
-            path: 'financials',
-            element: (
-              <RequiresModule module="financials">
-                <GeneralLedger />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'financials/journals',
-            element: (
-              <RequiresModule module="financials">
-                <JournalEntries />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'financials/year-end',
-            element: (
-              <RequiresModule module="financials">
-                <YearEndClosePage />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'financials/accounts',
-            element: (
-              <RequiresModule module="financials">
-                <ChartOfAccounts />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'banking',
-            element: (
-              <RequiresModule module={['sales', 'purchases', 'financials']}>
-                <Banking />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'banking/transactions',
-            element: (
-              <RequiresModule module="financials">
-                <BankingTransactionsPage />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'banking/reconcile',
-            element: (
-              <RequiresModule module="financials">
-                <ReconciliationHistoryPage />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'banking/:bankId/reconcile/:reconId',
-            element: (
-              <RequiresModule module="financials">
-                <ReconcilePage />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'banking/:bankId/reconcile',
-            element: (
-              <RequiresModule module="financials">
-                <ReconcilePage />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'banking/needs-review',
-            element: <RequiresStatementImport><IncomingReview /></RequiresStatementImport>,
-          },
-          {
-            path: 'banking/:bankId/statement-import',
-            element: (
-              <RequiresStatementImport>
-                <BankStatementImportPage />
-              </RequiresStatementImport>
-            ),
-          },
-          {
-            path: 'banking/:bankId',
-            element: (
-              <RequiresModule module={['sales', 'purchases', 'financials']}>
-                <BankRegisterPage />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'sales',
-            element: (
-              <RequiresModule module="sales">
-                <Invoices />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'sales/new',
-            element: (
-              <RequiresModule module="sales">
-                <InvoiceEdit />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'sales/clients',
-            element: (
-              <RequiresModule module="sales">
-                <Parties role="client" />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'sales/clients/:partyId',
-            element: (
-              <RequiresModule module="sales">
-                <PartyDetail role="client" />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'sales/recurring',
-            element: (
-              <RequiresModule module="sales">
-                <RecurringSchedules />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'sales/recurring/new',
-            element: (
-              <RequiresModule module="sales">
-                <RecurringScheduleEdit />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'sales/recurring/:scheduleId',
-            element: (
-              <RequiresModule module="sales">
-                <RecurringScheduleDetailPage />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'sales/recurring/:scheduleId/edit',
-            element: (
-              <RequiresModule module="sales">
-                <RecurringScheduleEdit isEdit={true} />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'sales/credits',
-            element: (
-              <RequiresModule module="sales">
-                <CreditsAndSettlements side="sales" />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'purchases/credits',
-            element: (
-              <RequiresModule module="purchases">
-                <CreditsAndSettlements side="purchasing" />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'sales/:invoiceId',
-            element: (
-              <RequiresModule module="sales">
-                <InvoiceDetail />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'sales/:invoiceId/edit',
-            element: (
-              <RequiresModule module="sales">
-                <InvoiceEdit isEdit={true} />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'items',
-            element: (
-              <RequiresModule module={['sales', 'purchases']}>
-                <ProductsServices />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'items/inventory',
-            element: (
-              <RequiresModule module="inventory">
-                <Inventory />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'items/inventory/:itemId',
-            element: (
-              <RequiresModule module="inventory">
-                <Inventory />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'inventory',
-            element: <LegacyInventoryRedirect />,
-          },
-          {
-            path: 'inventory/:itemId',
-            element: <LegacyInventoryRedirect />,
-          },
-          {
-            path: 'purchases',
-            element: (
-              <RequiresModule module="purchases">
-                <Bills />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'purchases/new',
-            element: (
-              <RequiresModule module="purchases">
-                <BillEdit />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'purchases/:billId',
-            element: (
-              <RequiresModule module="purchases">
-                <BillDetail />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'purchases/:billId/edit',
-            element: (
-              <RequiresModule module="purchases">
-                <BillEdit isEdit={true} />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'purchases/vendors',
-            element: (
-              <RequiresModule module="purchases">
-                <Parties role="vendor" />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'purchases/vendors/:partyId',
-            element: (
-              <RequiresModule module="purchases">
-                <PartyDetail role="vendor" />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'reports',
-            element: (
-              <RequiresModule module="reports">
-                <Reports />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'tax',
-            element: (
-              <RequiresModule module={['sales', 'purchases', 'financials', 'reports']}>
-                <Tax />
-              </RequiresModule>
-            ),
-          },
-          {
-            path: 'members',
-            element: <Members />,
-          },
-          {
-            path: 'profile',
-            element: <Profile />,
-          },
-        ],
+        children: orgRoutes,
       },
     ],
   },
@@ -461,7 +510,9 @@ const router = createBrowserRouter([
     path: '*',
     element: <NotFound />,
   },
-]);
+];
+
+const router = createBrowserRouter(appRoutes);
 
 export function App() {
   return <RouterProvider router={router} />;
