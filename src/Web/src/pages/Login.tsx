@@ -1,8 +1,8 @@
-import { safeReturnPath } from '../lib/safeReturnPath';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { getPersistedOrgSlug, setPersistedOrgSlug } from '../lib/storage';
+import { safeReturnPath } from '../lib/safeReturnPath';
 import { resolvePostAuthDestination } from './loginContinuation';
 import { clearInvitationToken, getInvitationToken, storeInvitationToken } from '../lib/invitationStorage';
 import { GoogleSignInButton } from '../components/GoogleSignInButton';

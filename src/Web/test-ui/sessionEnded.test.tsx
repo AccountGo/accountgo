@@ -121,4 +121,29 @@ describe('a session that ends because the refresh failed', () => {
 
     expect(actionNotices.getSnapshot()).toHaveLength(0);
   });
+
+  it('says the service could not be reached, not that the session ended, when the refresh got no answer before the deadline', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      let booted = false;
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input).includes('/api/auth/refresh')) {
+          if (!booted) { booted = true; return signedIn(); }
+          vi.setSystemTime(Date.now() + 10 * 60_000); // past the start-up deadline
+          return new Response('{}', { status: 503, headers: { 'Retry-After': '0' } });
+        }
+        return new Response('{}', { status: 401 });
+      }) as typeof fetch;
+      mount();
+      await screen.findByTestId('page');
+
+      await act(async () => { await auth.authFetch('/api/Sales/Invoices'); });
+
+      expect(await screen.findByTestId('login')).toBeTruthy();
+      expect(screen.getByTestId('notice').textContent).toBe("We couldn't reach AccountGo to keep you signed in. Sign in again to continue. Anything you hadn't saved wasn't kept.");
+      expect(screen.getByTestId('notice').textContent).not.toContain('session ended');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -14,8 +14,11 @@ const CHANNEL_NAME = 'accountgo-activity';
 
 export const ACTIVITY_EVENTS = ['pointermove', 'pointerdown', 'keydown', 'wheel', 'scroll', 'touchstart'] as const;
 
-/** 'revoked': the server refused the session's refresh (revoked, signed out elsewhere, token gone) while someone was signed in. */
-export type SignOutReason = 'idle' | 'expired' | 'revoked';
+/**
+ * 'revoked': the server refused the session's refresh (revoked, signed out elsewhere, token gone) while someone was signed in.
+ * 'unreachable': the refresh got no answer before the start-up deadline, so the session could not be kept (it may still be valid).
+ */
+export type SignOutReason = 'idle' | 'expired' | 'revoked' | 'unreachable';
 export type SessionWarning = { kind: 'idle' | 'expiry'; deadline: number } | null;
 
 type Message =

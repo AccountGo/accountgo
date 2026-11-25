@@ -85,6 +85,7 @@ function describeDuration(ms: number): string {
 
 export function signedOutNotice(reason: SignOutReason, idleMs: number): string {
   if (reason === 'revoked') return "Your session ended. Sign in again to continue. Anything you hadn't saved wasn't kept.";
+  if (reason === 'unreachable') return "We couldn't reach AccountGo to keep you signed in. Sign in again to continue. Anything you hadn't saved wasn't kept.";
   return reason === 'idle'
     ? `You were signed out after ${describeDuration(idleMs)} of inactivity. Sign in to continue where you left off.`
     : 'For your security, your session reached its time limit. Sign in to continue where you left off.';
@@ -137,12 +138,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   }, []);
 
-  // The server refused the refresh. If someone was signed in, say so once on the sign-in page (same path as idle/expired);
+  // The refresh failed for good: the server refused it ('revoked') or could not be reached before the start-up deadline
+  // ('unreachable', the session itself may be fine). If someone was signed in, say so once on the sign-in page (same path as idle/expired);
   // a visitor who was never signed in (the first refresh on page load) gets no notice. The single-flight refresh means
   // many concurrent 401s arrive here once; the first notice wins.
-  const endSessionAfterFailedRefresh = useCallback(() => {
+  const endSessionAfterFailedRefresh = useCallback((reason: 'revoked' | 'unreachable') => {
     if (tokenRef.current !== null) {
-      setSignedOutNoticeText((current) => current ?? signedOutNotice('revoked', 0));
+      setSignedOutNoticeText((current) => current ?? signedOutNotice(reason, 0));
     }
     clearSession();
   }, [clearSession]);
@@ -190,8 +192,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             applySessionLimits(data);
             return data.accessToken;
           }
-          if ((res && res.status < 500) || Date.now() >= deadline) {
-            endSessionAfterFailedRefresh();
+          if (res && res.status < 500) {
+            endSessionAfterFailedRefresh('revoked');
+            return null;
+          }
+          if (Date.now() >= deadline) {
+            endSessionAfterFailedRefresh('unreachable');
             return null;
           }
 
@@ -361,7 +367,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(authData.user);
     applySessionLimits(authData);
     return { type: 'success', data: authData };
-  }, [applySessionLimits, endSessionAfterFailedRefresh]);
+  }, [applySessionLimits]);
 
   const completeSession = useCallback((authData: AuthResponse) => {
     lastRefreshedOrgSlugRef.current = null;
