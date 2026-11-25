@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -732,8 +733,10 @@ public sealed class SalesInvoiceCaptureReviewTests : MultiTenancyPhase3TestBase
     public async Task SaveSalesInvoice_Issue_WhenAuditServiceThrows_StillReturns200OpenAndLogsSafeWarning()
     {
         var customerId = await SeedCustomerAsync("Audit Throw Sales Client");
+        // Use today so display status stays Open (past invoice dates flip to Overdue).
+        var invoiceDate = DateTime.UtcNow.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         var (captureId, _) = SeedSalesCapture(
-            acceptedFieldsJson: """{"date":"2026-11-10","sourceTotals":{"grandTotal":"100.00","priceBasis":"exclusive"}}""");
+            acceptedFieldsJson: $"{{\"date\":\"{invoiceDate}\",\"sourceTotals\":{{\"grandTotal\":\"100.00\",\"priceBasis\":\"exclusive\"}}}}");
 
         var logSink = new CapturingLoggerProvider();
         using var customFactory = _factory.WithWebHostBuilder(builder =>
@@ -752,7 +755,7 @@ public sealed class SalesInvoiceCaptureReviewTests : MultiTenancyPhase3TestBase
         var payload = $$"""
         {
           "customerId": "{{PubId<Customer>(customerId)}}",
-          "invoiceDate": "2026-11-10",
+          "invoiceDate": "{{invoiceDate}}",
           "status": "Open",
           "salesInvoiceLines": [{ "itemDescription": "Consulting", "quantity": 1, "amount": 145.67 }],
           "captureReviews": [{

@@ -4,6 +4,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -776,8 +777,10 @@ public sealed class PurchasingBillCaptureReviewTests : MultiTenancyPhase3TestBas
     public async Task SaveBill_Approve_WhenAuditServiceThrows_StillReturns200OpenAndLogsSafeWarning()
     {
         var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Audit Throw Vendor" });
+        // Use today so display status stays Open (past bill dates flip to Overdue).
+        var billDate = DateTime.UtcNow.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         var (captureId, _) = SeedCapture(
-            acceptedFieldsJson: """{"date":"2026-11-10","sourceTotals":{"grandTotal":"100.00","priceBasis":"exclusive"}}""");
+            acceptedFieldsJson: $"{{\"date\":\"{billDate}\",\"sourceTotals\":{{\"grandTotal\":\"100.00\",\"priceBasis\":\"exclusive\"}}}}");
 
         var logSink = new CapturingLoggerProvider();
         using var customFactory = _factory.WithWebHostBuilder(builder =>
@@ -796,7 +799,7 @@ public sealed class PurchasingBillCaptureReviewTests : MultiTenancyPhase3TestBas
         var payload = $$"""
         {
           "vendorId": "{{PubId<Vendor>(vendor.Id)}}",
-          "date": "2026-11-10",
+          "date": "{{billDate}}",
           "status": "Open",
           "lines": [{ "description": "Supplies", "quantity": 1, "amount": 135.42 }],
           "captureReviews": [{
