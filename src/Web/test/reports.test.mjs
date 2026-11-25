@@ -51,7 +51,7 @@ test('the reports route renders all statement controls and respects reports.view
   assert.ok(html.includes('Loading financial reports...'));
   assert.ok(!html.includes('Reconciled'));
   const denied = render(false);
-  assert.ok(denied.includes('Access Restricted'));
+  assert.ok(denied.includes('have access to'));
   assert.ok(!denied.includes('Export CSV'));
   assert.ok(!denied.includes('Download PDF'));
 });

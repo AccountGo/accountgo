@@ -48,7 +48,7 @@ function renderPage(Component, permissions, path = '/org/ws-one/financials') {
 
 test('financials mounts the ledger, keeps the module gate, and uses journal-view navigation', async () => {
   const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
-  assert.match(app, /path: 'financials',[\s\S]*?<RequiresModule module="financials">\s*<GeneralLedger/);
+  assert.match(app, /path: 'financials',[\s\S]*?<RequiresModule module="financials">\s*<RouteGuard><GeneralLedger/);
   assert.ok(!app.includes('PlaceholderView'));
   assert.match(app, /path: 'financials\/journals'/);
   await assert.rejects(() => readFile(new URL('../src/pages/PlaceholderView.tsx', import.meta.url)));
@@ -60,7 +60,7 @@ test('financials mounts the ledger, keeps the module gate, and uses journal-view
 
 test('ledger page denies account-only users and exposes working register actions by permission', () => {
   const denied = renderPage(GeneralLedger, ['financials.accounts.view']);
-  assert.ok(denied.includes('Access Restricted'));
+  assert.ok(denied.includes('have access to'));
   assert.ok(!denied.includes('Export CSV'));
   const view = renderPage(GeneralLedger, ['financials.journal.view']);
   for (const label of ['General Ledger', 'Export CSV', 'This Month', 'Quarter-to-Date', 'Year-to-Date', 'All Time', 'Account code', 'Document type', 'Search', 'Manual journals / drafts'])
@@ -151,7 +151,7 @@ test('CSV includes header audit metadata and each complete account line with spr
 });
 
 test('manual journal route is gated by journal.view and separates drafts from the posted register', () => {
-  assert.ok(renderPage(JournalEntries, []).includes('Access Restricted'));
+  assert.ok(renderPage(JournalEntries, []).includes('have access to'));
   const html = renderPage(JournalEntries, ['financials.journal.view']);
   assert.ok(html.includes('Draft vouchers are separate from the posted General Ledger'));
   assert.ok(!html.includes('New Journal Entry'));

@@ -4,6 +4,9 @@ import { BankingTabs } from '../components/BankingTabs';
 import { useAuth } from '../auth/AuthContext';
 import { useIntegrations, type IncomingItem } from '../lib/integrations';
 import type { TenantContextType } from '../types';
+import { problemError } from '../lib/apiProblems';
+import { useLoadProblem } from '../lib/useLoadProblem';
+import { NoAccess } from '../components/NoAccess';
 
 interface ReviewPage { companyId: string; items: IncomingItem[]; totalCount: number; page: number; pageSize: number }
 interface Options { companyId: string; connections: { id: string; label: string; provider: string }[]; banks: { bankId: string; bankName: string }[] }
@@ -18,28 +21,30 @@ export default function IncomingReview() {
   const [options, setOptions] = useState<Options | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const loadProblem = useLoadProblem();
   const query = params.toString();
   useEffect(() => {
     if (!capabilities?.canReview) return;
     let active = true;
     const abort = new AbortController();
-    setData(null); setLoading(true); setError('');
+    setData(null); setLoading(true); setError(''); loadProblem.reset();
     void (async () => {
       try {
         const [itemsRes, optionsRes] = await Promise.all([
           authFetch(`/api/integrations/review/items?${query}`, { signal: abort.signal }),
           authFetch('/api/integrations/review/options', { signal: abort.signal }),
         ]);
-        if (!itemsRes.ok || !optionsRes.ok) throw new Error('The review queue could not be loaded. Check access and refresh.');
+        if (!itemsRes.ok || !optionsRes.ok) throw await problemError(itemsRes.ok ? optionsRes : itemsRes, 'The review queue could not be loaded. Check access and refresh.');
         const items = await itemsRes.json() as ReviewPage;
         const nextOptions = await optionsRes.json() as Options;
         if (String(items.companyId) !== currentOrg.id || String(nextOptions.companyId) !== currentOrg.id)
           throw new Error('Review queue workspace mismatch.');
         if (active) { setData(items); setOptions(nextOptions); }
-      } catch (err) { if (active) setError(err instanceof Error ? err.message : 'Could not load review items.'); }
+      } catch (err) { if (active) setError(loadProblem.capture(err, 'Could not load review items.')); }
       finally { if (active) setLoading(false); }
     })();
     return () => { active = false; abort.abort(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authFetch, capabilities?.canReview, currentOrg.id, query]);
   const filter = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -48,6 +53,7 @@ export default function IncomingReview() {
     setParams(next);
   };
   if (!capabilities?.canReview) return <p role="alert">Incoming review is unavailable or not permitted.</p>;
+  if (loadProblem.denied) return <div className="space-y-6"><h1 className="text-xl font-bold">Needs review</h1><NoAccess problem={loadProblem.denied} /></div>;
   return <div className="space-y-6">
     <h1 className="text-xl font-bold">Needs review</h1>
     <p className="text-sm text-[var(--text-secondary)]">Incoming transactions are unmatched statement lines, not bills or payments. Open an item to inspect suggestions, supply missing details and explicitly choose an accounting action, or leave it for later.</p>

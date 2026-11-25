@@ -1,22 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { areaForPermission, PERMISSION_AREA_LABELS, permissionResource } from '../src/lib/permissionLabels';
-
-// The server's permission list. If this file moves, update the path here so the drift check below keeps running.
-// Resolved from this file up to the repository root (test-ui → Web → src → repo).
-const REPO_ROOT = resolve(__dirname, '../../..');
-const SYSTEM_PERMISSIONS = resolve(REPO_ROOT, 'src/Core/Domain/Security/SystemModule.cs');
-
-function serverPermissions(): string[] {
-  if (!existsSync(SYSTEM_PERMISSIONS)) {
-    throw new Error(`The server permission list was not found at ${SYSTEM_PERMISSIONS}. Update SYSTEM_PERMISSIONS in permissionLabels.test.tsx to where SystemPermissions now lives.`);
-  }
-  const source = readFileSync(SYSTEM_PERMISSIONS, 'utf8');
-  const permissions = [...source.matchAll(/public const string \w+ = "([a-z_]+(?:\.[a-z_]+)+)";/g)].map((m) => m[1]);
-  // Module keys such as "sales" have no dot and are not permissions.
-  return [...new Set(permissions)];
-}
+import { serverPermissions } from './serverPermissions';
 
 describe('permission area labels', () => {
   it('reads a sensible number of permissions from the server list', () => {
