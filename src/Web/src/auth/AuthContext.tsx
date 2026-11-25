@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { UserDto, AuthResponse, OtpSendResponse, SignUpPayload, SignUpResponse, AuthContextType, VerifyOtpResult, MfaRequiredResponse, MfaEnrollmentRequiredResponse } from '../types/auth';
 import { announceEntitlementDenial } from '../lib/entitlementEvents';
+import { announcePermissionDenial } from '../lib/permissionDenialEvents';
 import { ENTITLEMENTS_VERSION_HEADER, observeEntitlementsVersionHeader } from '../lib/entitlementVersion';
 import { startIdleSession, type IdleSession, type SessionWarning, type SignOutReason } from '../lib/idleSession';
 import { SessionTimeoutDialog } from '../components/SessionTimeoutDialog';
@@ -445,6 +446,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (shouldAnnounce) {
         void announceEntitlementDenial(res);
       }
+      // A permission denial refreshes the member's permissions and, for a write, shows a non-blocking notice. Never for sign-in routes.
+      if (!isAuthRoute && requestPath.startsWith('/api/')) {
+        void announcePermissionDenial(res, { action: userWrite });
+      }
       // Hook adopts /api/entitlements versions itself — observing here would duplicate the reload.
       if (requestPath !== '/api/entitlements') {
         observeEntitlementsVersionHeader(
@@ -487,6 +492,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           if (shouldAnnounce) {
             void announceEntitlementDenial(res);
+          }
+          if (!isAuthRoute && requestPath.startsWith('/api/')) {
+            void announcePermissionDenial(res, { action: userWrite });
           }
           if (requestPath !== '/api/entitlements') {
             observeEntitlementsVersionHeader(

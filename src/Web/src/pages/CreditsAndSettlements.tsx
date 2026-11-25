@@ -3,7 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { PageHeader, HeaderButton } from '../components/PageHeader';
 import { SalesTabs } from '../components/SalesTabs';
 import { PurchasesTabs } from '../components/PurchasesTabs';
-import { useTenantContext } from '../components/Gating';
+import { usePermissions, useTenantContext } from '../components/Gating';
+import { joinRoleNames, useAccessDirectory } from '../lib/accessDirectory';
 import { ModalShell } from '../components/ModalShell';
 import { useAuth } from '../auth/AuthContext';
 import { localToday } from '../lib/businessDays';
@@ -114,7 +115,24 @@ const ROLE_KEY_TO_REQUEST_FIELD: Record<string, string> = {
 export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> = ({ side }) => {
   const { authFetch } = useAuth();
   const { currentOrg } = useTenantContext();
+  const { hasPermission } = usePermissions();
   const [searchParams] = useSearchParams();
+  // What this member may do on the page. The server enforces every one of these; hiding what they cannot do keeps a view-only
+  // member from clicking into an error. Keys are the ones the API's endpoints require.
+  const isSalesSide = side === 'sales';
+  const canCreateCredit = hasPermission(isSalesSide ? 'sales.credits.create' : 'purchases.credits.create');
+  const canPostCredit = hasPermission(isSalesSide ? 'sales.credits.post' : 'purchases.credits.post');
+  const canReverseCredit = hasPermission(isSalesSide ? 'sales.credits.reverse' : 'purchases.credits.reverse');
+  const canApplyCredit = hasPermission('financials.settlements.apply');
+  // A refund is drafted, submitted (create) and then posted, so it needs both.
+  const canRefund = isSalesSide
+    ? hasPermission('sales.refunds.create') && hasPermission('sales.refunds.post')
+    : hasPermission('purchases.refunds.create') && hasPermission('purchases.refunds.post');
+  // A write-off is requested (create) and then posted.
+  const canWriteOff = isSalesSide && hasPermission('sales.write_offs.create') && hasPermission('sales.write_offs.post');
+  const canReturnGoods = hasPermission(isSalesSide ? 'sales.returns.post' : 'purchases.returns.post');
+  const canRecordAdvance = !isSalesSide && hasPermission('purchases.advances.create');
+  const canSaveMappings = hasPermission('financials.accounts.manage');
   const [credits, setCredits] = useState<CreditNoteRow[]>([]);
   const [mappings, setMappings] = useState<MappingPreview | null>(null);
   const [mappingSelections, setMappingSelections] = useState<Record<string, string>>({});
@@ -734,24 +752,26 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
         subtitle={subtitle}
         actions={
           <div className="flex flex-wrap gap-2">
-            <HeaderButton
-              label={side === 'sales' ? 'New customer credit' : 'New supplier credit'}
-              icon={Plus}
-              variant="primary"
-              onClick={() => {
-                setPreviewSummary(null);
-                setModal({ type: 'createCredit' });
-              }}
-            />
+            {canCreateCredit && (
+              <HeaderButton
+                label={side === 'sales' ? 'New customer credit' : 'New supplier credit'}
+                icon={Plus}
+                variant="primary"
+                onClick={() => {
+                  setPreviewSummary(null);
+                  setModal({ type: 'createCredit' });
+                }}
+              />
+            )}
             {side === 'sales' ? (
               <>
-                <HeaderButton label="Write off invoice" icon={FileWarning} onClick={() => setModal({ type: 'writeOff' })} />
-                <HeaderButton label="Customer return" icon={RotateCcw} onClick={() => setModal({ type: 'physicalReturn' })} />
+                {canWriteOff && <HeaderButton label="Write off invoice" icon={FileWarning} onClick={() => setModal({ type: 'writeOff' })} />}
+                {canReturnGoods && <HeaderButton label="Customer return" icon={RotateCcw} onClick={() => setModal({ type: 'physicalReturn' })} />}
               </>
             ) : (
               <>
-                <HeaderButton label="Supplier advance" icon={Plus} onClick={() => setModal({ type: 'supplierAdvance' })} />
-                <HeaderButton label="Supplier return dispatch" icon={RotateCcw} onClick={() => setModal({ type: 'physicalReturn' })} />
+                {canRecordAdvance && <HeaderButton label="Supplier advance" icon={Plus} onClick={() => setModal({ type: 'supplierAdvance' })} />}
+                {canReturnGoods && <HeaderButton label="Supplier return dispatch" icon={RotateCcw} onClick={() => setModal({ type: 'physicalReturn' })} />}
               </>
             )}
           </div>
@@ -784,14 +804,16 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
                 Accounts are snapshotted at posting. Missing or archived mappings block posting until reviewed.
               </p>
             </div>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void handleSaveMappings()}
-              className="inline-flex items-center gap-1.5 rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800"
-            >
-              <Save className="w-3.5 h-3.5" /> Save Mappings
-            </button>
+            {canSaveMappings && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void handleSaveMappings()}
+                className="inline-flex items-center gap-1.5 rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800"
+              >
+                <Save className="w-3.5 h-3.5" /> Save Mappings
+              </button>
+            )}
           </div>
           <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {mappings.roles.map((r) => (
@@ -868,59 +890,74 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
                   <td className="px-4 py-3 text-right font-mono">{c.refundedAmount.toFixed(2)}</td>
                   <td className="px-4 py-3 text-right font-mono font-semibold">{c.availableAmount.toFixed(2)}</td>
                   <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
-                    {c.statusLabel === 'Draft' && (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void handleCreditAction(c, 'submit')}
-                        className="text-xs font-medium text-indigo-600 hover:underline"
-                      >
-                        Submit
-                      </button>
-                    )}
-                    {(c.statusLabel === 'Draft' || c.statusLabel === 'PendingReview') && (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void handleCreditAction(c, 'post')}
-                        className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:underline"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Post
-                      </button>
-                    )}
-                    {c.statusLabel === 'Posted' && c.availableAmount > 0 && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setApplyAmount(c.availableAmount.toFixed(2));
-                            setModal({ type: 'applyCredit', credit: c });
-                          }}
-                          className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
-                        >
-                          <ArrowRightLeft className="w-3.5 h-3.5" /> Apply
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRefundAmount(c.availableAmount.toFixed(2));
-                            setModal({ type: 'recordRefund', credit: c });
-                          }}
-                          className="text-xs font-medium text-amber-700 hover:underline"
-                        >
-                          Record Refund
-                        </button>
-                      </>
-                    )}
-                    {c.statusLabel === 'Posted' && (
-                      <button
-                        type="button"
-                        onClick={() => setModal({ type: 'reverseCredit', credit: c })}
-                        className="inline-flex items-center gap-1 text-xs font-medium text-rose-600 hover:underline"
-                      >
-                        <Undo2 className="w-3.5 h-3.5" /> Reverse
-                      </button>
-                    )}
+                    {(() => {
+                      // Each action the row's state would offer, with the permission it needs. The member sees only the ones they
+                      // may take; if the state offers actions but they may take none, the row says so instead of going blank.
+                      const draft = c.statusLabel === 'Draft';
+                      const reviewable = draft || c.statusLabel === 'PendingReview';
+                      const posted = c.statusLabel === 'Posted';
+                      const offered: Array<{ key: string; allowed: boolean; needs: string[]; node: React.ReactNode }> = [
+                        {
+                          key: 'submit', allowed: canCreateCredit, needs: [isSalesSide ? 'sales.credits.create' : 'purchases.credits.create'],
+                          node: draft ? (
+                            <button type="button" disabled={busy} onClick={() => void handleCreditAction(c, 'submit')} className="text-xs font-medium text-indigo-600 hover:underline">
+                              Submit
+                            </button>
+                          ) : null,
+                        },
+                        {
+                          key: 'post', allowed: canPostCredit, needs: [isSalesSide ? 'sales.credits.post' : 'purchases.credits.post'],
+                          node: reviewable ? (
+                            <button type="button" disabled={busy} onClick={() => void handleCreditAction(c, 'post')} className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:underline">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Post
+                            </button>
+                          ) : null,
+                        },
+                        {
+                          key: 'apply', allowed: canApplyCredit, needs: ['financials.settlements.apply'],
+                          node: posted && c.availableAmount > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setApplyAmount(c.availableAmount.toFixed(2));
+                                setModal({ type: 'applyCredit', credit: c });
+                              }}
+                              className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
+                            >
+                              <ArrowRightLeft className="w-3.5 h-3.5" /> Apply
+                            </button>
+                          ) : null,
+                        },
+                        {
+                          key: 'refund', allowed: canRefund,
+                          needs: isSalesSide ? ['sales.refunds.create', 'sales.refunds.post'] : ['purchases.refunds.create', 'purchases.refunds.post'],
+                          node: posted && c.availableAmount > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRefundAmount(c.availableAmount.toFixed(2));
+                                setModal({ type: 'recordRefund', credit: c });
+                              }}
+                              className="text-xs font-medium text-amber-700 hover:underline"
+                            >
+                              Record Refund
+                            </button>
+                          ) : null,
+                        },
+                        {
+                          key: 'reverse', allowed: canReverseCredit, needs: [isSalesSide ? 'sales.credits.reverse' : 'purchases.credits.reverse'],
+                          node: posted ? (
+                            <button type="button" onClick={() => setModal({ type: 'reverseCredit', credit: c })} className="inline-flex items-center gap-1 text-xs font-medium text-rose-600 hover:underline">
+                              <Undo2 className="w-3.5 h-3.5" /> Reverse
+                            </button>
+                          ) : null,
+                        },
+                      ].filter((action) => action.node !== null);
+                      const available = offered.filter((action) => action.allowed);
+                      if (available.length > 0) return available.map((action) => <React.Fragment key={action.key}>{action.node}</React.Fragment>);
+                      if (offered.length === 0) return null;
+                      return <ViewOnlyHint needs={offered.flatMap((action) => action.needs)} />;
+                    })()}
                   </td>
                 </tr>
               ))
@@ -1482,5 +1519,16 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
         </ModalShell>
       )}
     </div>
+  );
+};
+
+/** Shown in a row's action area when the member may not take any of the actions its state offers. Roles come from the live catalog. */
+const ViewOnlyHint: React.FC<{ needs: string[] }> = ({ needs }) => {
+  const directory = useAccessDirectory(needs);
+  const roles = directory.grantingRoles.map((role) => role.displayName);
+  return (
+    <span className="text-xs text-slate-500">
+      {roles.length > 0 ? `View only. Changing credits needs ${joinRoleNames(roles)}.` : 'View only.'}
+    </span>
   );
 };

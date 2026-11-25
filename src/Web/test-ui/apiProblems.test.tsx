@@ -6,6 +6,7 @@ import {
   deniedProblemOf,
   failureMessage,
   problemError,
+  problemText,
 } from '../src/lib/apiProblems';
 
 // Payload shapes are copied from the API:
@@ -139,5 +140,25 @@ describe('classifyResponse and the error helpers', () => {
       expect(describeProblem({ category, status: 403 }, 'f')).not.toMatch(/\b40[0-9]\b/);
     }
     expect(describeProblem(null, 'The thing could not be loaded.')).toBe('The thing could not be loaded.');
+  });
+});
+
+describe('problemText', () => {
+  it('replaces a permission denial\'s own sentence, which names the permission key, with the short line', () => {
+    const body = { ...permissionDenied, detail: "You do not have the required permission 'purchases.vendors.view' to perform this action." };
+    expect(problemText(403, body, 'fallback')).toBe("You don't have access to do that.");
+  });
+
+  it('keeps the server sentence for every other problem, then falls back', () => {
+    expect(problemText(409, { detail: 'Review the latest setup.' }, 'fallback')).toBe('Review the latest setup.');
+    expect(problemText(400, { message: 'Amount must be positive.' }, 'fallback')).toBe('Amount must be positive.');
+    expect(problemText(400, { title: 'Bad request' }, 'fallback')).toBe('Bad request');
+    expect(problemText(500, null, 'fallback')).toBe('fallback');
+    expect(problemText(403, { detail: 'Plan limit reached', code: 'QUOTA_EXCEEDED' }, 'fallback')).toBe('Plan limit reached');
+  });
+
+  it('describeProblem uses the short action line for a permission denial and keeps the page-load line for an unnamed 403', () => {
+    expect(describeProblem({ category: 'permission-denied', status: 403 }, 'f')).toBe("You don't have access to do that.");
+    expect(describeProblem({ category: 'unknown-forbidden', status: 403 }, 'f')).toBe("You don't have access to this.");
   });
 });

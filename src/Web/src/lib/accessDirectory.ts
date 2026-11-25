@@ -136,10 +136,12 @@ export function useAccessDirectory(permission: string | string[] | null | undefi
             authFetch(`${BASE}/access-requests`),
           ]);
           if (!membersRes.ok || !rolesRes.ok) return null;
+          // Anything that is not a list reads as empty: a half-working server must not break the page that asked.
+          const list = <T,>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
           return {
-            members: (await membersRes.json()) as RawMember[],
-            roles: (await rolesRes.json()) as RawRole[],
-            requests: requestsRes.ok ? ((await requestsRes.json()) as RawRequest[]) : [],
+            members: list<RawMember>(await membersRes.json()),
+            roles: list<RawRole>(await rolesRes.json()),
+            requests: requestsRes.ok ? list<RawRequest>(await requestsRes.json()) : [],
           };
         } catch {
           return null;

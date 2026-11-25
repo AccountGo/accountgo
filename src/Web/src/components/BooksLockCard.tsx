@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AlertCircle, CheckCircle2, Lock, Save } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
+import { failureMessage } from '../lib/apiProblems';
 import { formatBooksLockDate, isBooksLockReopen } from '../lib/booksLock';
 
 interface BooksLockHistoryItem {
@@ -69,10 +70,7 @@ export const BooksLockCard: React.FC<{ canClose: boolean }> = ({ canClose }) => 
           reason: reason.trim() || undefined,
         }),
       });
-      if (!res.ok) {
-        const problem = await res.json().catch(() => null);
-        throw new Error(problem?.message || problem?.detail || problem?.title || 'Could not save books lock.');
-      }
+      if (!res.ok) throw new Error(await failureMessage(res, 'Could not save books lock.'));
       const data = await res.json() as BooksLockState;
       setState(data);
       setDraft(data.lockedThrough ?? '');
