@@ -285,6 +285,8 @@ export const Dashboard: React.FC = () => {
         <OwnerFinancialAccessBanner
           key={currentOrg.slug}
           slug={currentOrg.slug}
+          orgId={currentOrg.id}
+          isPersonalBooks={currentOrg.isPersonalBooks}
           onAccessGranted={(permissions) => {
             if (workspaceSlugRef.current !== currentOrg.slug) return;
             updateCurrentOrg({ permissions });

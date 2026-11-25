@@ -19,6 +19,7 @@ import { setEntitlementWorkspace } from '../lib/entitlementEvents';
 import { refreshWorkspaceAccess, throttledRefresh } from '../lib/permissionRefresh';
 import { useActionDenialRefresh } from '../lib/useActionDenialRefresh';
 import { ActionDenialRegion } from '../components/ActionDenialRegion';
+import { useWorkspaceLoss } from '../lib/useWorkspaceLoss';
 
 export function evaluateHasPermission(
   userPermissions: readonly string[] | undefined,
@@ -45,6 +46,14 @@ export const OrgLayout: React.FC = () => {
     return setEntitlementWorkspace(currentOrg.slug, !!currentOrg.isPersonalBooks);
   }, [currentOrg?.slug, currentOrg?.isPersonalBooks, orgSlug]);
   const [loading, setLoading] = useState<boolean>(true);
+  // The one way out of a workspace the caller no longer has (see useWorkspaceLoss): the membership check below and any call that
+  // answers "workspace not found" both end here, once, with the same explanation on /select-org.
+  const leaveWorkspace = useWorkspaceLoss(orgSlug, useCallback(() => {
+    clearPersistedOrgSlug();
+    setCurrentOrg(null);
+    setTenantWhitelabel(null);
+    navigate('/select-org', { replace: true, state: { notice: "You don't have access to that workspace" } });
+  }, [navigate, setTenantWhitelabel]));
   const [isMobileOpen, setIsMobileOpen] = useState<boolean>(false);
   const userProfile: UserProfile = useMemo(() => ({
     id: authUser?.id || '',
@@ -125,10 +134,7 @@ export const OrgLayout: React.FC = () => {
         const match = orgs.find((organization) => organization.slug.toLowerCase() === orgSlug?.toLowerCase());
         if (!match) {
           if (mounted) {
-            clearPersistedOrgSlug();
-            setCurrentOrg(null);
-            setTenantWhitelabel(null);
-            navigate('/select-org', { replace: true, state: { notice: "You don't have access to that workspace" } });
+            leaveWorkspace();
           }
           return;
         }
@@ -136,10 +142,7 @@ export const OrgLayout: React.FC = () => {
         const currentResponse = await authFetch('/api/organizations/current');
         if (currentResponse.status === 404) {
           if (mounted) {
-            clearPersistedOrgSlug();
-            setCurrentOrg(null);
-            setTenantWhitelabel(null);
-            navigate('/select-org', { replace: true, state: { notice: "You don't have access to that workspace" } });
+            leaveWorkspace();
           }
           return;
         }
@@ -207,7 +210,7 @@ export const OrgLayout: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, [authFetch, navigate, orgSlug, setTenantWhitelabel]);
+  }, [authFetch, leaveWorkspace, orgSlug, setTenantWhitelabel]);
 
   const subscription: SubscriptionInfo = useMemo(() => {
     if (currentOrg?.subscription) return currentOrg.subscription;

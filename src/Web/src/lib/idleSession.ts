@@ -14,7 +14,8 @@ const CHANNEL_NAME = 'accountgo-activity';
 
 export const ACTIVITY_EVENTS = ['pointermove', 'pointerdown', 'keydown', 'wheel', 'scroll', 'touchstart'] as const;
 
-export type SignOutReason = 'idle' | 'expired';
+/** 'revoked': the server refused the session's refresh (revoked, signed out elsewhere, token gone) while someone was signed in. */
+export type SignOutReason = 'idle' | 'expired' | 'revoked';
 export type SessionWarning = { kind: 'idle' | 'expiry'; deadline: number } | null;
 
 type Message =

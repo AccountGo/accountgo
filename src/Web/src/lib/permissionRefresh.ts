@@ -1,3 +1,4 @@
+import { SESSION_CLEARED_EVENT } from './workspaceAccessEvents';
 /**
  * Keeps the workspace permissions fresh without a reload. They are loaded once when the workspace opens, so a role change made by
  * someone else (an admin approving a request) would otherwise leave the member locked out until they reload.
@@ -43,6 +44,8 @@ export function throttledRefresh(
 export function resetPermissionRefresh(): void {
   entries.clear();
 }
+
+if (typeof window !== 'undefined') window.addEventListener(SESSION_CLEARED_EVENT, resetPermissionRefresh);
 
 export interface WorkspaceAccessSnapshot {
   slug?: string;
