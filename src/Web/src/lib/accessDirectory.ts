@@ -90,7 +90,19 @@ interface Fetched {
   requests: RawRequest[];
 }
 
+// Keyed by workspace AND signed-in user: the directory includes that user's own requests, and a different user in the same tab
+// must never see another user's.
 const cache = new Map<string, { at: number; promise: Promise<Fetched | null> }>();
+const cacheKey = (slug: string, userId: string | undefined) => `${slug}\u0000${userId ?? ''}`;
+
+/** After a request is sent, patch the shared entry so every No-access view in the workspace shows it as already sent. */
+function recordRequest(slug: string, userId: string | undefined, roleId: string): void {
+  const hit = cache.get(cacheKey(slug, userId));
+  if (!hit || !userId) return;
+  void hit.promise.then((value) => {
+    value?.requests.push({ status: 'Pending', targetUserId: userId, requestedRoleIds: [roleId] });
+  });
+}
 
 /** For tests: forget what was fetched. */
 export function clearAccessDirectoryCache(): void {
@@ -101,7 +113,7 @@ export function clearAccessDirectoryCache(): void {
  * Members and the role catalog are read once per workspace and shared (a page that shows "No access" several times, or a
  * redraw, does not fetch again). A failure is remembered for the same minute, so there is no retry loop.
  */
-export function useAccessDirectory(permission: string | null | undefined, enabled = true): AccessDirectory {
+export function useAccessDirectory(permission: string | null | undefined, enabled = true): AccessDirectory & { markRequested: (roleId: string) => void } {
   const { authFetch, user } = useAuth();
   const slug = (typeof window === 'undefined' ? null : getOrgSlugFromLocation()) ?? '';
   const [fetched, setFetched] = useState<Fetched | null | undefined>(undefined);
@@ -109,7 +121,7 @@ export function useAccessDirectory(permission: string | null | undefined, enable
   useEffect(() => {
     let cancelled = false;
     if (!enabled) return undefined;
-    const key = slug;
+    const key = cacheKey(slug, user?.id);
     const hit = cache.get(key);
     let promise: Promise<Fetched | null>;
     if (hit && Date.now() - hit.at < CACHE_MS) {
@@ -140,10 +152,14 @@ export function useAccessDirectory(permission: string | null | undefined, enable
     return () => {
       cancelled = true;
     };
-  }, [authFetch, enabled, slug]);
+  }, [authFetch, enabled, slug, user?.id]);
 
+  const markRequested = (roleId: string) => {
+    recordRequest(slug, user?.id, roleId);
+    setFetched((current) => current && { ...current, requests: [...current.requests, { status: 'Pending', targetUserId: user?.id, requestedRoleIds: [roleId] }] });
+  };
   if (!fetched) {
-    return { grantingRoles: [], adminNames: [], activeMemberCount: 0, pendingRequest: false, loaded: false };
+    return { grantingRoles: [], adminNames: [], activeMemberCount: 0, pendingRequest: false, loaded: false, markRequested };
   }
   const grantingRoles = permission ? grantingRolesFor(fetched.roles, permission) : [];
   const chosen = grantingRoles[0];
@@ -159,5 +175,6 @@ export function useAccessDirectory(permission: string | null | undefined, enable
     activeMemberCount: fetched.members.filter((m) => m.status === 'Active').length,
     pendingRequest,
     loaded: true,
+    markRequested,
   };
 }

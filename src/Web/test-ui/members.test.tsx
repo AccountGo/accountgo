@@ -460,3 +460,19 @@ it('does not open the setup form when the owner may not set up their own access'
   await screen.findByRole('button', { name: 'Invite member' });
   expect(screen.queryByRole('button', { name: 'Save and activate roles' })).toBeNull();
 });
+
+it('clears the link parameters and opens no form when the role catalog cannot be read', async () => {
+  urlSearch.value = '?access=setup&grant=Accountant';
+  authFetch.mockImplementation(async (url: string) => {
+    if (url === '/api/organizations/current') return new Response(JSON.stringify({ role: 'Owner' }), { status: 200 });
+    if (url.endsWith('/security-roles')) return new Response('x', { status: 500 });
+    return new Response(JSON.stringify(url.endsWith('/access-setup/status') ? { ownerCanManageOwnAccess: true } : []), { status: 200 });
+  });
+  render(<Members />);
+
+  await waitFor(() => expect(setSearchParams).toHaveBeenCalled());
+  const next = setSearchParams.mock.calls[0][0] as URLSearchParams;
+  expect(next.get('access')).toBeNull();
+  expect(next.get('grant')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Save and activate roles' })).toBeNull();
+});

@@ -14,10 +14,12 @@ type RequestState = 'idle' | 'sending' | 'sent' | 'failed';
  * Shown in place of a page that could not load because the viewer's roles do not include it. It says what is locked, which roles
  * open it and what to do next. It never shows data, and never says whether a record exists (a missing record is a plain "not found").
  */
-export const NoAccess: React.FC<{ problem: ClassifiedProblem }> = ({ problem }) => {
+export const NoAccess: React.FC<{ problem: ClassifiedProblem; headingLevel?: 1 | 2 }> = ({ problem, headingLevel = 2 }) => {
   const { currentOrg } = useOutletContext<TenantContextType>();
   const { authFetch } = useAuth();
   const headingRef = useRef<HTMLHeadingElement>(null);
+  // Pages keep their own title as the h1, so inside a page this is an h2; only a full-page use passes 1.
+  const Heading = headingLevel === 1 ? 'h1' : 'h2';
   // A ref, not state: two clicks before the next render must still send one request.
   const sentRef = useRef(false);
   const [requestState, setRequestState] = useState<RequestState>('idle');
@@ -49,6 +51,7 @@ export const NoAccess: React.FC<{ problem: ClassifiedProblem }> = ({ problem }) 
         body: JSON.stringify({ securityRoleIds: [chosen.id], reason: `Needs access to ${area}` }),
       });
       sentRef.current = res.ok;
+      if (res.ok) directory.markRequested(chosen.id);
       setRequestState(res.ok ? 'sent' : 'failed');
     } catch {
       sentRef.current = false;
@@ -69,9 +72,9 @@ export const NoAccess: React.FC<{ problem: ClassifiedProblem }> = ({ problem }) 
       <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center" aria-hidden="true">
         <ShieldAlert className="w-6 h-6" />
       </div>
-      <h1 id="no-access-heading" ref={headingRef} tabIndex={-1} className="text-xl font-bold text-[var(--text-main)] focus:outline-none">
+      <Heading id="no-access-heading" ref={headingRef} tabIndex={-1} className="text-xl font-bold text-[var(--text-main)] focus:outline-none">
         {`You don't have access to ${area}`}
-      </h1>
+      </Heading>
       <p className="text-sm text-[var(--text-secondary)] leading-relaxed">Your current access doesn’t include this part of the workspace.</p>
       {roleNames.length > 0 && (
         <p className="text-sm text-[var(--text-secondary)] leading-relaxed">

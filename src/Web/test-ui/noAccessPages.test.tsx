@@ -66,7 +66,9 @@ describe('a page that cannot load because of a missing permission', () => {
     serve(listUrl, () => denied(permission));
     render(<MemoryRouter>{page()}</MemoryRouter>);
 
-    expect(await screen.findByRole('heading', { level: 1, name: `You don't have access to ${area}` })).toBeTruthy();
+    expect(await screen.findByRole('heading', { level: 2, name: `You don't have access to ${area}` })).toBeTruthy();
+    // The page keeps its own title as the only h1.
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(document.body.textContent).not.toMatch(/\(40[13]\)/);
     expect(document.body.textContent).not.toMatch(/could not be loaded/i);
     expect(screen.queryByText(/No vendors yet|No clients yet|Add a vendor|Add your first/i)).toBeNull();

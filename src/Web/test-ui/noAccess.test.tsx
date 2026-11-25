@@ -5,13 +5,14 @@ import { NoAccess } from '../src/components/NoAccess';
 import { adminNamesOf, clearAccessDirectoryCache, grantingRolesFor, joinRoleNames } from '../src/lib/accessDirectory';
 import type { ClassifiedProblem } from '../src/lib/apiProblems';
 
-const { authFetch, outlet } = vi.hoisted(() => ({
+const { authFetch, outlet, authUser } = vi.hoisted(() => ({
   authFetch: vi.fn(),
+  authUser: { id: 'me' },
   outlet: { currentOrg: { id: '1', name: 'Acme', slug: 'acme', role: 'Owner' as string } },
 }));
 
 vi.mock('../src/auth/AuthContext', () => ({
-  useAuth: () => ({ authFetch, user: { id: 'me', email: 'me@example.com' } }),
+  useAuth: () => ({ authFetch, user: { id: authUser.id, email: 'me@example.com' } }),
   getOrgSlugFromLocation: () => 'acme',
 }));
 vi.mock('react-router-dom', async () => ({
@@ -51,6 +52,7 @@ function serve(opts: { members: unknown[]; requests?: unknown[]; failMembers?: b
 const renderIt = () => render(<MemoryRouter><NoAccess problem={problem} /></MemoryRouter>);
 
 beforeEach(() => {
+  authUser.id = 'me';
   clearAccessDirectoryCache();
   outlet.currentOrg.role = 'Owner';
 });
@@ -61,7 +63,7 @@ describe('NoAccess', () => {
     serve({ members: [owner] });
     renderIt();
 
-    const heading = screen.getByRole('heading', { level: 1, name: "You don't have access to Vendors" });
+    const heading = screen.getByRole('heading', { level: 2, name: "You don't have access to Vendors" });
     expect(document.activeElement).toBe(heading);
     await screen.findByRole('link', { name: 'Set up my access' });
     const main = screen.getByTestId('no-access');
@@ -146,7 +148,7 @@ describe('NoAccess', () => {
     renderIt();
 
     await waitFor(() => expect(authFetch).toHaveBeenCalled());
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe("You don't have access to Vendors");
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe("You don't have access to Vendors");
     expect(screen.getByText(/doesn’t include this part of the workspace/)).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Go to dashboard' })).toBeTruthy();
     expect(screen.queryByText(/Access comes with these roles/)).toBeNull();
@@ -167,6 +169,51 @@ describe('NoAccess', () => {
     expect(authFetch).toHaveBeenCalledTimes(3);
   });
 
+  it('uses an h2 inside a page and an h1 only when it is the whole page', async () => {
+    serve({ members: [owner] });
+    const inPage = renderIt();
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
+    inPage.unmount();
+
+    render(<MemoryRouter><NoAccess problem={problem} headingLevel={1} /></MemoryRouter>);
+    const heading = screen.getByRole('heading', { level: 1, name: "You don't have access to Vendors" });
+    expect(document.activeElement).toBe(heading);
+  });
+
+  it('shows "already sent" in every No-access view of the workspace right after a request, without another fetch', async () => {
+    outlet.currentOrg.role = 'Member';
+    serve({ members: [owner, member] });
+    const first = renderIt();
+    fireEvent.click(await screen.findByRole('button', { name: 'Ask an admin for access' }));
+    await screen.findByText(/Request sent to/);
+    first.unmount();
+    const callsBefore = authFetch.mock.calls.length;
+
+    renderIt(); // another page of the same workspace, well inside the cache window
+    await screen.findByText(/Request already sent/);
+
+    expect((screen.getByRole('button', { name: 'Ask an admin for access' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(authFetch.mock.calls.length).toBe(callsBefore); // served from the shared entry
+    expect(authFetch.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
+  });
+
+  it('keeps one directory per signed-in user, so another user in the same tab never sees it', async () => {
+    outlet.currentOrg.role = 'Member';
+    serve({ members: [owner, member] });
+    const first = renderIt();
+    fireEvent.click(await screen.findByRole('button', { name: 'Ask an admin for access' }));
+    await screen.findByText(/Request sent to/);
+    first.unmount();
+
+    authUser.id = 'someone-else';
+    renderIt();
+    const ask = await screen.findByRole('button', { name: 'Ask an admin for access' });
+
+    expect((ask as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.queryByText(/Request already sent/)).toBeNull();
+    expect(authFetch.mock.calls.filter(([url]) => String(url).endsWith('/members'))).toHaveLength(2); // read again for the new user
+  });
+
   it('keeps the code and request id in a collapsed Details section', async () => {
     serve({ members: [owner] });
     renderIt();
@@ -181,7 +228,7 @@ describe('NoAccess', () => {
     serve({ members: [owner] });
     render(<MemoryRouter><NoAccess problem={{ ...problem, requiredPermission: 'something.new.view' }} /></MemoryRouter>);
 
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe("You don't have access to this page");
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe("You don't have access to this page");
   });
 });
 

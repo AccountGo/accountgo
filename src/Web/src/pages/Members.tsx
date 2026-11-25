@@ -261,13 +261,15 @@ export const Members: React.FC = () => {
   const accessIntent = searchParams.get('access');
   const grantName = searchParams.get('grant');
   useEffect(() => {
-    if (!accessIntent || loading || roles.length === 0) return;
+    if (!accessIntent || loading) return;
+    // Once loading has finished the link parameters are used up whether or not a form opens (a failed catalog read opens none),
+    // so a later successful reload can never open the form from a stale link.
     const grantId = roles.find(r => r.name === grantName)?.id;
     const preselected = grantId ? [grantId] : [];
-    if (accessIntent === 'setup' && setupStatus?.ownerCanManageOwnAccess && !isEligibleForSolo) {
+    if (roles.length > 0 && accessIntent === 'setup' && setupStatus?.ownerCanManageOwnAccess && !isEligibleForSolo) {
       openForm('setup');
       setRoleIds(preselected);
-    } else if (accessIntent === 'request' && (!isSoloActive || members.length > 1)) {
+    } else if (roles.length > 0 && accessIntent === 'request' && (!isSoloActive || members.length > 1)) {
       openForm('request');
       setRoleIds(preselected);
     }
