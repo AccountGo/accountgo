@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { failureMessage } from './apiProblems';
 import { useAuth, getOrgSlugFromLocation } from '../auth/AuthContext';
 import type { ModuleKey, PlanKey } from '../types';
 import { ENTITLEMENT_DENIED_EVENT } from './entitlementEvents';
@@ -253,7 +254,7 @@ export const CapabilitiesProvider: React.FC<CapabilitiesProviderProps> = ({
     const requestOrg = orgSlug;
     try {
       const response = await authFetch('/api/entitlements');
-      if (!response.ok) throw new Error(`Could not load plan usage (HTTP ${response.status}).`);
+      if (!response.ok) throw new Error(await failureMessage(response, 'Plan usage could not be loaded.'));
       const normalized = normalizeEntitlementsPayload(await response.json());
       // Ignore late responses after a workspace switch.
       if (requestOrg !== getOrgSlugFromLocation()) return entitlementsRef.current;

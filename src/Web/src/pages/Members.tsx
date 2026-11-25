@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
+import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import { RefreshCw, UserPlus, ShieldCheck, ShieldAlert, RotateCcw } from 'lucide-react';
 import {
   AccessSetupStatus,
@@ -72,7 +72,7 @@ export class ApiProblemError extends Error {
 async function requireSuccess(response: Response): Promise<void> {
   if (response.ok) return;
   const text = await response.text();
-  let message = text || `Request failed (${response.status})`;
+  let message = text || 'The request could not be completed.';
   let problemMessage: string | undefined;
   let reasonCode: string | undefined;
   let policyRevision: number | undefined;
@@ -254,6 +254,31 @@ export const Members: React.FC = () => {
     void load(controller.signal);
     return () => controller.abort();
   }, [load]);
+
+  // "No access" pages link here with ?access=setup|request&grant=<role name>. The named role must exist in the live catalog (anything
+  // else is ignored), the form only opens preselected, and nothing is ever submitted from the link.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const accessIntent = searchParams.get('access');
+  const grantName = searchParams.get('grant');
+  useEffect(() => {
+    if (!accessIntent || loading) return;
+    // Once loading has finished the link parameters are used up whether or not a form opens (a failed catalog read opens none),
+    // so a later successful reload can never open the form from a stale link.
+    const grantId = roles.find(r => r.name === grantName)?.id;
+    const preselected = grantId ? [grantId] : [];
+    if (roles.length > 0 && accessIntent === 'setup' && setupStatus?.ownerCanManageOwnAccess && !isEligibleForSolo) {
+      openForm('setup');
+      setRoleIds(preselected);
+    } else if (roles.length > 0 && accessIntent === 'request' && (!isSoloActive || members.length > 1)) {
+      openForm('request');
+      setRoleIds(preselected);
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete('access');
+    next.delete('grant');
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessIntent, grantName, loading, roles, setupStatus, isEligibleForSolo, isSoloActive, members.length]);
 
   const mutate = async (
     path: string,

@@ -1,55 +1,18 @@
-/** Problem codes the server returns when the plan, not the user's role, blocks an action. */
-export const ENTITLEMENT_CODES = [
-  'QUOTA_EXCEEDED',
-  'MODULE_NOT_SUBSCRIBED',
-  'PLAN_NOT_AVAILABLE',
-  'SUBSCRIPTION_INACTIVE',
-  'FEATURE_NOT_ENTITLED',
-] as const;
-export type EntitlementCode = (typeof ENTITLEMENT_CODES)[number];
-
-export interface EntitlementProblem {
-  code: EntitlementCode;
-  title?: string;
-  detail?: string;
-  resource?: string;
-  limit?: number;
-  used?: number;
-  period?: string | null;
-  contact?: string | null;
-  requiredModule?: string;
-  requiredFeature?: string;
-  effectivePlan?: string;
-  canManageBilling?: boolean;
-  upgradeAvailable?: boolean;
-  monthly?: boolean;
-  status?: string;
-}
+export {
+  ENTITLEMENT_CODES,
+  isBooksNotReadyProblem,
+  isEntitlementProblem,
+  type BooksNotReadyProblem,
+  type EntitlementCode,
+  type EntitlementProblem,
+  type UnpostedDocument,
+} from './apiProblems';
+import { classifyResponse, type BooksNotReadyProblem, type EntitlementProblem } from './apiProblems';
 
 export const ENTITLEMENT_DENIED_EVENT = 'accountgo:entitlement-denied';
 
 /** Issued invoices or bills with no ledger entry block turning on accounting (409 BOOKS_NOT_READY). */
 export const BOOKS_NOT_READY_EVENT = 'accountgo:books-not-ready';
-
-export interface UnpostedDocument {
-  type: 'invoice' | 'bill';
-  id: string;
-  number?: string | null;
-  date: string;
-}
-
-export interface BooksNotReadyProblem {
-  code: 'BOOKS_NOT_READY';
-  title?: string;
-  detail?: string;
-  unpostedInvoices: UnpostedDocument[];
-  unpostedBills: UnpostedDocument[];
-}
-
-export function isBooksNotReadyProblem(body: unknown): body is BooksNotReadyProblem {
-  const value = body as Partial<BooksNotReadyProblem> | null;
-  return value?.code === 'BOOKS_NOT_READY' && Array.isArray(value.unpostedInvoices) && Array.isArray(value.unpostedBills);
-}
 
 let activeWorkspace: { slug: string; personal: boolean } | null = null;
 export function setEntitlementWorkspace(slug: string, personal: boolean): () => void {
@@ -74,11 +37,6 @@ export async function withSuppressedEntitlementDenial<T>(fn: () => Promise<T>): 
   }
 }
 
-export function isEntitlementProblem(body: unknown): body is EntitlementProblem {
-  const code = (body as { code?: unknown } | null)?.code;
-  return typeof code === 'string' && (ENTITLEMENT_CODES as readonly string[]).includes(code);
-}
-
 /**
  * Inspects a response without consuming it and announces plan denials, so one dialog can explain them wherever
  * the request came from. Pages still show their own inline errors.
@@ -86,20 +44,11 @@ export function isEntitlementProblem(body: unknown): body is EntitlementProblem 
 export async function announceEntitlementDenial(response: Response): Promise<void> {
   if (suppressDenialDepth > 0) return;
   if ((response.status !== 403 && response.status !== 409) || typeof window === 'undefined') return;
-  const type = response.headers.get('content-type') || '';
-  if (!type.includes('json')) return;
-  try {
-    const body = await response.clone().json();
-    if (response.status === 409) {
-      if (isBooksNotReadyProblem(body)) {
-        window.dispatchEvent(new CustomEvent<BooksNotReadyProblem>(BOOKS_NOT_READY_EVENT, { detail: body }));
-      }
-      return;
-    }
-    if (isEntitlementProblem(body)) {
-      window.dispatchEvent(new CustomEvent<EntitlementProblem>(ENTITLEMENT_DENIED_EVENT, { detail: body }));
-    }
-  } catch {
-    /* not a problem document */
+  const problem = await classifyResponse(response);
+  if (!problem) return;
+  if (problem.category === 'books-not-ready' && problem.booksNotReady) {
+    window.dispatchEvent(new CustomEvent<BooksNotReadyProblem>(BOOKS_NOT_READY_EVENT, { detail: problem.booksNotReady }));
+  } else if ((problem.category === 'plan-required' || problem.category === 'quota-exceeded') && problem.entitlement) {
+    window.dispatchEvent(new CustomEvent<EntitlementProblem>(ENTITLEMENT_DENIED_EVENT, { detail: problem.entitlement }));
   }
 }

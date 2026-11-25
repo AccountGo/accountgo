@@ -319,9 +319,9 @@ export const CreditsAndSettlements: React.FC<{ side: 'sales' | 'purchasing' }> =
   const readProblem = async (res: Response) => {
     try {
       const body = await res.json();
-      return body.detail || body.message || body.title || `Request failed (${res.status})`;
+      return body.detail || body.message || body.title || 'The request could not be completed.';
     } catch {
-      return `Request failed (${res.status})`;
+      return 'The request could not be completed.';
     }
   };
 

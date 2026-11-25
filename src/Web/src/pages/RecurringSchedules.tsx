@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, Loader2, Plus, Repeat, Search } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
+import { problemError } from '../lib/apiProblems';
 import { usePermissions, ReadOnlyModuleBanner } from '../components/Gating';
 import { PageHeader, HeaderButton, StatusPill } from '../components/PageHeader';
 import { SalesTabs } from '../components/SalesTabs';
@@ -43,7 +44,7 @@ export const RecurringSchedules: React.FC = () => {
     setIsLoading(true);
     try {
       const res = await authFetch('/api/RecurringSchedules');
-      if (!res.ok) throw new Error(`Failed to load recurring schedules (${res.status}).`);
+      if (!res.ok) throw await problemError(res, 'The recurring schedules could not be loaded.');
       const data = await res.json();
       setSchedules(Array.isArray(data) ? data.map(normalizeRecurringSummary) : []);
     } catch (err: any) {
@@ -93,7 +94,7 @@ export const RecurringSchedules: React.FC = () => {
         body: JSON.stringify({ runDate: schedule.nextRunDate }),
       });
       const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.message || `The run could not be completed (${res.status}).`);
+      if (!res.ok) throw new Error(data?.message || 'The run could not be completed.');
       if (data?.outcome === 'Failed' || data?.outcome === 'Aborted') {
         await loadSchedules();
         throw new Error(data.message || 'The run could not be completed. Open the schedule to review its history.');

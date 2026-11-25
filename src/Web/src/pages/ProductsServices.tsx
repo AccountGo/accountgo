@@ -7,6 +7,9 @@ import { ItemsTabs } from '../components/ItemsTabs';
 import { usePermissions } from '../components/Gating';
 import { CatalogItem, TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
+import { problemError } from '../lib/apiProblems';
+import { useLoadProblem } from '../lib/useLoadProblem';
+import { NoAccessOr } from '../components/NoAccess';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 
 /**
@@ -38,14 +41,17 @@ export const ProductsServices: React.FC = () => {
     [currencySymbol]
   );
 
+  const loadProblem = useLoadProblem();
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      loadProblem.reset();
       try {
         const promises: Promise<Response>[] = [authFetch('/api/Catalog/Items')];
         if (showPrice) promises.push(authFetch('/api/Catalog/SalesAccounts'));
         const [itemsRes, accountsRes] = await Promise.all(promises);
-        if (!itemsRes.ok) throw new Error(`Products and services could not be loaded (${itemsRes.status}).`);
+        if (!itemsRes.ok) throw await problemError(itemsRes, 'Products and services could not be loaded.');
         const data = await itemsRes.json();
         if (!cancelled) setItems(data);
         if (accountsRes?.ok) {
@@ -53,7 +59,7 @@ export const ProductsServices: React.FC = () => {
           if (!cancelled && Array.isArray(accs)) setSalesAccounts(accs);
         }
       } catch (err: any) {
-        if (!cancelled) setError(err.message);
+        if (!cancelled) setError(loadProblem.capture(err, 'Products and services could not be loaded.'));
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -114,6 +120,7 @@ export const ProductsServices: React.FC = () => {
       />
       <ItemsTabs orgSlug={currentOrg.slug} />
 
+      <NoAccessOr denied={loadProblem.denied}>
       {error && (
         <div role="alert" className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-sm flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -266,6 +273,7 @@ export const ProductsServices: React.FC = () => {
           </div>
         )}
       </div>
+      </NoAccessOr>
 
       {dialog && (
         <ItemFormDialog

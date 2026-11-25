@@ -301,7 +301,8 @@ it('shows an error and retry when the summary request fails', async () => {
   renderDashboard();
 
   expect(await screen.findByTestId('dashboard-load-error')).toBeTruthy();
-  expect(screen.getByText(/Could not load dashboard \(403\)/)).toBeTruthy();
+  expect(screen.getByText("You don't have access to this.")).toBeTruthy();
+  expect(screen.queryByText(/\(403\)/)).toBeNull();
   expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
 });
 

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import React, { useEffect, useRef, useState } from 'react';
+import { failureMessage } from '../lib/apiProblems';
 import { BookCheck } from 'lucide-react';
 import { getOrgSlugFromLocation, useAuth } from '../auth/AuthContext';
 import { BOOKS_NOT_READY_EVENT, type BooksNotReadyProblem, type UnpostedDocument } from '../lib/entitlementEvents';
@@ -60,7 +61,7 @@ export const BooksCheckDialogView: React.FC<{ problem: BooksNotReadyProblem; onC
     setFailure(null);
     try {
       const response = await authFetch('/api/Sales/PostUnpostedInvoices', { method: 'POST' }, false);
-      if (!response.ok) throw new Error(`Posting failed (HTTP ${response.status}).`);
+      if (!response.ok) throw new Error(await failureMessage(response, 'Posting failed.'));
       const body = await response.json() as {
         results: PostResult[];
         unpostedInvoices: UnpostedDocument[];

@@ -474,7 +474,7 @@ const BankStatementImportPage: React.FC = () => {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        throw new Error(body?.message || `Could not exclude the lines (HTTP ${res.status}).`);
+        throw new Error(body?.message || 'The lines could not be excluded.');
       }
       const result = (await res.json()) as { excluded: number };
       setSelectedIds([]);

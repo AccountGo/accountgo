@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { isStepUpRequired } from '../lib/apiProblems';
 import { AlertCircle, Image as ImageIcon, Trash2, Upload } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { getPasskeyAssertion, isWebAuthnSupported } from '../lib/webauthn';
@@ -171,7 +172,7 @@ export function InvoiceLogoSection({
       const data = await res.json().catch(() => null);
 
       if (!res.ok) {
-        if (res.status === 403 && (!data || data.code === 'mfa_step_up_required')) {
+        if (res.status === 403 && (!data || isStepUpRequired(res.status, data))) {
           setNeedsStepUp(true);
           throw new Error('Verify your identity below, then retry saving your logo.');
         }
@@ -208,7 +209,7 @@ export function InvoiceLogoSection({
       const data = await res.json().catch(() => null);
 
       if (!res.ok) {
-        if (res.status === 403 && (!data || data.code === 'mfa_step_up_required')) {
+        if (res.status === 403 && (!data || isStepUpRequired(res.status, data))) {
           setNeedsStepUp(true);
           throw new Error('Verify your identity below, then retry removing your logo.');
         }

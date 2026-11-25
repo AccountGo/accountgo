@@ -9,6 +9,9 @@ import { VoidDialog } from '../components/VoidDialog';
 import { ReadOnlyModuleBanner, usePermissions } from '../components/Gating';
 import { Bill, BillPayment, PaymentTermOption, TenantContextType } from '../types';
 import { useAuth } from '../auth/AuthContext';
+import { problemError } from '../lib/apiProblems';
+import { useLoadProblem } from '../lib/useLoadProblem';
+import { NoAccess } from '../components/NoAccess';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { BillTitle, billTitle } from '../lib/billTitle';
 import { useCapabilities } from '../lib/entitlements';
@@ -80,10 +83,13 @@ export const BillDetail: React.FC = () => {
   const formatDate = (value?: string | null) =>
     value ? new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
 
+  const loadProblem = useLoadProblem();
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setIsLoading(true);
+      loadProblem.reset();
       try {
         const [billRes, termsRes] = await Promise.all([
           authFetch(`/api/Purchasing/Bill?id=${encodeURIComponent(billId ?? '')}`),
@@ -94,11 +100,11 @@ export const BillDetail: React.FC = () => {
           setNotFound(true);
           return;
         }
-        if (!billRes.ok) throw new Error(`The bill could not be loaded (${billRes.status}).`);
+        if (!billRes.ok) throw await problemError(billRes, 'The bill could not be loaded.');
         setBill(await billRes.json());
         if (termsRes.ok) setPaymentTerms(await termsRes.json());
       } catch (err: any) {
-        if (!cancelled) setError(err.message || 'The bill could not be loaded.');
+        if (!cancelled) setError(loadProblem.capture(err, 'The bill could not be loaded.'));
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -106,6 +112,7 @@ export const BillDetail: React.FC = () => {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authFetch, billId]);
 
   const act = async (kind: 'approve', path: string, done: string, confirmDuplicate = false) => {
@@ -261,6 +268,15 @@ export const BillDetail: React.FC = () => {
       <div className="py-24 flex flex-col items-center justify-center text-[var(--text-secondary)] gap-3">
         <Loader2 className="w-8 h-8 animate-spin text-[var(--brand-primary)]" />
         <p className="text-sm">Loading bill...</p>
+      </div>
+    );
+  }
+
+  if (loadProblem.denied) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Bills" back={{ to: listPath, label: 'Back to bills' }} />
+        <NoAccess problem={loadProblem.denied} />
       </div>
     );
   }

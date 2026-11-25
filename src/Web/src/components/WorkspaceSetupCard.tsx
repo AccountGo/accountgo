@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { failureMessage } from '../lib/apiProblems';
 import { AlertCircle, ClipboardList } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import type { WorkspaceOperatingPolicySummary } from '../types';
@@ -22,7 +23,7 @@ export const WorkspaceSetupCard: React.FC = () => {
     try {
       const response = await authFetch(OPERATING_SETTINGS_PATH);
       if (!response.ok) {
-        setError(`Could not load workspace setup (${response.status}).`);
+        setError(await failureMessage(response, 'Workspace setup could not be loaded.'));
         return;
       }
       const parsed = await response.json();

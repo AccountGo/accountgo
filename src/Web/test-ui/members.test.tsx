@@ -2,8 +2,10 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Members } from '../src/pages/Members';
 
-const { authFetch, currentOrg, caller, hasModule } = vi.hoisted(() => ({
+const { authFetch, currentOrg, caller, hasModule, urlSearch, setSearchParams } = vi.hoisted(() => ({
   authFetch: vi.fn(),
+  urlSearch: { value: '' },
+  setSearchParams: vi.fn(),
   currentOrg: { id: '1', name: 'Test workspace', slug: 'test' },
   caller: { role: 'Owner' },
   hasModule: vi.fn((_module: string) => true),
@@ -15,12 +17,14 @@ vi.mock('../src/auth/AuthContext', () => ({
 vi.mock('react-router-dom', () => ({
   useOutletContext: () => ({ currentOrg, hasModule }),
   useNavigate: () => vi.fn(),
+  useSearchParams: () => [new URLSearchParams(urlSearch.value), setSearchParams],
 }));
 vi.mock('../src/lib/entitlements', () => ({
   useCapabilities: () => ({ canCreate: () => true }),
 }));
 
 beforeEach(() => {
+  urlSearch.value = '';
   caller.role = 'Owner';
   hasModule.mockImplementation((_module: string) => true);
   authFetch.mockImplementation(async (url: string, options?: RequestInit) => {
@@ -413,4 +417,62 @@ it('hides return to just me when the server does not list it', async () => {
   render(<Members />);
   await screen.findByRole('button', { name: 'Invite member' });
   expect(screen.queryByRole('button', { name: 'Return to just me' })).toBeNull();
+});
+
+// "No access" pages link here with ?access=setup|request&grant=<role name>.
+const soloOwnerServer = (accessSetup: object) => authFetch.mockImplementation(async (url: string, options?: RequestInit) => {
+  if (options?.method === 'POST') return new Response(null, { status: 200 });
+  const value = url === '/api/organizations/current' ? { role: 'Owner' }
+    : url.endsWith('/access-setup/status') ? accessSetup
+    : url.endsWith('/security-roles') ? [{ id: '3', name: 'Accountant', displayName: 'Accountant' }, { id: '4', name: 'Purchasing Agent', displayName: 'Purchasing Agent' }]
+    : [];
+  return new Response(JSON.stringify(value), { status: 200 });
+});
+
+it('opens the setup form with the named role preselected from a No-access link, and sends nothing', async () => {
+  urlSearch.value = '?access=setup&grant=Purchasing%20Agent';
+  soloOwnerServer({ ownerCanManageOwnAccess: true, isEligibleForBootstrap: false });
+  render(<Members />);
+
+  await screen.findByRole('button', { name: 'Save and activate roles' });
+  expect((screen.getByLabelText('Purchasing Agent') as HTMLInputElement).checked).toBe(true);
+  expect((screen.getByLabelText('Accountant') as HTMLInputElement).checked).toBe(false);
+  expect(authFetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+  expect(setSearchParams).toHaveBeenCalled(); // the link parameters are cleared once used
+});
+
+it('ignores a role name that is not in the live catalog', async () => {
+  urlSearch.value = '?access=setup&grant=Nonexistent%20Role';
+  soloOwnerServer({ ownerCanManageOwnAccess: true, isEligibleForBootstrap: false });
+  render(<Members />);
+
+  await screen.findByRole('button', { name: 'Save and activate roles' });
+  expect((screen.getByLabelText('Purchasing Agent') as HTMLInputElement).checked).toBe(false);
+  expect((screen.getByLabelText('Accountant') as HTMLInputElement).checked).toBe(false);
+  expect(authFetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+});
+
+it('does not open the setup form when the owner may not set up their own access', async () => {
+  urlSearch.value = '?access=setup&grant=Accountant';
+  soloOwnerServer({ ownerCanManageOwnAccess: false, isEligibleForBootstrap: false });
+  render(<Members />);
+
+  await screen.findByRole('button', { name: 'Invite member' });
+  expect(screen.queryByRole('button', { name: 'Save and activate roles' })).toBeNull();
+});
+
+it('clears the link parameters and opens no form when the role catalog cannot be read', async () => {
+  urlSearch.value = '?access=setup&grant=Accountant';
+  authFetch.mockImplementation(async (url: string) => {
+    if (url === '/api/organizations/current') return new Response(JSON.stringify({ role: 'Owner' }), { status: 200 });
+    if (url.endsWith('/security-roles')) return new Response('x', { status: 500 });
+    return new Response(JSON.stringify(url.endsWith('/access-setup/status') ? { ownerCanManageOwnAccess: true } : []), { status: 200 });
+  });
+  render(<Members />);
+
+  await waitFor(() => expect(setSearchParams).toHaveBeenCalled());
+  const next = setSearchParams.mock.calls[0][0] as URLSearchParams;
+  expect(next.get('access')).toBeNull();
+  expect(next.get('grant')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Save and activate roles' })).toBeNull();
 });

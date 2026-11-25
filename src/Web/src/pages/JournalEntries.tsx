@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { failureMessage } from '../lib/apiProblems';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Check, Copy, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
@@ -107,7 +108,7 @@ async function problemText(response: Response): Promise<string> {
 
 async function read<T>(fetcher: Fetcher, path: string, init?: RequestInit): Promise<T> {
   const response = await fetcher(path, init);
-  if (!response.ok) throw new Error(`Journal request failed (HTTP ${response.status}): ${await response.text()}`);
+  if (!response.ok) throw new Error(await failureMessage(response, 'The journal request could not be completed.'));
   return response.json();
 }
 const inputClass = 'w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-main)] focus:ring-2 focus:ring-[var(--brand-ring)]';
@@ -162,7 +163,7 @@ export function JournalEditor({ initial, accounts, closedYears, canCreate, canPo
         setBusy(false);
         return;
       }
-      if (!response.ok) throw new Error(`Journal request failed (HTTP ${response.status}): ${await problemText(response)}`);
+      if (!response.ok) throw new Error(await failureMessage(response, 'The journal request could not be completed.'));
       const result: { id: string } = await response.json();
       onSaved(post ? entry.id : result.id);
     } catch (error) {

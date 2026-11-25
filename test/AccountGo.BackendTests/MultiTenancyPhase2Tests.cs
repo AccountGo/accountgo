@@ -427,6 +427,22 @@ namespace AccountGo.BackendTests
             Assert.Equal(bodyB.Status, bodyNonExistent.Status);
         }
 
+        // The workspace 404 carries a stable code for the web client and stays byte-identical for "not a member" and "does not exist".
+        [Fact]
+        public async Task Test3b_WorkspaceNotFound_Carries_A_Code_And_Is_Byte_Identical_For_NonMember_And_Unknown()
+        {
+            var notMember = await _client.SendAsync(CreateRequest(HttpMethod.Get, "/api/Sales/Customers", TokenUA, SlugB));
+            var unknown = await _client.SendAsync(CreateRequest(HttpMethod.Get, "/api/Sales/Customers", TokenUA, "random-unknown-org"));
+
+            Assert.Equal(HttpStatusCode.NotFound, notMember.StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
+            var notMemberBody = await notMember.Content.ReadAsStringAsync();
+            var unknownBody = await unknown.Content.ReadAsStringAsync();
+            Assert.Equal(notMemberBody, unknownBody);
+            using var json = System.Text.Json.JsonDocument.Parse(notMemberBody);
+            Assert.Equal("WORKSPACE_NOT_FOUND", json.RootElement.GetProperty("code").GetString());
+        }
+
         private string Pub<T>(int id) where T : BaseEntity, IHasPublicId =>
             AccountGo.BackendTests.PublicIds.PublicIdTestHelper.PublicIdOf<T>(_factory.Services, id);
 

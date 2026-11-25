@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
+import { failureMessage } from '../lib/apiProblems';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Download, FileDown, Loader2, RefreshCw } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
@@ -203,14 +204,14 @@ export async function loadReportData(
 ): Promise<ReportData> {
   async function read<T>(path: string): Promise<T[]> {
     const response = await fetcher(path);
-    if (!response.ok) throw new Error(`Unable to load financial reports (HTTP ${response.status}).`);
+    if (!response.ok) throw new Error(await failureMessage(response, 'Financial reports could not be loaded.'));
     const data: T[] = await response.json();
     if (!Array.isArray(data)) throw new Error('The reporting API returned an invalid response.');
     return data;
   }
   async function readObject<T>(path: string): Promise<T> {
     const response = await fetcher(path);
-    if (!response.ok) throw new Error(`Unable to load financial reports (HTTP ${response.status}).`);
+    if (!response.ok) throw new Error(await failureMessage(response, 'Financial reports could not be loaded.'));
     const data: T = await response.json();
     if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('The reporting API returned an invalid response.');
     return data;

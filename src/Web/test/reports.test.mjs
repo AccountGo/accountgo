@@ -243,7 +243,7 @@ test('all four live endpoints receive changed date filters and accounting basis,
     assert.equal(new URL(calls[1], 'http://test').searchParams.get('from'), '2026-04-01T00:00:00');
     assert.equal(new URL(calls[1], 'http://test').searchParams.get('basis'), 'Cash');
   }
-  await assert.rejects(loadReportData(async () => new Response('', { status: 403 }), { from: '', to: '' }), /HTTP 403/);
+  await assert.rejects(loadReportData(async () => new Response('', { status: 403 }), { from: '', to: '' }), /You don't have access to this\./);
   await assert.rejects(loadReportData(async () => Response.json({}), { from: '', to: '' }), /invalid response/);
   await assert.rejects(loadReportData(async url => Response.json(
     url.includes('CashFlow') ? {

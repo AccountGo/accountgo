@@ -47,7 +47,7 @@ export function usePlanCatalog() {
     if (cached) return;
     let mounted = true;
     inflight ??= authFetch('/api/Subscription/plans').then(async (response) => {
-      if (!response.ok) throw new Error(`Could not load plans (HTTP ${response.status}).`);
+      if (!response.ok) throw new Error('Plans could not be loaded.');
       const data = (await response.json()) as PlanCatalogEntry[];
       cached = data;
       return data;
