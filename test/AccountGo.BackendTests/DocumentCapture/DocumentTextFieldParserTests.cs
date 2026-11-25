@@ -776,6 +776,225 @@ public sealed class DocumentTextFieldParserTests(ITestOutputHelper output)
         Assert.Equal("INV-42", fields[0].GetProperty("value").GetString());
     }
 
+    [Fact]
+    [Trait("Rule", "A-01")]
+    public void Parse_AssistantAttachment_SpaceSeparatedAndNextLineLabels()
+    {
+        var lines = new[]
+        {
+            Line("Invoice Number INV-3337"),
+            Line("From:"),
+            Line("DEMO - Sliced Invoices"),
+            Line("Order Number 12345"),
+            Line("Invoice Date January 25, 2016"),
+            Line("Due Date January 31, 2016"),
+            Line("Total Due $93.50"),
+            Line("To:"),
+            Line("Test Business"),
+            Line("Sub Total $85.00"),
+            Line("Tax $8.50"),
+            Line("Total $93.50"),
+        };
+
+        var root = ParseAndValidate("assistant-attachment", lines, out _);
+        var map = root.GetProperty("fields").EnumerateArray()
+            .ToDictionary(
+                f => f.GetProperty("label").GetString()!,
+                f => f.GetProperty("value").GetString()!,
+                StringComparer.OrdinalIgnoreCase);
+
+        Assert.Equal("INV-3337", map["Invoice Number"]);
+        Assert.Equal("DEMO - Sliced Invoices", map["From"]);
+        Assert.Equal("12345", map["Order Number"]);
+        Assert.Equal("January 25, 2016", map["Invoice Date"]);
+        Assert.Equal("January 31, 2016", map["Due Date"]);
+        Assert.Equal("$93.50", map["Total Due"]);
+        Assert.Equal("Test Business", map["To"]);
+        Assert.Equal("$85.00", map["Sub Total"]);
+        Assert.Equal("$8.50", map["Tax"]);
+        Assert.Equal("$93.50", map["Total"]);
+    }
+
+    [Fact]
+    [Trait("Rule", "A-01")]
+    public void Parse_AssistantAttachment_EmbeddedLabelsWhenColumnsMerge()
+    {
+        var root = ParseAndValidate("assistant-attachment",
+        [
+            Line("DEMO - Sliced Invoices Order Number 12345"),
+            Line("Suite 5A-1204 Invoice Date January 25, 2016"),
+        ], out _);
+        var map = root.GetProperty("fields").EnumerateArray()
+            .ToDictionary(
+                f => f.GetProperty("label").GetString()!,
+                f => f.GetProperty("value").GetString()!,
+                StringComparer.OrdinalIgnoreCase);
+
+        Assert.Equal("12345", map["Order Number"]);
+        Assert.Equal("January 25, 2016", map["Invoice Date"]);
+    }
+
+    [Fact]
+    [Trait("Rule", "A-01")]
+    public void Parse_AssistantAttachment_FinancialFallbackWhenNoEnglishLabeledPairs()
+    {
+        // Thai invoice cues are known to the financial parser but not to the English A-01 space-label list.
+        var root = ParseAndValidate("assistant-attachment",
+        [
+            Line("ตัวอย่าง ซัพพลาย จำกัด"),
+            Line("เลขที่ INV-20457"),
+            Line("วันที่ 25/01/2016"),
+            Line("ยอดรวมทั้งสิ้น 93.50"),
+        ], out _);
+
+        var map = root.GetProperty("fields").EnumerateArray()
+            .ToDictionary(
+                f => f.GetProperty("label").GetString()!,
+                f => f.GetProperty("value").GetString()!,
+                StringComparer.OrdinalIgnoreCase);
+
+        Assert.Equal("INV-20457", map["Invoice number"]);
+        Assert.Equal("2016-01-25", map["Date"]);
+        Assert.Equal("93.50", map["Total"]);
+    }
+
+    [Fact]
+    [Trait("Rule", "A-01")]
+    public void Parse_AssistantAttachment_RejectsTaxInvoiceHeaderAndTotalQty()
+    {
+        var root = ParseAndValidate("assistant-attachment",
+        [
+            Line("Tax Invoice"),
+            Line("Total Qty 5"),
+            Line("Total 93.50"),
+            Line("Due Date 25 January 2016"),
+        ], out _);
+
+        var map = root.GetProperty("fields").EnumerateArray()
+            .ToDictionary(
+                f => f.GetProperty("label").GetString()!,
+                f => f.GetProperty("value").GetString()!,
+                StringComparer.OrdinalIgnoreCase);
+
+        Assert.False(map.TryGetValue("Tax", out var tax) && tax!.Equals("Invoice", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("93.50", map["Total"]);
+        Assert.Contains("2016", map["Due Date"], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Rule", "A-01")]
+    public void Parse_AssistantAttachment_FinancialHintsFillGapsAfterPartialLabels()
+    {
+        // A lone From: pair must not block financial date/total recovery.
+        var root = ParseAndValidate("assistant-attachment",
+        [
+            Line("From:"),
+            Line("Acme Supplies Ltd"),
+            Line("Invoice Number INV-9"),
+            Line("Date 25 January 2016"),
+            Line("Total 40.00"),
+        ], out _);
+
+        var map = root.GetProperty("fields").EnumerateArray()
+            .ToDictionary(
+                f => f.GetProperty("label").GetString()!,
+                f => f.GetProperty("value").GetString()!,
+                StringComparer.OrdinalIgnoreCase);
+
+        Assert.Equal("Acme Supplies Ltd", map["From"]);
+        Assert.Equal("INV-9", map["Invoice Number"]);
+        Assert.True(map.ContainsKey("Date") || map.ContainsKey("Total") || map.ContainsKey("Invoice number"));
+    }
+
+    [Fact]
+    [Trait("Rule", "A-01")]
+    public void Parse_AssistantAttachment_ProdStyleWordPressInvoiceExtractsFields()
+    {
+        // Invented layout matching the production Sliced Invoices / WordPress sample shape (merged columns, no colons).
+        var root = ParseAndValidate("assistant-attachment", WordPressStyleInvoiceLines(), out _);
+
+        var map = root.GetProperty("fields").EnumerateArray()
+            .ToDictionary(
+                f => f.GetProperty("label").GetString()!,
+                f => f.GetProperty("value").GetString()!,
+                StringComparer.OrdinalIgnoreCase);
+
+        Assert.Equal("INV-3337", map["Invoice Number"]);
+        Assert.Equal("12345", map["Order Number"]);
+        Assert.Contains("DEMO - Sliced Invoices", map["From"], StringComparison.Ordinal);
+        Assert.Equal("Test Business", map["To"]);
+        Assert.Equal("$93.50", map["Total Due"]);
+        Assert.True(map.ContainsKey("Date") || map.ContainsKey("Invoice Date") || map.ContainsKey("Due Date"));
+    }
+
+    [Theory]
+    [InlineData("purchase-invoice")]
+    [InlineData("expense-receipt")]
+    [InlineData("sales-invoice")]
+    [Trait("Rule", "V-06")]
+    [Trait("Rule", "V-07")]
+    [Trait("Rule", "V-08")]
+    [Trait("Rule", "T-03")]
+    [Trait("Rule", "D-03")]
+    [Trait("Rule", "N-01")]
+    public void Parse_Financial_ProdStyleWordPressInvoiceExtractsPartiesAndTotals(string kind)
+    {
+        DocumentTextFieldParser.Warmup();
+        var root = ParseAndValidate(kind, WordPressStyleInvoiceLines(), out var warnings);
+
+        Assert.DoesNotContain("PARSE_TRUNCATED", warnings);
+        Assert.Equal("INV-3337",
+            root.GetProperty(kind == "sales-invoice" ? "sourceInvoiceNo" : "vendorInvoiceNo").GetString());
+        Assert.Equal("2016-01-25", root.GetProperty("date").GetString());
+        Assert.Equal("2016-01-31", root.GetProperty("dueDate").GetString());
+
+        var totals = root.GetProperty("sourceTotals");
+        Assert.Equal("93.50", totals.GetProperty("grandTotal").GetString());
+        Assert.Equal("85.00", totals.GetProperty("subtotal").GetString());
+        Assert.Equal("8.50", totals.GetProperty("taxTotal").GetString());
+
+        if (kind == "sales-invoice")
+            Assert.Equal("Test Business", root.GetProperty("customerName").GetString());
+        else
+            Assert.Equal("DEMO - Sliced Invoices", root.GetProperty("vendorName").GetString());
+    }
+
+    [Fact]
+    [Trait("Rule", "V-08")]
+    public void Parse_PurchaseInvoice_V08_PrefersFromLabelOverTopBlockTitle()
+    {
+        var root = ParseAndValidate("purchase-invoice",
+        [
+            Line("Invoice"),
+            Line("Invoice Number INV-9001"),
+            Line("From:"),
+            Line("Harbor Supplies Ltd Order Number 55"),
+            Line("Date: 2026-03-01"),
+            Line("Total: EUR 12.00"),
+        ], out _);
+
+        Assert.Equal("Harbor Supplies Ltd", root.GetProperty("vendorName").GetString());
+        Assert.Equal("INV-9001", root.GetProperty("vendorInvoiceNo").GetString());
+    }
+
+    private static TextLine[] WordPressStyleInvoiceLines() =>
+    [
+        Line("Invoice"),
+        Line("Invoice Number INV-3337"),
+        Line("From:"),
+        Line("DEMO - Sliced Invoices Order Number 12345"),
+        Line("Suite 5A-1204 Invoice Date January 25, 2016"),
+        Line("123 Somewhere Street"),
+        Line("Due Date January 31, 2016"),
+        Line("Your City AZ 12345"),
+        Line("Total Due $93.50"),
+        Line("To:"),
+        Line("Test Business"),
+        Line("Sub Total $85.00d"),
+        Line("Tax $8.50i"),
+        Line("Total $93.50a"),
+    ];
+
     // --- L1: tendered amounts and amountPaid > grandTotal + 0.01 omit amountPaid ---
 
     [Fact]

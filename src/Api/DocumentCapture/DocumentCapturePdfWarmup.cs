@@ -1,6 +1,7 @@
 // Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+using Api.DocumentCaptures.Parsing;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -52,6 +53,17 @@ internal sealed class DocumentCapturePdfWarmup : BackgroundService
                 .ConfigureAwait(false);
             if (!result.IsValid)
                 _logger.LogWarning("Document capture PDF parser warm-up did not complete successfully.");
+
+            // Field/date/amount regex JIT is separate from PDFium; warm it so the first live
+            // capture does not emit PARSE_TRUNCATED under the 500 ms cooperative deadline.
+            try
+            {
+                DocumentTextFieldParser.Warmup();
+            }
+            catch (Exception)
+            {
+                _logger.LogWarning("Document capture field parser warm-up did not complete successfully.");
+            }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {

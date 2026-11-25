@@ -488,6 +488,28 @@ public sealed class AssistantDocumentCaptureTests : IAsyncLifetime
     }
 
     [Fact]
+    public void AttachmentBlock_FallsBackToMaskedRawTextWhenFieldsEmpty()
+    {
+        var withRaw = AssistantAttachmentMessageBuilder.BuildDelimitedUntrustedBlock(
+            "cap_raw01",
+            "{\"fields\":[]}",
+            companyName: "Northwind Trading Ltd.",
+            maskedRawText: "Invoice Number INV-3337\nTotal Due $93.50\nTest Business");
+        Assert.Contains(AssistantAttachmentMessageBuilder.RawTextFallbackHeader, withRaw, StringComparison.Ordinal);
+        Assert.Contains("Invoice Number INV-3337", withRaw, StringComparison.Ordinal);
+        Assert.Contains("Total Due $93.50", withRaw, StringComparison.Ordinal);
+        Assert.DoesNotContain("(no extracted fields)", withRaw, StringComparison.Ordinal);
+
+        var empty = AssistantAttachmentMessageBuilder.BuildDelimitedUntrustedBlock(
+            "cap_raw02",
+            "{\"fields\":[]}",
+            companyName: "Northwind Trading Ltd.",
+            maskedRawText: null);
+        Assert.Contains("(no extracted fields)", empty, StringComparison.Ordinal);
+        Assert.DoesNotContain(AssistantAttachmentMessageBuilder.RawTextFallbackHeader, empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task RunStream_ConcurrentReadyAssistantCapture_AcceptsOnceAndPurgesBlobs()
     {
         var (id, pubId) = SeedCapture(

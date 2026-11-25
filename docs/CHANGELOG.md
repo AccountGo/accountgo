@@ -28,6 +28,10 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ### Fixed
 
+- Scanned bills and invoices now read `From:` / `To:` party labels (and strip merged `Order Number` text), and the first scan after a container start no longer drops dates and totals under a cold-start parse timeout.
+
+- Assistant document attachments now extract invoice-style fields even when the PDF uses space-separated labels instead of `Label: Value`, and fall back to masked extracted text when structured fields are still empty.
+
 - Scanned bills now include the document's tax, as a recoverable tax rate for VAT/GST workspaces or in the line costs otherwise, and can't be approved with the tax missing.
 
 - Scanned sales invoices now apply the document's tax as output tax, and the tax treatment of every scanned bill and invoice is recorded.
