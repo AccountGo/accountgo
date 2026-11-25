@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getOrgSlugFromLocation, useAuth } from '../auth/AuthContext';
 import { FULL_WORKSPACE_ACCESS_ROLE_NAME } from './accessPresets';
+import { SESSION_CLEARED_EVENT } from './workspaceAccessEvents';
 
 const BASE = '/api/organizations/current';
 const FULL_ACCESS_LABEL = 'Full workspace access';
@@ -105,10 +106,12 @@ function recordRequest(slug: string, userId: string | undefined, roleId: string)
   });
 }
 
-/** For tests: forget what was fetched. */
+/** Forget what was fetched: for tests, and when the session ends or a workspace is lost. */
 export function clearAccessDirectoryCache(): void {
   cache.clear();
 }
+
+if (typeof window !== 'undefined') window.addEventListener(SESSION_CLEARED_EVENT, clearAccessDirectoryCache);
 
 /**
  * Members and the role catalog are read once per workspace and shared (a page that shows "No access" several times, or a

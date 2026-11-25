@@ -1,5 +1,6 @@
 import type { ClassifiedProblem } from './apiProblems';
 import { PERMISSION_DENIED_EVENT, type PermissionDeniedDetail } from './permissionDenialEvents';
+import { SESSION_CLEARED_EVENT } from './workspaceAccessEvents';
 
 /**
  * The notices for actions the server refused. They live outside React on purpose: a permission refresh changes the workspace's
@@ -32,6 +33,7 @@ if (typeof window !== 'undefined') {
     const detail = (event as CustomEvent<PermissionDeniedDetail>).detail;
     if (detail?.action) add(detail.problem); // a denied read is explained by its page
   });
+  window.addEventListener(SESSION_CLEARED_EVENT, () => actionNotices.clear());
 }
 
 export const actionNotices = {

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { getPersistedOrgSlug, setPersistedOrgSlug } from '../lib/storage';
+import { safeReturnPath } from '../lib/safeReturnPath';
 import { resolvePostAuthDestination } from './loginContinuation';
 import { clearInvitationToken, getInvitationToken, storeInvitationToken } from '../lib/invitationStorage';
 import { GoogleSignInButton } from '../components/GoogleSignInButton';
@@ -208,8 +209,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
           persistedSlug: getPersistedOrgSlug(),
           fromPath: (() => {
             const from = (location.state as any)?.from;
-            if (!from?.pathname) return undefined;
-            return `${from.pathname}${from.search || ''}`;
+            return safeReturnPath(from?.pathname, from?.search || '') ?? undefined;
           })(),
         });
         if (cancelled) return;
@@ -414,9 +414,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
     // every entry path (explicit slug, persisted slug, original destination, or sole workspace), not just
     // when the in-memory signup slug survives.
     const fromLoc = (location.state as any)?.from;
-    const fromPath = fromLoc?.pathname
-      ? `${fromLoc.pathname}${fromLoc.search || ''}`
-      : undefined;
+    const fromPath = safeReturnPath(fromLoc?.pathname, fromLoc?.search || '') ?? undefined;
     const decision = await resolvePostAuthDestination(authFetch, {
       targetSlugOverride,
       targetOrgSlug,

@@ -27,6 +27,9 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - Pages you can't open now explain why and how to get access, instead of showing an error code.
 - Actions you can't take now say which role you need and how to get it, instead of a generic error.
 - Error messages no longer show internal permission names.
+- When your session ends, you're asked to sign in again and returned to the page you were on.
+- When you lose access to a workspace, you're taken to your workspace list with an explanation instead of an error.
+- The dashboard's access setup prompt for new workspace owners can be dismissed and offers a way into access setup.
 
 ### Fixed
 

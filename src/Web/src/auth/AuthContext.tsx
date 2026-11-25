@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import { UserDto, AuthResponse, OtpSendResponse, SignUpPayload, SignUpResponse, AuthContextType, VerifyOtpResult, MfaRequiredResponse, MfaEnrollmentRequiredResponse } from '../types/auth';
 import { announceEntitlementDenial } from '../lib/entitlementEvents';
 import { announcePermissionDenial } from '../lib/permissionDenialEvents';
+import { SESSION_CLEARED_EVENT, announceWorkspaceAccessLost } from '../lib/workspaceAccessEvents';
 import { ENTITLEMENTS_VERSION_HEADER, observeEntitlementsVersionHeader } from '../lib/entitlementVersion';
 import { startIdleSession, type IdleSession, type SessionWarning, type SignOutReason } from '../lib/idleSession';
 import { SessionTimeoutDialog } from '../components/SessionTimeoutDialog';
@@ -83,6 +84,8 @@ function describeDuration(ms: number): string {
 }
 
 export function signedOutNotice(reason: SignOutReason, idleMs: number): string {
+  if (reason === 'revoked') return "Your session ended. Sign in again to continue. Anything you hadn't saved wasn't kept.";
+  if (reason === 'unreachable') return "We couldn't reach AccountGo to keep you signed in. Sign in again to continue. Anything you hadn't saved wasn't kept.";
   return reason === 'idle'
     ? `You were signed out after ${describeDuration(idleMs)} of inactivity. Sign in to continue where you left off.`
     : 'For your security, your session reached its time limit. Sign in to continue where you left off.';
@@ -124,6 +127,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSessionExpiresAt(Number.isFinite(expires) ? expires : null);
     setSignedOutNoticeText(null);
   }, []);
+
+  // Logout session
+  const clearSession = useCallback(() => {
+    // Whatever was learned for this session (action notices, member lists, permission refresh timers) goes with it.
+    window.dispatchEvent(new Event(SESSION_CLEARED_EVENT));
+    lastRefreshedOrgSlugRef.current = null;
+    tokenRef.current = null;
+    setAccessToken(null);
+    setUser(null);
+  }, []);
+
+  // The refresh failed for good: the server refused it ('revoked') or could not be reached before the start-up deadline
+  // ('unreachable', the session itself may be fine). If someone was signed in, say so once on the sign-in page (same path as idle/expired);
+  // a visitor who was never signed in (the first refresh on page load) gets no notice. The single-flight refresh means
+  // many concurrent 401s arrive here once; the first notice wins.
+  const endSessionAfterFailedRefresh = useCallback((reason: 'revoked' | 'unreachable') => {
+    if (tokenRef.current !== null) {
+      setSignedOutNoticeText((current) => current ?? signedOutNotice(reason, 0));
+    }
+    clearSession();
+  }, [clearSession]);
 
   // Silent refresh helper
   const performRefresh = useCallback(async (orgSlugIfChanged?: string): Promise<string | null> => {
@@ -169,13 +193,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return data.accessToken;
           }
           if (res && res.status < 500) {
-            setAccessToken(null);
-            setUser(null);
+            endSessionAfterFailedRefresh('revoked');
             return null;
           }
           if (Date.now() >= deadline) {
-            setAccessToken(null);
-            setUser(null);
+            endSessionAfterFailedRefresh('unreachable');
             return null;
           }
 
@@ -201,7 +223,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return refreshPromiseRef.current;
-  }, [applySessionLimits]);
+  }, [applySessionLimits, endSessionAfterFailedRefresh]);
 
   // Initialize session on mount via httpOnly refresh cookie
   useEffect(() => {
@@ -361,14 +383,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAccessToken(newToken);
   }, []);
 
-  // Logout session
-  const clearSession = useCallback(() => {
-    lastRefreshedOrgSlugRef.current = null;
-    tokenRef.current = null;
-    setAccessToken(null);
-    setUser(null);
-  }, []);
-
   const logout = useCallback(async (reason?: SignOutReason): Promise<void> => {
     try {
       const currentToken = tokenRef.current;
@@ -449,6 +463,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // A permission denial refreshes the member's permissions and, for a write, shows a non-blocking notice. Never for sign-in routes.
       if (!isAuthRoute && requestPath.startsWith('/api/')) {
         void announcePermissionDenial(res, { action: userWrite });
+        void announceWorkspaceAccessLost(res, headers.get(ORG_HEADER));
       }
       // Hook adopts /api/entitlements versions itself — observing here would duplicate the reload.
       if (requestPath !== '/api/entitlements') {
@@ -495,6 +510,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
           if (!isAuthRoute && requestPath.startsWith('/api/')) {
             void announcePermissionDenial(res, { action: userWrite });
+            void announceWorkspaceAccessLost(res, retryHeaders.get(ORG_HEADER));
           }
           if (requestPath !== '/api/entitlements') {
             observeEntitlementsVersionHeader(
