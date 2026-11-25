@@ -248,7 +248,7 @@ export const OrgLayout: React.FC = () => {
   const updateCurrentOrgRef = useRef(updateCurrentOrg);
   updateCurrentOrgRef.current = updateCurrentOrg;
   const userId = userProfile.id;
-  const refreshPermissions = useCallback((): Promise<boolean> => {
+  const refreshPermissions = useCallback((options?: { force?: boolean }): Promise<boolean> => {
     const shown = currentOrgRef.current;
     if (!shown) return Promise.resolve(false);
     return throttledRefresh(`${shown.slug}\u0000${userId}`, () =>
@@ -257,6 +257,7 @@ export const OrgLayout: React.FC = () => {
         getCurrent: () => currentOrgRef.current,
         apply: (updates) => updateCurrentOrgRef.current(updates),
       }),
+      { force: options?.force },
     );
   }, [authFetch, userId]);
 
@@ -432,7 +433,7 @@ interface OrgWorkspaceShellProps {
   hasPermission: (permission: string | string[]) => boolean;
   switchOrg: (slug: string) => void;
   updateCurrentOrg: (updates: Partial<OrgDetails>) => void;
-  refreshPermissions: () => Promise<boolean>;
+  refreshPermissions: (options?: { force?: boolean }) => Promise<boolean>;
   updateOrgWhitelabel: (config: WhitelabelConfig) => void;
   updateSubscription: (
     newPlan: PlanKey,

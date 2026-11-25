@@ -104,7 +104,7 @@ function journalWorkflowLabel(mode?: string): string {
 }
 
 export const Members: React.FC = () => {
-  const { currentOrg, updateCurrentOrg, hasModule } = useOutletContext<TenantContextType>();
+  const { currentOrg, updateCurrentOrg, refreshPermissions, hasModule } = useOutletContext<TenantContextType>();
   const { authFetch, user } = useAuth();
   const navigate = useNavigate();
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
@@ -299,10 +299,16 @@ export const Members: React.FC = () => {
       });
       await requireSuccess(response);
       if (path === 'owner-access-setup') {
-        const current = await authFetch(base);
-        if (current.ok) {
-          const updated = await current.json();
-          if (Array.isArray(updated.permissions)) updateCurrentOrg?.({ permissions: updated.permissions });
+        // The member just changed their own roles, so re-read now through the shared helper (which also applies role and
+        // permissions and does not wait out the one-minute limit).
+        if (refreshPermissions) {
+          await refreshPermissions({ force: true });
+        } else {
+          const current = await authFetch(base);
+          if (current.ok) {
+            const updated = await current.json();
+            if (Array.isArray(updated.permissions)) updateCurrentOrg?.({ permissions: updated.permissions });
+          }
         }
       }
       setForm(null);

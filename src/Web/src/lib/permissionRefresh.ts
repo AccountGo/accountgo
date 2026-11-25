@@ -14,11 +14,20 @@ interface Entry {
 
 const entries = new Map<string, Entry>();
 
-/** Runs `run` unless one is in flight (then shares it) or one started within the last minute (then resolves false without running). */
-export function throttledRefresh(key: string, run: () => Promise<boolean>, now: () => number = Date.now): Promise<boolean> {
+/**
+ * Runs `run` unless one is in flight (then shares it) or one started within the last minute (then resolves false without running).
+ * `force` skips the minute for a refresh the member just caused themselves (they changed their own roles), still sharing an
+ * in-flight run. A forced run starts a new minute like any other.
+ */
+export function throttledRefresh(
+  key: string,
+  run: () => Promise<boolean>,
+  options: { force?: boolean; now?: () => number } = {},
+): Promise<boolean> {
+  const now = options.now ?? Date.now;
   const entry = entries.get(key);
   if (entry?.inflight) return entry.inflight;
-  if (entry && now() - entry.startedAt < PERMISSION_REFRESH_MIN_INTERVAL_MS) return Promise.resolve(false);
+  if (!options.force && entry && now() - entry.startedAt < PERMISSION_REFRESH_MIN_INTERVAL_MS) return Promise.resolve(false);
 
   const next: Entry = { startedAt: now(), inflight: null };
   next.inflight = run()

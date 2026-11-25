@@ -249,15 +249,30 @@ describe('throttledRefresh and refreshWorkspaceAccess', () => {
     let clock = 1_000_000;
     const run = vi.fn(async () => { throw new Error('network'); });
 
-    expect(await throttledRefresh('k', run, () => clock)).toBe(false);
+    expect(await throttledRefresh('k', run, { now: () => clock })).toBe(false);
     clock += 30_000;
-    expect(await throttledRefresh('k', run, () => clock)).toBe(false);
+    expect(await throttledRefresh('k', run, { now: () => clock })).toBe(false);
     expect(run).toHaveBeenCalledTimes(1);
 
     clock += 31_000;
-    await throttledRefresh('k', run, () => clock);
+    await throttledRefresh('k', run, { now: () => clock });
     expect(run).toHaveBeenCalledTimes(2);
-    expect(await throttledRefresh('other', async () => true, () => clock)).toBe(true); // another workspace or user is independent
+    expect(await throttledRefresh('other', async () => true, { now: () => clock })).toBe(true); // another workspace or user is independent
+  });
+
+  it('a forced refresh skips the minute (the member just changed their own roles) but still shares an in-flight run', async () => {
+    const run = vi.fn(async () => true);
+    await throttledRefresh('f', run);
+    expect(await throttledRefresh('f', run)).toBe(false); // inside the minute
+    expect(run).toHaveBeenCalledTimes(1);
+
+    expect(await throttledRefresh('f', run, { force: true })).toBe(true);
+    expect(run).toHaveBeenCalledTimes(2);
+
+    const slow = vi.fn(() => new Promise<boolean>((resolve) => setTimeout(() => resolve(true), 10)));
+    const [a, b] = await Promise.all([throttledRefresh('g', slow, { force: true }), throttledRefresh('g', slow, { force: true })]);
+    expect([a, b]).toEqual([true, true]);
+    expect(slow).toHaveBeenCalledTimes(1);
   });
 
   it('shares one in-flight run between concurrent callers', async () => {
