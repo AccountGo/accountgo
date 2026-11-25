@@ -28,7 +28,7 @@ AccountGo is an open-source accounting and ERP application for small businesses 
 
 ![AccountGo financial dashboard](docs/screenshots/11-local-dashboard.png)
 
-[See more screenshots](docs/readme/showcase.md) · [Run locally](#quick-start-with-a-coding-agent) · [Self-hosting guide](docs/readme/deployment.md) · [Contribute](#contributing)
+[Watch the invoice-to-ledger walkthrough](https://accountgo.dev/resources/articles/invoice-to-general-ledger/) · [See more screenshots](docs/readme/showcase.md) · [Run locally](#quick-start-with-a-coding-agent) · [Self-hosting guide](docs/readme/deployment.md) · [Contribute](#contributing)
 
 If AccountGo is useful to you, consider starring the repository to follow its development.
 
