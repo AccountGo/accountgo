@@ -30,6 +30,47 @@ public static class DocumentCapturePdfLimits
 
 public sealed record DocumentCapturePdfValidationResult(bool IsValid, int? PageCount, string? ErrorCode);
 
+/// <summary>
+/// Byte, page, decode and time bounds for one PDF validation. <see cref="Scan"/> is the extraction profile (unchanged limits);
+/// stored-only library uploads use <see cref="ForStoredDocument"/>, which scales the decode budget and deadline with the byte limit.
+/// </summary>
+public sealed record DocumentCapturePdfProfile(
+    int MaxInputBytes,
+    int MaxPages,
+    int MaxAggregateDecodedBytes,
+    int MaxDecodedBytesPerStream,
+    TimeSpan ParseDeadline,
+    bool ReportsPageLimit = false)
+{
+    public const int MaxStoredInputBytes = 15 * 1024 * 1024;
+    public const int MaxStoredPages = 300;
+
+    public static DocumentCapturePdfProfile Scan { get; } = new(
+        DocumentCapturePdfLimits.MaxInputBytes,
+        DocumentCapturePdfLimits.MaxPages,
+        DocumentCapturePdfLimits.MaxAggregateDecodedBytes,
+        DocumentCapturePdfLimits.MaxDecodedBytesPerStream,
+        DocumentCapturePdfLimits.ParseDeadline);
+
+    /// <summary>Stored-only documents: never above 15 MiB / 300 pages; at or below the scan limits it is the scan profile.</summary>
+    public static DocumentCapturePdfProfile ForStoredDocument(int maxInputBytes, int maxPages)
+    {
+        if (maxInputBytes is < 1 or > MaxStoredInputBytes)
+            throw new ArgumentOutOfRangeException(nameof(maxInputBytes));
+        if (maxPages is < 1 or > MaxStoredPages)
+            throw new ArgumentOutOfRangeException(nameof(maxPages));
+        if (maxInputBytes <= DocumentCapturePdfLimits.MaxInputBytes && maxPages <= DocumentCapturePdfLimits.MaxPages)
+            return Scan with { MaxInputBytes = maxInputBytes, MaxPages = maxPages, ReportsPageLimit = true };
+        return new DocumentCapturePdfProfile(
+            maxInputBytes,
+            maxPages,
+            MaxAggregateDecodedBytes: 64 * 1024 * 1024,
+            MaxDecodedBytesPerStream: Math.Max(DocumentCapturePdfLimits.MaxDecodedBytesPerStream, maxInputBytes),
+            ParseDeadline: TimeSpan.FromSeconds(8),
+            ReportsPageLimit: true);
+    }
+}
+
 public static class DocumentCapturePdfValidator
 {
     internal static readonly ConcurrentDictionary<int, SemaphoreSlim> ParseGates = new();
@@ -52,16 +93,34 @@ public static class DocumentCapturePdfValidator
         CancellationToken cancellationToken = default) =>
         ValidateWithDeadlineAsync(bytes, parseSlots, clock, DocumentCapturePdfLimits.ParseDeadline, cancellationToken);
 
-    internal static async Task<DocumentCapturePdfValidationResult> ValidateWithDeadlineAsync(
+    /// <summary>Validates with an explicit profile (stored-only library documents).</summary>
+    public static Task<DocumentCapturePdfValidationResult> ValidateAsync(
+        ReadOnlyMemory<byte> bytes,
+        int parseSlots,
+        DocumentCapturePdfProfile profile,
+        TimeProvider clock,
+        CancellationToken cancellationToken = default) =>
+        ValidateWithProfileAsync(bytes, parseSlots, clock, profile ?? throw new ArgumentNullException(nameof(profile)), cancellationToken);
+
+    internal static Task<DocumentCapturePdfValidationResult> ValidateWithDeadlineAsync(
         ReadOnlyMemory<byte> bytes,
         int parseSlots,
         TimeProvider clock,
         TimeSpan deadline,
+        CancellationToken cancellationToken) =>
+        ValidateWithProfileAsync(bytes, parseSlots, clock, DocumentCapturePdfProfile.Scan with { ParseDeadline = deadline }, cancellationToken);
+
+    private static async Task<DocumentCapturePdfValidationResult> ValidateWithProfileAsync(
+        ReadOnlyMemory<byte> bytes,
+        int parseSlots,
+        TimeProvider clock,
+        DocumentCapturePdfProfile profile,
         CancellationToken cancellationToken)
     {
+        var deadline = profile.ParseDeadline;
         if (bytes.Length == 0)
             return Invalid("DOCUMENT_EMPTY");
-        if (bytes.Length > DocumentCapturePdfLimits.MaxInputBytes)
+        if (bytes.Length > profile.MaxInputBytes)
             return Invalid("DOCUMENT_TOO_LARGE");
         if (bytes.Length < 5 || !bytes.Span[..5].SequenceEqual("%PDF-"u8))
             return Invalid("DOCUMENT_MALFORMED");
@@ -79,8 +138,8 @@ public static class DocumentCapturePdfValidator
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var decodeBudget = new PdfDecodeBudget(DocumentCapturePdfLimits.MaxAggregateDecodedBytes,
-                DocumentCapturePdfLimits.MaxDecodedBytesPerStream, deadline, clock);
+            var decodeBudget = new PdfDecodeBudget(profile.MaxAggregateDecodedBytes,
+                profile.MaxDecodedBytesPerStream, deadline, clock);
             budget = decodeBudget;
             var options = new ParsingOptions
             {
@@ -93,9 +152,11 @@ public static class DocumentCapturePdfValidator
             decodeBudget.ThrowIfExpired();
             if (document.IsEncrypted)
                 return Invalid("DOCUMENT_UNSUPPORTED_TYPE");
-            if (document.NumberOfPages is < 1 or > DocumentCapturePdfLimits.MaxPages)
+            if (document.NumberOfPages < 1)
                 return Invalid("DOCUMENT_UNSUPPORTED_TYPE");
-            if (HasUnsupportedActiveContent(document))
+            if (document.NumberOfPages > profile.MaxPages)
+                return Invalid(profile.ReportsPageLimit ? "DOCUMENT_TOO_MANY_PAGES" : "DOCUMENT_UNSUPPORTED_TYPE");
+            if (HasUnsupportedActiveContent(document, profile.MaxPages))
                 return Invalid("DOCUMENT_UNSUPPORTED_TYPE");
             decodeBudget.ThrowIfExpired();
 
@@ -145,7 +206,7 @@ public static class DocumentCapturePdfValidator
         return end >= 5 && bytes.Slice(end - 5, 5).SequenceEqual("%%EOF"u8);
     }
 
-    private static bool HasUnsupportedActiveContent(PdfDocument document)
+    private static bool HasUnsupportedActiveContent(PdfDocument document, int maxPages)
     {
         var catalog = document.Structure.Catalog.CatalogDictionary;
         var actionBudget = new PdfActionInspectionBudget();
@@ -177,14 +238,14 @@ public static class DocumentCapturePdfValidator
 
         var pageCount = 0;
         var nodesVisited = 0;
-        var hasUnsupportedContent = InspectPageTree(document, pagesToken, depth: 0, ref pageCount, ref nodesVisited, actionBudget);
+        var hasUnsupportedContent = InspectPageTree(document, pagesToken, depth: 0, ref pageCount, ref nodesVisited, actionBudget, maxPages);
         if (pageCount != document.NumberOfPages)
             throw new InvalidDataException("PdfPig page count does not match the active page tree.");
         return hasUnsupportedContent;
     }
 
     private static bool InspectPageTree(PdfDocument document, IToken nodeToken, int depth, ref int pageCount,
-        ref int nodesVisited, PdfActionInspectionBudget actionBudget)
+        ref int nodesVisited, PdfActionInspectionBudget actionBudget, int maxPages)
     {
         if (depth >= DocumentCapturePdfLimits.MaxStackDepth || ++nodesVisited > 5000)
             throw new PdfDecodeLimitException("PDF active page tree exceeded its inspection bounds.");
@@ -195,7 +256,7 @@ public static class DocumentCapturePdfValidator
 
         if (type.Data == "Page")
         {
-            if (++pageCount > DocumentCapturePdfLimits.MaxPages)
+            if (++pageCount > maxPages)
                 return false;
             return InspectPageAnnotations(document, node, actionBudget);
         }
@@ -208,7 +269,7 @@ public static class DocumentCapturePdfValidator
         var hasUnsupportedContent = false;
         foreach (var child in kids.Data)
         {
-            if (InspectPageTree(document, child, depth + 1, ref pageCount, ref nodesVisited, actionBudget))
+            if (InspectPageTree(document, child, depth + 1, ref pageCount, ref nodesVisited, actionBudget, maxPages))
                 hasUnsupportedContent = true;
         }
         return hasUnsupportedContent;
@@ -421,6 +482,8 @@ internal sealed class PdfDecodeBudget
         _deadlineTimestamp = clock.GetTimestamp() + (long)(deadline.TotalSeconds * clock.TimestampFrequency);
     }
 
+    public int MaxPerStream => _maxPerStream;
+
     public void ThrowIfExpired()
     {
         if (_clock.GetTimestamp() >= _deadlineTimestamp)
@@ -530,6 +593,8 @@ internal abstract class BoundedPdfFilter(PdfDecodeBudget budget) : IFilter
     }
 
     protected void CheckDeadline() => budget.ThrowIfExpired();
+
+    protected int MaxDecodedBytesPerStream => budget.MaxPerStream;
 
     private PdfPredictorParameters ReadPredictorParameters(DictionaryToken stream, int filterIndex)
     {
@@ -847,7 +912,7 @@ internal sealed class BoundedRunLengthFilter(PdfDecodeBudget budget) : BoundedPd
     }
 }
 
-internal sealed class BoundedLzwFilter(PdfDecodeBudget budget) : BoundedPdfFilter(budget)
+internal sealed class BoundedLzwFilter(PdfDecodeBudget decodeBudget) : BoundedPdfFilter(decodeBudget)
 {
     protected override bool SupportsPredictors => true;
 
@@ -896,7 +961,7 @@ internal sealed class BoundedLzwFilter(PdfDecodeBudget budget) : BoundedPdfFilte
             {
                 var added = Append(previous, current[0]);
                 tableBytes += added.Length;
-                if (tableBytes > DocumentCapturePdfLimits.MaxDecodedBytesPerStream)
+                if (tableBytes > MaxDecodedBytesPerStream)
                     throw new PdfDecodeLimitException("LZW dictionary memory limit exceeded.");
                 table[nextCode++] = added;
                 if (codeSize < 12 && nextCode + earlyChange == (1 << codeSize))

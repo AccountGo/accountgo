@@ -103,6 +103,13 @@ const PERMISSION_GROUPS: Array<{ group: string; module?: ModuleKey | ModuleKey[]
     ],
   },
   {
+    group: 'Documents',
+    permissions: [
+      { key: 'documents.view', label: 'View Documents' },
+      { key: 'documents.manage', label: 'Upload & Manage Documents' },
+    ],
+  },
+  {
     group: 'Governance & Administration',
     permissions: [
       { key: 'reports.view', label: 'View Financial Reports', module: 'reports' },

@@ -159,6 +159,7 @@ namespace Services.Security
                 ["Inventory"] = "Inventory & Items",
                 ["Reports"] = "Reports & Analytics",
                 ["Donations"] = "Donations & Non-Profit",
+                ["Documents"] = "Documents",
                 ["Audit"] = "Audit & Compliance",
                 ["Admin"] = "Administration"
             };
@@ -248,6 +249,9 @@ namespace Services.Security
 
                 ("Donations", SystemPermissions.DonationsView, "View Donations"),
                 ("Donations", SystemPermissions.DonationsManage, "Manage Donations"),
+
+                ("Documents", SystemPermissions.DocumentsView, "View Documents"),
+                ("Documents", SystemPermissions.DocumentsManage, "Manage Documents"),
 
                 ("Audit", SystemPermissions.AuditLogsView, "View Audit Logs"),
 

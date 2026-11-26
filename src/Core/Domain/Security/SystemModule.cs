@@ -92,6 +92,10 @@ namespace Core.Domain.Security
         public const string DonationsView = "donations.view";
         public const string DonationsManage = "donations.manage";
 
+        // Documents library (stored files and record attachments)
+        public const string DocumentsView = "documents.view";
+        public const string DocumentsManage = "documents.manage";
+
         // Audit & Admin
         public const string AuditLogsView = "audit.logs.view";
         public const string AdminMembersManage = "admin.members.manage";

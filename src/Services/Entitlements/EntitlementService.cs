@@ -124,6 +124,9 @@ namespace Services.Entitlements
             return false;
         }
 
+        /// <summary>Community edition: no document storage cap; library files up to the platform maximum.</summary>
+        public DocumentStoragePolicy GetDocumentStoragePolicy(int companyId) => DocumentStoragePolicy.Community;
+
         public EntitlementDecision Evaluate(int companyId, EntitlementAction action) => action switch
         {
             EntitlementAction.Module module => EvaluateModule(companyId, module),

@@ -264,6 +264,12 @@ namespace Core.Entitlements
             return false;
         }
 
+        /// <summary>
+        /// Document storage cap and per-file limits for the workspace. The default grants no storage (fail-safe) so an engine
+        /// must opt in; the community engine returns <see cref="DocumentStoragePolicy.Community"/>.
+        /// </summary>
+        DocumentStoragePolicy GetDocumentStoragePolicy(int companyId) => DocumentStoragePolicy.NotGranted;
+
         /// <summary>Checks whether the workspace is entitled to the given feature key (e.g. "mfa").</summary>
         bool HasFeature(int companyId, string feature) => Get(companyId).HasFeature(feature);
 

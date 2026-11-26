@@ -88,6 +88,9 @@ namespace Core.Domain.Security
             SystemPermissions.DonationsView,
             SystemPermissions.DonationsManage,
 
+            SystemPermissions.DocumentsView,
+            SystemPermissions.DocumentsManage,
+
             SystemPermissions.AuditLogsView,
 
             SystemPermissions.AdminMembersManage,

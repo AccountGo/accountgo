@@ -11,6 +11,8 @@ namespace Api.DocumentCaptures;
 public static class DocumentCaptureImageLimits
 {
     public const int MaxInputBytes = 8 * 1024 * 1024;
+    /// <summary>Largest input a stored-only library upload may use; scans keep <see cref="MaxInputBytes"/>.</summary>
+    public const int MaxStoredDocumentInputBytes = 15 * 1024 * 1024;
     public const int MaxStoredBytes = 1_500_000;
     public const int MaxDimensionPixels = 8_000;
     public const long MaxTotalPixels = 24_000_000;
@@ -47,11 +49,26 @@ public static class DocumentCaptureImageNormalizer
         ReadOnlyMemory<byte> original,
         string declaredContentType,
         int decodeSlots,
+        CancellationToken cancellationToken = default) =>
+        await NormalizeAsync(original, declaredContentType, decodeSlots, DocumentCaptureImageLimits.MaxInputBytes, cancellationToken)
+            .ConfigureAwait(false);
+
+    /// <summary>
+    /// Same as the scan overload with a caller-chosen input byte limit (stored-only library uploads, at most
+    /// <see cref="DocumentCaptureImageLimits.MaxStoredDocumentInputBytes"/>). Pixel, decode and output bounds are unchanged.
+    /// </summary>
+    public static async Task<NormalizedDocumentImage> NormalizeAsync(
+        ReadOnlyMemory<byte> original,
+        string declaredContentType,
+        int decodeSlots,
+        int maxInputBytes,
         CancellationToken cancellationToken = default)
     {
+        if (maxInputBytes is < 1 or > DocumentCaptureImageLimits.MaxStoredDocumentInputBytes)
+            throw new ArgumentOutOfRangeException(nameof(maxInputBytes));
         if (original.IsEmpty)
             throw new DocumentCaptureMediaException("DOCUMENT_EMPTY", "An image file is required.");
-        if (original.Length > DocumentCaptureImageLimits.MaxInputBytes)
+        if (original.Length > maxInputBytes)
             throw new DocumentCaptureMediaException("DOCUMENT_TOO_LARGE", "The uploaded image exceeds the size limit.");
         if (!string.Equals(declaredContentType, "image/png", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(declaredContentType, "image/jpeg", StringComparison.OrdinalIgnoreCase))
