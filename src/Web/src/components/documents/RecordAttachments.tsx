@@ -47,28 +47,48 @@ export const RecordAttachments: React.FC<Props> = ({ targetType, targetId, canAt
   const fileInput = useRef<HTMLInputElement>(null);
   const base = `/api/documents/linked/${targetType}/${encodeURIComponent(targetId)}`;
 
+  // The linked list is paginated (100 per page) and includes the scanned source. Pages are read on demand with
+  // "Show more", so a record with any number of files never hides one without saying so.
+  const [loaded, setLoaded] = useState<{ items: LibraryDocument[]; total: number; page: number }>({ items: [], total: 0, page: 0 });
+  const isAttachment = useCallback(
+    (d: LibraryDocument) => d.links.some((l) => l.targetType === targetType && l.targetId === targetId && l.role === 'attachment'),
+    [targetId, targetType],
+  );
+
+  const fetchPage = useCallback(async (pageNumber: number) => {
+    const res = await authFetch(`${base}?page=${pageNumber}&pageSize=100`);
+    if (!res.ok) {
+      const problem = await readProblem(res);
+      if (problem?.code === 'DOCUMENTS_DISABLED') setAvailable(false);
+      else setLoadFailed(true);
+      return null;
+    }
+    return (await res.json()) as DocumentPage;
+  }, [authFetch, base]);
+
   const load = useCallback(async () => {
     try {
-      // The linked list is paginated and includes the scanned source; read every page so no attachment is hidden.
-      const all: LibraryDocument[] = [];
-      for (let pageNumber = 1; pageNumber <= 50; pageNumber++) {
-        const res = await authFetch(`${base}?page=${pageNumber}&pageSize=100`);
-        if (!res.ok) {
-          const problem = await readProblem(res);
-          if (problem?.code === 'DOCUMENTS_DISABLED') setAvailable(false);
-          else setLoadFailed(true);
-          return;
-        }
-        const page = (await res.json()) as DocumentPage;
-        all.push(...page.items);
-        if (page.items.length === 0 || all.length >= page.total) break;
-      }
-      setAttachments(all.filter((d) => d.links.some((l) => l.targetType === targetType && l.targetId === targetId && l.role === 'attachment')));
+      const page = await fetchPage(1);
+      if (!page) return;
+      setLoaded({ items: page.items, total: page.total, page: 1 });
+      setAttachments(page.items.filter(isAttachment));
       setLoadFailed(false);
     } catch {
       setLoadFailed(true);
     }
-  }, [authFetch, base, targetId, targetType]);
+  }, [fetchPage, isAttachment]);
+
+  const loadMore = async () => {
+    try {
+      const page = await fetchPage(loaded.page + 1);
+      if (!page) return;
+      const items = [...loaded.items, ...page.items];
+      setLoaded({ items, total: page.total, page: loaded.page + 1 });
+      setAttachments(items.filter(isAttachment));
+    } catch {
+      setLoadFailed(true);
+    }
+  };
 
   useEffect(() => { void load(); }, [load, recordStatus]);
 
@@ -201,6 +221,11 @@ export const RecordAttachments: React.FC<Props> = ({ targetType, targetId, canAt
             );
           })}
         </ul>
+      )}
+      {!loadFailed && loaded.items.length < loaded.total && (
+        <button type="button" onClick={() => void loadMore()} className="text-xs font-semibold text-[var(--brand-primary)] hover:underline">
+          Show more linked files ({loaded.total - loaded.items.length} not shown yet)
+        </button>
       )}
       {error && <p role="alert" className="text-xs text-rose-500">{error}</p>}
       {picking && <LibraryPicker onPick={(doc) => void linkExisting(doc)} onClose={() => setPicking(false)} exclude={(attachments ?? []).map((d) => d.id).join(',')} />}
