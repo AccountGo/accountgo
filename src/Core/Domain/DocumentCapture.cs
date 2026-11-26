@@ -160,6 +160,32 @@ public sealed class DocumentUploadAdmission : BaseEntity, ICompanyOwned
     public DateTime ReservedAt { get; set; }
 }
 
+/// <summary>
+/// One "Download all documents" run (design 3.9 S2/S3, 3.10 T1/T2). The selection (ids and stored hashes) and the document
+/// revision are fixed under the company lock when the run is created; the ZIP is then streamed once. <see cref="Status"/>:
+/// <c>ready</c> (selected, not yet downloaded), <c>running</c> (streaming), <c>server_finished</c> (every selected file written
+/// and verified, index and archive finalised, response completed without abort) or <c>failed</c> (with <see cref="FailureReason"/>).
+/// "server_finished" never claims the browser saved the file.
+/// </summary>
+[PublicIdPrefix("dex")]
+public sealed class DocumentExportRun : BaseEntity, ICompanyOwned, IHasPublicId
+{
+    public int CompanyId { get; set; }
+    public string PublicId { get; set; } = string.Empty;
+    public string Status { get; set; } = "ready";
+    public string RequestedBy { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+    public DateTime? StreamStartedAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
+    public long SelectedRevision { get; set; }
+    public int SelectedCount { get; set; }
+    public long SelectedBytes { get; set; }
+    public int WrittenCount { get; set; }
+    public string? FailureReason { get; set; }
+    /// <summary>JSON array of [captureId, storedSha256] fixed at selection.</summary>
+    public string InventoryJson { get; set; } = "[]";
+}
+
 public sealed class DocumentLibraryRevision : ICompanyOwned
 {
     public int CompanyId { get; set; }

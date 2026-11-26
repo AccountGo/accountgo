@@ -916,6 +916,11 @@ WHERE ""DisabledModulesJson"" IS NULL
                 DocumentCaptureLinkTableSql,
                 DocumentLibraryRevisionsTableSql,
                 DocumentUploadAdmissionsTableSql,
+                DocumentExportRunsTableSql,
+                DocumentExportRunsCreatedIndexSql,
+                DocumentExportRunsPublicIdCompanyIndexSql,
+                DocumentExportRunsOneRunningIndexSql,
+                DocumentExportRunsPublicIdIndexSql,
                 DocumentUploadAdmissionsCompanyIndexSql,
                 DocumentUploadAdmissionsReservedIndexSql,
                 DocumentCaptureAiMappingTableSql,
@@ -1136,6 +1141,42 @@ WHERE ""DisabledModulesJson"" IS NULL
                 CONSTRAINT ""FK_DocumentCaptureLinks_DocumentCaptures_CompanyId_CaptureId""
                     FOREIGN KEY (""CompanyId"", ""CaptureId"") REFERENCES ""DocumentCaptures"" (""CompanyId"", ""Id"") ON DELETE CASCADE
             );";
+
+        private const string DocumentExportRunsTableSql = @"
+            CREATE TABLE IF NOT EXISTS ""DocumentExportRuns"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_DocumentExportRuns"" PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""PublicId"" TEXT NOT NULL DEFAULT '',
+                ""Status"" TEXT NOT NULL,
+                ""RequestedBy"" TEXT NOT NULL,
+                ""CreatedAt"" TEXT NOT NULL,
+                ""StreamStartedAt"" TEXT NULL,
+                ""CompletedAt"" TEXT NULL,
+                ""SelectedRevision"" INTEGER NOT NULL,
+                ""SelectedCount"" INTEGER NOT NULL,
+                ""SelectedBytes"" INTEGER NOT NULL,
+                ""WrittenCount"" INTEGER NOT NULL,
+                ""FailureReason"" TEXT NULL,
+                ""InventoryJson"" TEXT NOT NULL,
+                CONSTRAINT ""FK_DocumentExportRuns_Company_CompanyId""
+                    FOREIGN KEY (""CompanyId"") REFERENCES ""Company"" (""Id"") ON DELETE CASCADE
+            );";
+
+        private const string DocumentExportRunsCreatedIndexSql = @"
+            CREATE INDEX IF NOT EXISTS ""IX_DocumentExportRuns_CompanyId_CreatedAt""
+            ON ""DocumentExportRuns"" (""CompanyId"", ""CreatedAt"");";
+
+        private const string DocumentExportRunsPublicIdCompanyIndexSql = @"
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_DocumentExportRuns_CompanyId_PublicId""
+            ON ""DocumentExportRuns"" (""CompanyId"", ""PublicId"");";
+
+        private const string DocumentExportRunsOneRunningIndexSql = @"
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_DocumentExportRuns_OneRunning""
+            ON ""DocumentExportRuns"" (""CompanyId"") WHERE ""Status"" = 'running';";
+
+        private const string DocumentExportRunsPublicIdIndexSql = @"
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_DocumentExportRuns_PublicId""
+            ON ""DocumentExportRuns"" (""PublicId"") WHERE ""PublicId"" <> '';";
 
         private const string DocumentUploadAdmissionsTableSql = @"
             CREATE TABLE IF NOT EXISTS ""DocumentUploadAdmissions"" (

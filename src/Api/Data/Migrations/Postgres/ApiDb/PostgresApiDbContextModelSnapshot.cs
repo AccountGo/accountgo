@@ -1235,6 +1235,82 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.ToTable("DocumentCaptureLinks", (string)null);
                 });
 
+            modelBuilder.Entity("Core.Domain.DocumentExportRun", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("InventoryJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("");
+
+                    b.Property<string>("RequestedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<long>("SelectedBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("SelectedCount")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("SelectedRevision")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("StreamStartedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("WrittenCount")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_DocumentExportRuns_OneRunning")
+                        .HasFilter("\"Status\" = 'running'");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("\"PublicId\" <> ''");
+
+                    b.HasIndex("CompanyId", "CreatedAt");
+
+                    b.HasIndex("CompanyId", "PublicId")
+                        .IsUnique();
+
+                    b.ToTable("DocumentExportRuns", (string)null);
+                });
+
             modelBuilder.Entity("Core.Domain.DocumentLibraryRevision", b =>
                 {
                     b.Property<int>("CompanyId")
@@ -7874,6 +7950,15 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .IsRequired();
 
                     b.Navigation("Capture");
+                });
+
+            modelBuilder.Entity("Core.Domain.DocumentExportRun", b =>
+                {
+                    b.HasOne("Core.Domain.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Core.Domain.DocumentLibraryRevision", b =>

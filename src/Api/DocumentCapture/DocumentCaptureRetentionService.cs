@@ -178,6 +178,23 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
                 break;
         }
 
+        // Export runs: fail stale ones and drop runs older than 30 days (metadata only; no file content is ever stored).
+        if (WithinPassBudget(passStarted))
+        {
+            var staleBefore = utcNow - DocumentExportService.StaleAfter;
+            await db.DocumentExportRuns.IgnoreQueryFilters()
+                .Where(run => (run.Status == DocumentExportService.Running && run.StreamStartedAt <= staleBefore)
+                    || (run.Status == DocumentExportService.Ready && run.CreatedAt <= staleBefore))
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(run => run.Status, DocumentExportService.Failed)
+                    .SetProperty(run => run.FailureReason, "stale")
+                    .SetProperty(run => run.CompletedAt, utcNow), cancellationToken).ConfigureAwait(false);
+            var keepAfter = utcNow - DocumentExportService.KeepRunsFor;
+            await db.DocumentExportRuns.IgnoreQueryFilters()
+                .Where(run => run.CreatedAt <= keepAfter)
+                .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         // Upload admissions only matter for the hourly limit; keep a day, then remove.
         if (WithinPassBudget(passStarted))
         {

@@ -754,6 +754,10 @@ namespace Api.Controllers
         public class DeleteOrganizationRequest
         {
             public string ConfirmSlug { get; set; }
+            /// <summary>The owner confirmed they opened the latest "Download all documents" ZIP (design 3.10 T2).</summary>
+            public bool DocumentsExportConfirmed { get; set; }
+            /// <summary>The owner chose not to keep the documents. Recorded in the audit event.</summary>
+            public bool SkipDocumentsExport { get; set; }
         }
 
         [TenantScoped]
@@ -783,6 +787,17 @@ namespace Api.Controllers
                 return NotFound();
             if (!string.Equals(request.ConfirmSlug, company.Slug, StringComparison.Ordinal))
                 return Problem(statusCode: 400, title: "Workspace slug confirmation does not match");
+            // Deleting purges every file (owner decision D6). Inside this locked transaction: nothing filed, an explicit skip, or a
+            // confirmed export whose revision is still current (design 3.10 T1/T2).
+            var exportRefusal = await DocumentExportService.DeleteRefusalAsync(_db, companyId, request.DocumentsExportConfirmed,
+                request.SkipDocumentsExport, cancellationToken);
+            if (exportRefusal is not null)
+            {
+                var refused = new ProblemDetails { Status = StatusCodes.Status409Conflict, Title = exportRefusal };
+                refused.Extensions["code"] = exportRefusal;
+                return new ObjectResult(refused) { StatusCode = StatusCodes.Status409Conflict };
+            }
+            _deletionDocumentsChoice = request.SkipDocumentsExport ? "skipped" : request.DocumentsExportConfirmed ? "exported" : "none";
             company.DeletedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
@@ -800,6 +815,8 @@ namespace Api.Controllers
             return NoContent();
         }
 
+        private string _deletionDocumentsChoice = "none";
+
         /// <summary>Best-effort <c>workspace.delete</c> event; awaited in-request so the identity context is not used concurrently.</summary>
         private void AuditWorkspaceDeleted(int companyId)
         {
@@ -808,7 +825,7 @@ namespace Api.Controllers
                 return;
             try
             {
-                audit.LogEventAsync("workspace.delete", "success", UserId, companyId, new { companyId }).GetAwaiter().GetResult();
+                audit.LogEventAsync("workspace.delete", "success", UserId, companyId, new { companyId, documents = _deletionDocumentsChoice }).GetAwaiter().GetResult();
             }
             catch
             {

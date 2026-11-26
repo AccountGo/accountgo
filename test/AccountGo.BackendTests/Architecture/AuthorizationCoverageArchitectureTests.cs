@@ -411,6 +411,7 @@ namespace AccountGo.BackendTests.Architecture
             ["src/Api/Controllers/LinkedEntriesController.cs"] = "governance: linked entries management",
             ["src/Api/Controllers/OrganizationsController.PersonalBooks.cs"] = "governance: personal books ownership and link management",
             ["src/Api/Controllers/OrganizationsController.cs"] = "governance: organization administration and ownership transfer",
+            ["src/Api/Controllers/DocumentExportsController.cs"] = "governance: workspace-wide document export, same Owner + MFA authority as workspace deletion",
             ["src/Api/Controllers/SessionPolicyController.cs"] = "governance: session policy administration",
             ["src/Api/Controllers/SubscriptionController.cs"] = "governance: subscription administration",
             ["src/Api/Controllers/WorkspaceInvitationsController.cs"] = "governance: workspace invitation authorization",

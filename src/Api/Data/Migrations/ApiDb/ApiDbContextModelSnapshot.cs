@@ -1236,6 +1236,82 @@ namespace Api.Data.Migrations.ApiDb
                     b.ToTable("DocumentCaptureLinks", (string)null);
                 });
 
+            modelBuilder.Entity("Core.Domain.DocumentExportRun", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("InventoryJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("");
+
+                    b.Property<string>("RequestedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<long>("SelectedBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("SelectedCount")
+                        .HasColumnType("int");
+
+                    b.Property<long>("SelectedRevision")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("StreamStartedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("WrittenCount")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_DocumentExportRuns_OneRunning")
+                        .HasFilter("[Status] = 'running'");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("[PublicId] <> ''");
+
+                    b.HasIndex("CompanyId", "CreatedAt");
+
+                    b.HasIndex("CompanyId", "PublicId")
+                        .IsUnique();
+
+                    b.ToTable("DocumentExportRuns", (string)null);
+                });
+
             modelBuilder.Entity("Core.Domain.DocumentLibraryRevision", b =>
                 {
                     b.Property<int>("CompanyId")
@@ -7879,6 +7955,15 @@ namespace Api.Data.Migrations.ApiDb
                         .IsRequired();
 
                     b.Navigation("Capture");
+                });
+
+            modelBuilder.Entity("Core.Domain.DocumentExportRun", b =>
+                {
+                    b.HasOne("Core.Domain.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Core.Domain.DocumentLibraryRevision", b =>

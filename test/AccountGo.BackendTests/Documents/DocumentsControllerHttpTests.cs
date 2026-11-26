@@ -284,6 +284,95 @@ public sealed class DocumentsControllerHttpTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task OwnerExportsOverHttp_MembersCannot_AndWorkspaceDeleteFollowsTheExportContract()
+    {
+        using (var upload = Request(HttpMethod.Post, "/api/documents", _ownerToken))
+        {
+            upload.Content = UploadForm(CreatePdf(1), "application/pdf", "lease.pdf", ("Category", "contract"));
+            using var response = await _client.SendAsync(upload);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        // A larger stored file (written straight through, not buffered) alongside the small one.
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            db.SuppressTenantSecurityCheck = true;
+            var companyId = await db.Companies.IgnoreQueryFilters().Where(c => c.Slug == _companySlug).Select(c => c.Id).SingleAsync();
+            var big = new byte[300 * 1024];
+            new Random(3).NextBytes(big);
+            var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(big)).ToLowerInvariant();
+            var now = DateTime.UtcNow;
+            db.DocumentCaptures.Add(new Core.Domain.DocumentCapture
+            {
+                CompanyId = companyId, Kind = "document", SchemaVersion = 1, Status = "stored", SourceHash = hash, ContentHash = hash,
+                NormalizationVersion = "pdf-structure-v1", ContentType = "application/pdf", ByteCount = big.Length, PageCount = 1,
+                IdempotencyKey = $"seed-{Guid.NewGuid():N}", RequestFingerprint = new string('b', 64), CreatedBy = "seed", CreatedAt = now,
+                ExpiresAt = now, FiledAt = now, FiledBy = "seed", Title = "Big scan",
+                Blob = new DocumentCaptureBlob { CompanyId = companyId, DocumentBytes = big }
+            });
+            await db.SaveChangesAsync();
+        }
+
+        using (var member = Request(HttpMethod.Post, "/api/documents/exports", _memberToken))
+        using (var response = await _client.SendAsync(member))
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+
+        using (var delete = Request(HttpMethod.Delete, "/api/organizations/current", _ownerToken))
+        {
+            delete.Content = JsonContent.Create(new { confirmSlug = _companySlug });
+            using var response = await _client.SendAsync(delete);
+            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+            Assert.Equal("DOCUMENT_EXPORT_REQUIRED", await CodeOf(response));
+        }
+
+        string exportId;
+        using (var create = Request(HttpMethod.Post, "/api/documents/exports", _ownerToken))
+        using (var response = await _client.SendAsync(create))
+        {
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            exportId = body.RootElement.GetProperty("id").GetString()!;
+            Assert.StartsWith("dex_", exportId, StringComparison.Ordinal);
+            Assert.Equal(2, body.RootElement.GetProperty("selectedCount").GetInt32());
+        }
+        using (var file = Request(HttpMethod.Get, $"/api/documents/exports/{exportId}/file", _ownerToken))
+        using (var response = await _client.SendAsync(file))
+        {
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal("application/zip", response.Content.Headers.ContentType!.MediaType);
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            using var zip = new System.IO.Compression.ZipArchive(new MemoryStream(bytes), System.IO.Compression.ZipArchiveMode.Read);
+            Assert.Equal("index.csv", zip.Entries[^1].FullName);
+            using var reader = new StreamReader(zip.Entries[^1].Open());
+            Assert.Contains($"# complete,2,2,{exportId}", await reader.ReadToEndAsync(), StringComparison.Ordinal);
+            var bigEntry = zip.Entries.Single(e => e.FullName.Contains("Big_scan", StringComparison.Ordinal));
+            Assert.Equal(300 * 1024, bigEntry.Length);
+        }
+        using (var status = Request(HttpMethod.Get, "/api/documents/exports/status", _ownerToken))
+        using (var response = await _client.SendAsync(status))
+        {
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var latest = body.RootElement.GetProperty("latest");
+            Assert.Equal("server_finished", latest.GetProperty("status").GetString());
+            Assert.True(latest.GetProperty("current").GetBoolean());
+        }
+
+        using (var unconfirmed = Request(HttpMethod.Delete, "/api/organizations/current", _ownerToken))
+        {
+            unconfirmed.Content = JsonContent.Create(new { confirmSlug = _companySlug });
+            using var response = await _client.SendAsync(unconfirmed);
+            Assert.Equal("DOCUMENT_EXPORT_CONFIRMATION_REQUIRED", await CodeOf(response));
+        }
+        using (var delete = Request(HttpMethod.Delete, "/api/organizations/current", _ownerToken))
+        {
+            delete.Content = JsonContent.Create(new { confirmSlug = _companySlug, documentsExportConfirmed = true });
+            using var response = await _client.SendAsync(delete);
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        }
+    }
+
+    [Fact]
     public async Task OversizedUploadIsRefusedWith413AndTheLimit()
     {
         using var upload = Request(HttpMethod.Post, "/api/documents", _ownerToken);

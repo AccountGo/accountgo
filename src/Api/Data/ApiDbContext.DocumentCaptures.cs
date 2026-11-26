@@ -17,6 +17,7 @@ public partial class ApiDbContext
     public virtual DbSet<CaptureAiMappingConsent> CaptureAiMappingConsents { get; set; } = null!;
     public virtual DbSet<DocumentLibraryRevision> DocumentLibraryRevisions { get; set; } = null!;
     public virtual DbSet<DocumentUploadAdmission> DocumentUploadAdmissions { get; set; } = null!;
+    public virtual DbSet<DocumentExportRun> DocumentExportRuns { get; set; } = null!;
     public virtual DbSet<PartyAlias> PartyAliases { get; set; } = null!;
 
     private static void ConfigureDocumentCaptureModel(ModelBuilder builder)
@@ -147,6 +148,28 @@ public partial class ApiDbContext
                 .WithMany(capture => capture.Links)
                 .HasForeignKey(link => new { link.CompanyId, link.CaptureId })
                 .HasPrincipalKey(capture => new { capture.CompanyId, capture.Id })
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<DocumentExportRun>(entity =>
+        {
+            entity.ToTable("DocumentExportRuns");
+            entity.HasKey(run => run.Id);
+            entity.Property(run => run.PublicId).HasMaxLength(40).IsRequired();
+            entity.Property(run => run.Status).HasMaxLength(20).IsRequired();
+            entity.Property(run => run.RequestedBy).HasMaxLength(256).IsRequired();
+            entity.Property(run => run.FailureReason).HasMaxLength(200);
+            entity.Property(run => run.InventoryJson).IsRequired();
+            entity.HasIndex(run => new { run.CompanyId, run.PublicId }).IsUnique();
+            entity.HasIndex(run => new { run.CompanyId, run.CreatedAt });
+            // One streaming export per workspace at a time.
+            entity.HasIndex(run => run.CompanyId)
+                .HasDatabaseName("IX_DocumentExportRuns_OneRunning")
+                .IsUnique()
+                .HasFilter("[Status] = 'running'");
+            entity.HasOne<Company>()
+                .WithMany()
+                .HasForeignKey(run => run.CompanyId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
