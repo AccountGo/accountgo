@@ -119,7 +119,10 @@ describe('AssistantSidepanel and composer attachments (#98)', () => {
   it('removes the header attachment bar while keeping the privacy notice and ChatSidepanel', () => {
     render(<AssistantSidepanel orgSlug="acme" />);
 
-    expect(screen.getByText('Names and personal details are hidden from the AI.')).toBeTruthy();
+    const notice = screen.getByText(
+      'Names from your books are hidden from the AI. Attachment text is sent with only account numbers masked.',
+    );
+    expect(notice.getAttribute('title')).toMatch(/masking is limited: other names, email addresses and phone numbers/);
     expect(screen.getByTestId('mock-chat-sidepanel')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Attach document/i })).toBeNull();
   });
