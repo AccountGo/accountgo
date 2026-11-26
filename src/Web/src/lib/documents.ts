@@ -159,7 +159,7 @@ export function documentProblemMessage(problem: DocumentProblem | null, fallback
     case 'DOCUMENT_LOCKED_BY_POSTED_RECORD':
       return 'Kept as evidence for a posted bill or invoice. You can archive it instead.';
     case 'DOCUMENT_SOURCE_LINK_FIXED':
-      return 'This is the scanned source of a bill or invoice. Delete or edit that record to remove it.';
+      return 'This is the scanned source of a bill or invoice. Delete the draft to free it; a posted record keeps it as evidence.';
     case 'DOCUMENT_PERMISSION_REQUIRED':
       return "You don't have permission to do that.";
     case 'DOCUMENTS_DISABLED':

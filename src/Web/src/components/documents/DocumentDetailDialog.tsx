@@ -140,7 +140,8 @@ export const DocumentDetailDialog: React.FC<Props> = ({ document: doc, orgSlug, 
           {scanSource && (
             <p className="text-xs rounded-lg bg-[var(--bg-subtle)] p-3 text-[var(--text-secondary)] flex gap-2">
               <Lock className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-              Scanned source of a bill or invoice. Delete or edit the draft to remove it.
+              Scanned source of a bill or invoice. While the bill or invoice is a draft, deleting the draft frees this file;
+              once it is posted, the file stays as its evidence.
             </p>
           )}
           {doc.hasLockedLink && (

@@ -10,6 +10,7 @@ import { WorkspaceDeleteDocumentsStep } from '../src/components/documents/Worksp
 import { useDeleteCurrentWorkspace } from '../src/lib/useDeleteCurrentWorkspace';
 import { Sidebar } from '../src/components/Sidebar';
 import { RecordAttachments } from '../src/components/documents/RecordAttachments';
+import { DownloadAllDocuments } from '../src/components/documents/DownloadAllDocuments';
 import type { DocumentCapabilities, LibraryDocument } from '../src/lib/documents';
 
 const { authFetch, outlet, navigate, permissions } = vi.hoisted(() => ({
@@ -22,6 +23,9 @@ const { authFetch, outlet, navigate, permissions } = vi.hoisted(() => ({
 vi.mock('../src/auth/AuthContext', () => ({ useAuth: () => ({ authFetch }) }));
 vi.mock('../src/components/Gating', () => ({
   usePermissions: () => ({ hasPermission: (p: string) => permissions.set.has(p) }),
+}));
+vi.mock('../src/components/StepUpPrompt', () => ({
+  StepUpPrompt: ({ onVerified }: { onVerified: () => void }) => <button type="button" onClick={onVerified}>Verify code</button>,
 }));
 vi.mock('../src/components/OrgSwitcher', () => ({ OrgSwitcher: () => null }));
 vi.mock('../src/components/UserProfileSection', () => ({ UserProfileSection: () => null }));
@@ -197,7 +201,7 @@ describe('Document details', () => {
           onChanged={vi.fn()} onRemoved={vi.fn()} onClose={vi.fn()} />
       </MemoryRouter>,
     );
-    expect(screen.getByText(/Scanned source of a bill or invoice\. Delete or edit the draft to remove it\./)).toBeTruthy();
+    expect(screen.getByText(/Scanned source of a bill or invoice\. While the bill or invoice is a draft, deleting the draft frees this file/)).toBeTruthy();
     expect((screen.getByRole('button', { name: /Move to trash/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
@@ -325,5 +329,38 @@ describe('Record attachments', () => {
     authFetch.mockResolvedValue(json({ code: 'DOCUMENTS_DISABLED' }, 404));
     const { container } = render(<RecordAttachments targetType="invoice" targetId="inv_1" canAttach canRemove recordLabel="invoice" />);
     await waitFor(() => expect(container.querySelector('section')).toBeNull());
+  });
+});
+
+describe('Download all documents', () => {
+  it('after the MFA step-up, waits for a fresh click instead of starting on its own', async () => {
+    let posts = 0;
+    authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/documents/exports' && init?.method === 'POST') {
+        posts += 1;
+        return json({ code: 'mfa_step_up_required' }, 403);
+      }
+      return json({}, 404);
+    });
+    render(<DownloadAllDocuments orgSlug="acme" />);
+    fireEvent.click(screen.getByRole('button', { name: /Download all documents/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Verify code' }));
+    expect(await screen.findByText(/Verified\. Click Download all documents again to start\./)).toBeTruthy();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(posts).toBe(1);
+  });
+
+  it('without a save-to-disk dialog, refuses exports too large to hold in memory before downloading', async () => {
+    const calls: string[] = [];
+    authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      calls.push(`${init?.method ?? 'GET'} ${url}`);
+      if (url === '/api/documents/exports' && init?.method === 'POST')
+        return json({ id: 'dex_1', status: 'ready', createdAt: '', completedAt: null, selectedCount: 900, selectedBytes: 600 * 1024 * 1024, writtenCount: 0, failureReason: null, current: false });
+      return json({}, 404);
+    });
+    render(<DownloadAllDocuments orgSlug="acme" />);
+    fireEvent.click(screen.getByRole('button', { name: /Download all documents/ }));
+    expect(await screen.findByText(/too much for this browser to save in one piece/)).toBeTruthy();
+    expect(calls.some((c) => c.includes('/file'))).toBe(false);
   });
 });

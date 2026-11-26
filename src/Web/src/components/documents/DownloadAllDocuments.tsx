@@ -27,11 +27,13 @@ export const DownloadAllDocuments: React.FC<{
   const [needsStepUp, setNeedsStepUp] = useState(false);
   const [error, setError] = useState('');
   const [run, setRun] = useState<DocumentExportRun | null>(null);
+  const [verified, setVerified] = useState(false);
 
   const start = useCallback(async () => {
     setBusy(true);
     setError('');
     setNeedsStepUp(false);
+    setVerified(false);
     try {
       // The save dialog must open straight from the click, before any network wait.
       const name = `documents-${orgSlug}-${new Date().toISOString().slice(0, 10)}.zip`;
@@ -51,6 +53,13 @@ export const DownloadAllDocuments: React.FC<{
         return;
       }
       const ready = (await created.json()) as DocumentExportRun;
+      if (!target && ready.selectedBytes > MAX_IN_MEMORY_DOWNLOAD_BYTES) {
+        setError(
+          `These documents add up to ${formatBytes(ready.selectedBytes)}, too much for this browser to save in one piece. ` +
+          'Use Chrome or Edge on a computer, which save the ZIP straight to disk.',
+        );
+        return;
+      }
 
       const file = await authFetch(`/api/documents/exports/${encodeURIComponent(ready.id)}/file`);
       if (!file.ok) {
@@ -92,7 +101,9 @@ export const DownloadAllDocuments: React.FC<{
         {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
         {busy ? 'Preparing download…' : 'Download all documents'}
       </button>
-      {needsStepUp && <StepUpPrompt actionLabel="downloading all documents" onVerified={() => void start()} />}
+      {/* After verifying, the browser needs a fresh click before it will open the save dialog, so ask for one. */}
+      {needsStepUp && <StepUpPrompt actionLabel="downloading all documents" onVerified={() => { setNeedsStepUp(false); setVerified(true); }} />}
+      {verified && !busy && <p role="status" className="text-xs text-[var(--text-secondary)]">Verified. Click Download all documents again to start.</p>}
       {error && <p role="alert" className="text-xs text-rose-500">{error}</p>}
       {run && <ExportRunStatus run={run} />}
     </div>
@@ -137,6 +148,12 @@ function failureText(reason: string | null): string {
       return 'a server error';
   }
 }
+
+/**
+ * Without a save dialog that writes straight to disk (Safari, Firefox, phones) the ZIP is assembled in browser memory, so
+ * only exports up to this size are offered there.
+ */
+export const MAX_IN_MEMORY_DOWNLOAD_BYTES = 500 * 1024 * 1024;
 
 type SaveTarget = { createWritable: () => Promise<WritableStream<Uint8Array>> } | null;
 
