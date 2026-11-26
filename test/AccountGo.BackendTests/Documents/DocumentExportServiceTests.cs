@@ -251,6 +251,30 @@ public sealed class DocumentExportServiceTests
     }
 
     [Fact]
+    public async Task AHungRenewalThatIgnoresCancellation_StillCancelsTheBlockedWriteBeforeTheLeaseEnds()
+    {
+        await using var h = await Harness.CreateAsync();
+        await h.SeedAsync("document", "a", null);
+        var exports = h.ExportsWith(new HungLease(), FastLease);
+        var run = await exports.CreateAsync(default);
+        var gate = new BlockingStream();
+        var context = new DefaultHttpContext();
+        context.Response.Body = gate;
+        var claimedAt = System.Diagnostics.Stopwatch.StartNew();
+        var streaming = exports.StreamAsync(await h.RunIdOf(run.Id), context.Response, "export-co", CancellationToken.None);
+        await gate.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        await streaming.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True(gate.Cancelled, "The watchdog must cancel the blocked write even though renewal never returns.");
+        Assert.True(claimedAt.Elapsed < FastLease.Lease + TimeSpan.FromMilliseconds(250),
+            $"Output stopped after {claimedAt.Elapsed.TotalMilliseconds} ms; the lease is {FastLease.Lease.TotalMilliseconds} ms.");
+        Assert.Equal(("failed", "lease-lost"), ((await h.Exports.GetRunAsync(await h.RunIdOf(run.Id), default)).Status,
+            (await h.Exports.GetRunAsync(await h.RunIdOf(run.Id), default)).FailureReason));
+        // Only now, with the old output stopped, can a successor start.
+        Assert.Equal("ready", (await exports.CreateAsync(default)).Status);
+    }
+
+    [Fact]
     public async Task ARunFencedByAnotherRequest_StopsItsOutputAtTheNextRenewal_AndReportsNoSuccess()
     {
         await using var h = await Harness.CreateAsync();
@@ -396,6 +420,13 @@ public sealed class DocumentExportServiceTests
             return await db.DocumentExportRuns.Where(r => r.CompanyId == companyId && r.Id == runId && r.Status == "running")
                 .ExecuteUpdateAsync(s => s.SetProperty(r => r.LastHeartbeatAt, now), cancellationToken) == 1;
         }
+    }
+
+    /// <summary>A renewal that never completes and ignores its cancellation token (a hung connection).</summary>
+    private sealed class HungLease : IDocumentExportLease
+    {
+        public Task<bool> RenewAsync(int companyId, int runId, DateTime now, CancellationToken cancellationToken) =>
+            new TaskCompletionSource<bool>().Task;
     }
 
     private sealed class FailingLease : IDocumentExportLease

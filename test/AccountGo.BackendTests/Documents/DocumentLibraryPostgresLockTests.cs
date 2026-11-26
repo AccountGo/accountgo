@@ -299,6 +299,45 @@ public sealed class DocumentLibraryPostgresLockTests
             .CreateAsync(CancellationToken.None)).Status);
     }
 
+    [PostgresOnlyFact]
+    public async Task Export_HungRenewal_WatchdogCancelsTheBlockedWriteBeforeTheLeaseEnds_NoOverlap_OnPostgres()
+    {
+        await using var fx = await Fixture.CreateAsync();
+        await fx.SeedLinkedDocumentAsync();
+        await using var db = fx.NewDb();
+        var service = new DocumentExportService(db, new DocumentCaptureAdmissionLock(db), fx.TenantContext,
+            lease: new HungLease(), leaseSettings: FastLease);
+        var run = await service.CreateAsync(CancellationToken.None);
+        var runId = await db.DocumentExportRuns.Where(r => r.PublicId == run.Id).Select(r => r.Id).SingleAsync();
+        var gate = new GateStream();
+        var context = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        context.Response.Body = gate;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var streaming = service.StreamAsync(runId, context.Response, "docs-lock-co", CancellationToken.None);
+
+        // While the old stream is blocked and its renewal hangs, a competitor is refused until the stream has stopped.
+        await gate.Entered.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await using (var other = fx.NewDb())
+        {
+            var competitor = new DocumentExportService(other, new DocumentCaptureAdmissionLock(other), fx.TenantContext, leaseSettings: FastLease);
+            if (!gate.Cancelled)
+                Assert.Equal("DOCUMENT_EXPORT_RUNNING",
+                    (await Assert.ThrowsAsync<DocumentCaptureServiceException>(() => competitor.CreateAsync(CancellationToken.None))).ErrorCode);
+        }
+        await streaming.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.True(gate.Cancelled);
+        Assert.True(clock.Elapsed < FastLease.Lease + TimeSpan.FromMilliseconds(250), $"stopped after {clock.Elapsed.TotalMilliseconds} ms");
+        await using var verify = fx.NewDb();
+        Assert.Equal(("failed", "lease-lost"), ((await verify.DocumentExportRuns.SingleAsync(r => r.Id == runId)).Status,
+            (await verify.DocumentExportRuns.SingleAsync(r => r.Id == runId)).FailureReason));
+    }
+
+    private sealed class HungLease : IDocumentExportLease
+    {
+        public Task<bool> RenewAsync(int companyId, int runId, DateTime now, CancellationToken cancellationToken) =>
+            new TaskCompletionSource<bool>().Task;
+    }
+
     private sealed class RenewingLease(Fixture fx) : IDocumentExportLease
     {
         public async Task<bool> RenewAsync(int companyId, int runId, DateTime now, CancellationToken cancellationToken)

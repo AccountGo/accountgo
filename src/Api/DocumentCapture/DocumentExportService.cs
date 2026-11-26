@@ -139,11 +139,16 @@ public sealed class DocumentExportService(
 
         // The lease is renewed on its own connection while the ZIP streams, independently of slow writes. Every write uses
         // 'output', which the lease loop cancels when the run was fenced or renewals failed for SelfFenceAfter.
+        // Watchdog: the output is cancelled SelfFenceAfter after the last *confirmed* renewal by a timer that does not depend on
+        // the renewal call returning. Assumes response writes honour cancellation; a suspended process or a write that ignores
+        // cancellation can't be fenced from inside the process, so this is not a distributed mutual-exclusion guarantee.
         using var outputSource = CancellationTokenSource.CreateLinkedTokenSource(requestAborted);
+        if (lease is not null)
+            outputSource.CancelAfter(_lease.SelfFenceAfter);
         using var stopLease = new CancellationTokenSource();
         var output = outputSource.Token;
         var leaseState = new LeaseState();
-        var leaseLoop = RunLeaseAsync(companyId, runId, now, leaseState, outputSource, stopLease.Token);
+        var leaseLoop = RunLeaseAsync(companyId, runId, leaseState, outputSource, stopLease.Token);
 
         // From here the run is "running": every outcome below ends in a terminal status. Failure is the default; only the
         // explicit success path at the end sets it to finished.
@@ -203,7 +208,7 @@ public sealed class DocumentExportService(
             // Disposing the archive wrote the central directory; only now is the ZIP valid.
             await body.FlushAsync(output).ConfigureAwait(false);
             await response.CompleteAsync().ConfigureAwait(false);
-            if (leaseState.Lost)
+            if (leaseState.Lost || (output.IsCancellationRequested && !requestAborted.IsCancellationRequested))
                 throw new ExportLeaseLostException();
 
             if (requestAborted.IsCancellationRequested)
@@ -215,7 +220,7 @@ public sealed class DocumentExportService(
             else if (written == inventory.Length)
                 finished = true;
         }
-        catch (OperationCanceledException) when (leaseState.Lost)
+        catch (OperationCanceledException) when (leaseState.Lost || (output.IsCancellationRequested && !requestAborted.IsCancellationRequested))
         {
             failure = "lease-lost";
         }
@@ -314,31 +319,34 @@ public sealed class DocumentExportService(
     }
 
     /// <summary>
-    /// Renews every <see cref="DocumentExportLeaseSettings.RenewEvery"/>. A fenced run (0 rows renewed) or
-    /// <see cref="DocumentExportLeaseSettings.SelfFenceAfter"/> without a successful renewal cancels the output, before any other
-    /// request may expire the run after <see cref="DocumentExportLeaseSettings.Lease"/>.
+    /// Renews every <see cref="DocumentExportLeaseSettings.RenewEvery"/>, each call bounded by that same interval even if the
+    /// database (or the renewer) ignores cancellation. A confirmed renewal pushes the output watchdog to SelfFenceAfter measured
+    /// from when that renewal *started* (its heartbeat time), so freshness is never overstated. A fenced run (0 rows) cancels
+    /// the output at once; failed or hung renewals simply let the watchdog fire.
     /// </summary>
-    private async Task RunLeaseAsync(int companyId, int runId, DateTime startedAt, LeaseState state, CancellationTokenSource output,
-        CancellationToken stop)
+    private async Task RunLeaseAsync(int companyId, int runId, LeaseState state, CancellationTokenSource output, CancellationToken stop)
     {
         if (lease is null)
             return;
-        var lastRenewed = startedAt;
-        while (!stop.IsCancellationRequested)
+        while (!stop.IsCancellationRequested && !output.IsCancellationRequested)
         {
             try
             {
-                await Task.Delay(_lease.RenewEvery, _timeProvider, stop).ConfigureAwait(false);
+                await Task.Delay(_lease.RenewEvery, stop).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
                 return;
             }
-            var now = _timeProvider.GetUtcNow().UtcDateTime;
+            var attemptStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+            var heartbeat = _timeProvider.GetUtcNow().UtcDateTime;
             bool? renewed;
+            using var attempt = CancellationTokenSource.CreateLinkedTokenSource(stop);
+            attempt.CancelAfter(_lease.RenewEvery);
             try
             {
-                renewed = await lease.RenewAsync(companyId, runId, now, stop).ConfigureAwait(false);
+                renewed = await lease.RenewAsync(companyId, runId, heartbeat, attempt.Token)
+                    .WaitAsync(_lease.RenewEvery, stop).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (stop.IsCancellationRequested)
             {
@@ -346,19 +354,43 @@ public sealed class DocumentExportService(
             }
             catch (Exception exception) when (exception is not OutOfMemoryException)
             {
-                renewed = null; // could not reach the database; counts towards self-fencing
+                renewed = null; // unreachable, slow or hung: no extension, the watchdog keeps counting
+            }
+            if (renewed == false)
+            {
+                state.MarkLost();
+                await CancelQuietlyAsync(output).ConfigureAwait(false);
+                return;
             }
             if (renewed == true)
             {
-                lastRenewed = now;
-                continue;
+                var remaining = _lease.SelfFenceAfter - System.Diagnostics.Stopwatch.GetElapsedTime(attemptStarted);
+                if (remaining <= TimeSpan.Zero)
+                {
+                    state.MarkLost();
+                    await CancelQuietlyAsync(output).ConfigureAwait(false);
+                    return;
+                }
+                try
+                {
+                    output.CancelAfter(remaining);
+                }
+                catch (ObjectDisposedException)
+                {
+                    return;
+                }
             }
-            if (renewed == false || now - lastRenewed >= _lease.SelfFenceAfter)
-            {
-                state.MarkLost();
-                await output.CancelAsync().ConfigureAwait(false);
-                return;
-            }
+        }
+    }
+
+    private static async Task CancelQuietlyAsync(CancellationTokenSource source)
+    {
+        try
+        {
+            await source.CancelAsync().ConfigureAwait(false);
+        }
+        catch (ObjectDisposedException)
+        {
         }
     }
 
