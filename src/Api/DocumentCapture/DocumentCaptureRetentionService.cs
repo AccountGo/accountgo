@@ -178,13 +178,12 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
                 break;
         }
 
-        // Content-free rows left by permanent deletes: kept a day so upload rate limits count them, then removed.
+        // Upload admissions only matter for the hourly limit; keep a day, then remove.
         if (WithinPassBudget(passStarted))
         {
-            var tombstoneCutoff = utcNow.AddDays(-1);
-            await db.DocumentCaptures.IgnoreQueryFilters()
-                .Where(capture => capture.Kind == DocumentLibraryService.DocumentKind && capture.BytesDeletedAt != null
-                    && capture.BytesDeletedAt <= tombstoneCutoff)
+            var admissionCutoff = utcNow.AddDays(-1);
+            await db.DocumentUploadAdmissions.IgnoreQueryFilters()
+                .Where(admission => admission.ReservedAt <= admissionCutoff)
                 .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         }
 

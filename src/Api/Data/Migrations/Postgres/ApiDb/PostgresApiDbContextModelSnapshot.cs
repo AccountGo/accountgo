@@ -1280,6 +1280,29 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.ToTable("DocumentNumberSeries", (string)null);
                 });
 
+            modelBuilder.Entity("Core.Domain.DocumentUploadAdmission", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("ReservedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReservedAt");
+
+                    b.HasIndex("CompanyId", "ReservedAt");
+
+                    b.ToTable("DocumentUploadAdmissions", (string)null);
+                });
+
             modelBuilder.Entity("Core.Domain.Donations.DonationInvoiceHeader", b =>
                 {
                     b.Property<int>("Id")
@@ -7871,6 +7894,15 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .IsRequired();
 
                     b.Navigation("FinancialYear");
+                });
+
+            modelBuilder.Entity("Core.Domain.DocumentUploadAdmission", b =>
+                {
+                    b.HasOne("Core.Domain.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Core.Domain.Donations.DonationInvoiceHeader", b =>

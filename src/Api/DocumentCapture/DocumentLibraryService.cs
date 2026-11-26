@@ -178,10 +178,10 @@ public sealed class DocumentLibraryService(
             }
         }
 
-        // The rate limit is checked before any decode work and again under the lock. Permanently deleted uploads stay counted
-        // (their rows remain as tombstones until the retention worker clears them a day later).
+        // Every upload attempt reserves a slot before any decode work, so invalid files, failures and later deletions all count
+        // against the hourly limit (design 3.2 abuse guard). Replays above never reach this point.
         var now = _timeProvider.GetUtcNow().UtcDateTime;
-        await EnsureUploadRateAsync(companyId, now, cancellationToken).ConfigureAwait(false);
+        await ReserveUploadSlotAsync(companyId, now, cancellationToken).ConfigureAwait(false);
         var media = await PrepareAsync(source, declaredContentType, limit, cancellationToken).ConfigureAwait(false);
         int captureId;
         string capturePublicId;
@@ -216,7 +216,6 @@ public sealed class DocumentLibraryService(
                     throw new DocumentCaptureServiceException(409, "DOCUMENT_DUPLICATE", duplicate.PublicId);
             }
 
-            await EnsureUploadRateAsync(companyId, now, cancellationToken).ConfigureAwait(false);
 
             if (policy.StorageLimitBytes is { } storageLimit)
             {
@@ -565,7 +564,7 @@ public sealed class DocumentLibraryService(
         return await GetAsync(captureId, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Purges a trashed document now: row, blob and links. Refused while any link is locked or it is a scan's source.</summary>
+    /// <summary>Purges a trashed document now: the row with its blob, links, attempts and mapping jobs. Refused while any link is locked or it is a scan's source.</summary>
     public async Task DeletePermanentlyAsync(int captureId, CancellationToken cancellationToken)
     {
         EnsureEnabled();
@@ -583,7 +582,10 @@ public sealed class DocumentLibraryService(
             publicId = capture.PublicId;
             byteCount = capture.ByteCount;
             await EnsureRemovableAsync(companyId, captureId, cancellationToken).ConfigureAwait(false);
-            await TombstoneAsync(companyId, captureId, cancellationToken).ConfigureAwait(false);
+            // The whole row goes: blob, links, extraction attempts and AI-mapping jobs cascade, so no scanned text or field
+            // value survives a permanent delete of any kind.
+            await db.DocumentCaptures.Where(c => c.CompanyId == companyId && c.Id == captureId)
+                .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
             await DocumentRevision.BumpAsync(db, companyId, cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -592,38 +594,21 @@ public sealed class DocumentLibraryService(
     }
 
     /// <summary>
-    /// Permanent delete: removes the bytes and links and wipes the descriptive metadata, keeping a content-free row (kind,
-    /// created time) so upload rate limits still count it. The retention worker removes such rows after a day.
-    /// Caller holds the company lock.
+    /// Reserves one upload slot under the company lock: refuses with <c>DOCUMENT_RATE_LIMITED</c> when the workspace already has
+    /// <see cref="DocumentsOptions.MaxUploadsPerHour"/> admissions in the last hour, otherwise records this one and commits.
     /// </summary>
-    private async Task TombstoneAsync(int companyId, int captureId, CancellationToken cancellationToken)
+    private async Task ReserveUploadSlotAsync(int companyId, DateTime now, CancellationToken cancellationToken)
     {
-        var now = _timeProvider.GetUtcNow().UtcDateTime;
-        await db.DocumentCaptureBlobs.Where(b => b.CompanyId == companyId && b.CaptureId == captureId)
-            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
-        await db.DocumentCaptureLinks.Where(l => l.CompanyId == companyId && l.CaptureId == captureId)
-            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
-        var updated = await db.DocumentCaptures.Where(c => c.CompanyId == companyId && c.Id == captureId && c.BytesDeletedAt == null)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(c => c.BytesDeletedAt, now)
-                .SetProperty(c => c.FieldsWipedAt, now)
-                .SetProperty(c => c.Title, (string?)null)
-                .SetProperty(c => c.FileName, (string?)null)
-                .SetProperty(c => c.Notes, (string?)null)
-                .SetProperty(c => c.Category, (string?)null)
-                .SetProperty(c => c.DocumentDate, (DateTime?)null), cancellationToken).ConfigureAwait(false);
-        if (updated != 1)
-            throw new DocumentCaptureServiceException(409, "DOCUMENT_STATE_CONFLICT");
-    }
-
-    private async Task EnsureUploadRateAsync(int companyId, DateTime now, CancellationToken cancellationToken)
-    {
+        await using var transaction = await admissionLock.AcquireCompanyAsync(companyId, cancellationToken).ConfigureAwait(false);
         var hourAgo = now.AddHours(-1);
-        var recentUploads = await db.DocumentCaptures.AsNoTracking()
-            .CountAsync(c => c.CompanyId == companyId && c.Kind == DocumentKind && c.CreatedAt > hourAgo, cancellationToken)
-            .ConfigureAwait(false);
-        if (recentUploads >= options.Value.MaxUploadsPerHour)
+        var admitted = await db.DocumentUploadAdmissions.AsNoTracking()
+            .CountAsync(a => a.CompanyId == companyId && a.ReservedAt > hourAgo, cancellationToken).ConfigureAwait(false);
+        if (admitted >= options.Value.MaxUploadsPerHour)
             throw new DocumentCaptureServiceException(429, "DOCUMENT_RATE_LIMITED");
+        db.DocumentUploadAdmissions.Add(new DocumentUploadAdmission { CompanyId = companyId, ReservedAt = now });
+        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        db.ChangeTracker.Clear();
     }
 
     /// <summary>Whether a keyed earlier upload may be replayed to this caller: a live file the caller can read.</summary>

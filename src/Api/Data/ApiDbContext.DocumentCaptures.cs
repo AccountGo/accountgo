@@ -16,6 +16,7 @@ public partial class ApiDbContext
     public virtual DbSet<DocumentCaptureAiMapping> DocumentCaptureAiMappings { get; set; } = null!;
     public virtual DbSet<CaptureAiMappingConsent> CaptureAiMappingConsents { get; set; } = null!;
     public virtual DbSet<DocumentLibraryRevision> DocumentLibraryRevisions { get; set; } = null!;
+    public virtual DbSet<DocumentUploadAdmission> DocumentUploadAdmissions { get; set; } = null!;
     public virtual DbSet<PartyAlias> PartyAliases { get; set; } = null!;
 
     private static void ConfigureDocumentCaptureModel(ModelBuilder builder)
@@ -146,6 +147,18 @@ public partial class ApiDbContext
                 .WithMany(capture => capture.Links)
                 .HasForeignKey(link => new { link.CompanyId, link.CaptureId })
                 .HasPrincipalKey(capture => new { capture.CompanyId, capture.Id })
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<DocumentUploadAdmission>(entity =>
+        {
+            entity.ToTable("DocumentUploadAdmissions");
+            entity.HasKey(admission => admission.Id);
+            entity.HasIndex(admission => new { admission.CompanyId, admission.ReservedAt });
+            entity.HasIndex(admission => admission.ReservedAt);
+            entity.HasOne<Company>()
+                .WithMany()
+                .HasForeignKey(admission => admission.CompanyId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

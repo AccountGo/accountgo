@@ -150,6 +150,16 @@ public sealed class DocumentCaptureLink : BaseEntity, ICompanyOwned
     public DocumentCapture Capture { get; set; } = null!;
 }
 
+/// <summary>
+/// One admitted stored-document upload attempt, reserved before any decode work. Independent of the document rows, so deleting
+/// documents or failing validation never frees a slot in the per-workspace hourly upload limit. Cleared by the retention worker.
+/// </summary>
+public sealed class DocumentUploadAdmission : BaseEntity, ICompanyOwned
+{
+    public int CompanyId { get; set; }
+    public DateTime ReservedAt { get; set; }
+}
+
 public sealed class DocumentLibraryRevision : ICompanyOwned
 {
     public int CompanyId { get; set; }

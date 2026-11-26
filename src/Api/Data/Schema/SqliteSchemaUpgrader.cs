@@ -915,6 +915,9 @@ WHERE ""DisabledModulesJson"" IS NULL
                 DocumentCaptureAttemptTableSql,
                 DocumentCaptureLinkTableSql,
                 DocumentLibraryRevisionsTableSql,
+                DocumentUploadAdmissionsTableSql,
+                DocumentUploadAdmissionsCompanyIndexSql,
+                DocumentUploadAdmissionsReservedIndexSql,
                 DocumentCaptureAiMappingTableSql,
                 CaptureAiMappingConsentTableSql,
                 PartyAliasesTableSql
@@ -1133,6 +1136,23 @@ WHERE ""DisabledModulesJson"" IS NULL
                 CONSTRAINT ""FK_DocumentCaptureLinks_DocumentCaptures_CompanyId_CaptureId""
                     FOREIGN KEY (""CompanyId"", ""CaptureId"") REFERENCES ""DocumentCaptures"" (""CompanyId"", ""Id"") ON DELETE CASCADE
             );";
+
+        private const string DocumentUploadAdmissionsTableSql = @"
+            CREATE TABLE IF NOT EXISTS ""DocumentUploadAdmissions"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_DocumentUploadAdmissions"" PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""ReservedAt"" TEXT NOT NULL,
+                CONSTRAINT ""FK_DocumentUploadAdmissions_Company_CompanyId""
+                    FOREIGN KEY (""CompanyId"") REFERENCES ""Company"" (""Id"") ON DELETE CASCADE
+            );";
+
+        private const string DocumentUploadAdmissionsCompanyIndexSql = @"
+            CREATE INDEX IF NOT EXISTS ""IX_DocumentUploadAdmissions_CompanyId_ReservedAt""
+            ON ""DocumentUploadAdmissions"" (""CompanyId"", ""ReservedAt"");";
+
+        private const string DocumentUploadAdmissionsReservedIndexSql = @"
+            CREATE INDEX IF NOT EXISTS ""IX_DocumentUploadAdmissions_ReservedAt""
+            ON ""DocumentUploadAdmissions"" (""ReservedAt"");";
 
         private const string DocumentLibraryRevisionsTableSql = @"
             CREATE TABLE IF NOT EXISTS ""DocumentLibraryRevisions"" (

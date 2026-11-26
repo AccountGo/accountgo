@@ -286,8 +286,8 @@ public sealed class DocumentLibraryServiceTests
         await h.Library.TrashAsync(id, default);
         await h.Library.DeletePermanentlyAsync(id, default);
         Assert.Equal(revision + 4, await DocumentRevision.GetCurrentAsync(h.Db, h.CompanyId));
-        Assert.NotNull((await h.Db.DocumentCaptures.AsNoTracking().SingleAsync(c => c.Id == id)).BytesDeletedAt);
-        await Assert.ThrowsAsync<DocumentCaptureServiceException>(() => h.Library.GetAsync(id, default));
+        Assert.False(await h.Db.DocumentCaptures.AnyAsync(c => c.Id == id));
+        Assert.False(await h.Db.DocumentCaptureBlobs.AnyAsync(b => b.CaptureId == id));
         Assert.False(await h.Db.DocumentCaptureBlobs.AnyAsync(b => b.CaptureId == id));
         h.Audit.Verify(a => a.LogEventAsync("document.deleted", "success", "actor-1", h.CompanyId, It.IsAny<object?>()), Times.Once);
     }
@@ -447,32 +447,65 @@ public sealed class DocumentLibraryServiceTests
     }
 
     [Fact]
-    public async Task UploadRateCountsPermanentlyDeletedUploads_UntilTheWindowPasses()
+    public async Task UploadRateCountsEveryAttempt_DeletedAndInvalidIncluded_UntilTheWindowPasses()
     {
-        await using var h = await Harness.CreateAsync(maxUploadsPerHour: 2);
-        for (var i = 0; i < 2; i++)
-        {
-            var view = await h.Library.UploadAsync(CreatePdf(1, label: $"n{i}"), "application/pdf", "a.pdf", Meta(), null, null, null, false, default);
-            var id = await h.IdOf(view.Id);
-            await h.Library.TrashAsync(id, default);
-            await h.Library.DeletePermanentlyAsync(id, default);
-        }
+        await using var h = await Harness.CreateAsync(maxUploadsPerHour: 3);
+        var view = await h.Library.UploadAsync(CreatePdf(1, label: "n0"), "application/pdf", "a.pdf", Meta(), null, null, null, false, default);
+        var id = await h.IdOf(view.Id);
+        await h.Library.TrashAsync(id, default);
+        await h.Library.DeletePermanentlyAsync(id, default);
+        await Assert.ThrowsAsync<DocumentCaptureServiceException>(() =>
+            h.Library.UploadAsync("%PDF-1.4 broken"u8.ToArray(), "application/pdf", "bad.pdf", Meta(), null, null, null, false, default));
+        await Assert.ThrowsAsync<DocumentCaptureServiceException>(() =>
+            h.Library.UploadAsync(new byte[] { 1, 2, 3 }, "image/png", "bad.png", Meta(), null, null, null, false, default));
+
         var limited = await Assert.ThrowsAsync<DocumentCaptureServiceException>(() =>
-            h.Library.UploadAsync(CreatePdf(1, label: "n3"), "application/pdf", "a.pdf", Meta(), null, null, null, false, default));
+            h.Library.UploadAsync(CreatePdf(1, label: "n4"), "application/pdf", "a.pdf", Meta(), null, null, null, false, default));
         Assert.Equal((429, "DOCUMENT_RATE_LIMITED"), (limited.StatusCode, limited.ErrorCode));
+        Assert.Equal(3, await h.Db.DocumentUploadAdmissions.CountAsync());
+        Assert.False(await h.Db.DocumentCaptures.AnyAsync());
 
-        // Tombstones carry no content; once the hour passes uploads are allowed again.
-        var tombstones = await h.Db.DocumentCaptures.AsNoTracking().Where(c => c.Kind == "document").ToListAsync();
-        Assert.All(tombstones, t => Assert.True(t.BytesDeletedAt is not null && t.Title is null && t.FileName is null && t.Notes is null));
-        Assert.False(await h.Db.DocumentCaptureBlobs.AnyAsync());
-        await h.Db.DocumentCaptures.ExecuteUpdateAsync(s => s.SetProperty(c => c.CreatedAt, DateTime.UtcNow.AddHours(-2)));
-        Assert.NotNull(await h.Library.UploadAsync(CreatePdf(1, label: "n4"), "application/pdf", "a.pdf", Meta(), null, null, null, false, default));
+        // An idempotent replay doesn't consume a slot; once the hour passes uploads are allowed again.
+        await h.Db.DocumentUploadAdmissions.ExecuteUpdateAsync(s => s.SetProperty(a => a.ReservedAt, DateTime.UtcNow.AddHours(-2)));
+        var pdf = CreatePdf(1, label: "n5");
+        var keyed = await h.Library.UploadAsync(pdf, "application/pdf", "a.pdf", Meta(), null, null, "k-5", false, default);
+        Assert.Equal(keyed.Id, (await h.Library.UploadAsync(pdf, "application/pdf", "a.pdf", Meta(), null, null, "k-5", false, default)).Id);
+        Assert.Equal(1, await h.Db.DocumentUploadAdmissions.CountAsync(a => a.ReservedAt > DateTime.UtcNow.AddHours(-1)));
 
-        // The retention worker clears tombstones older than a day.
-        await h.Db.DocumentCaptures.Where(c => c.BytesDeletedAt != null)
-            .ExecuteUpdateAsync(s => s.SetProperty(c => c.BytesDeletedAt, DateTime.UtcNow.AddDays(-2)));
+        // The retention worker clears admissions older than a day.
+        await h.Db.DocumentUploadAdmissions.ExecuteUpdateAsync(s => s.SetProperty(a => a.ReservedAt, DateTime.UtcNow.AddDays(-2)));
         await new DocumentCaptureRetentionService(h.Db, new DocumentCaptureAdmissionLock(h.Db)).PurgeAsync(DateTime.UtcNow, default);
-        Assert.Equal(1, await h.Db.DocumentCaptures.CountAsync(c => c.Kind == "document"));
+        Assert.False(await h.Db.DocumentUploadAdmissions.AnyAsync());
+    }
+
+    [Fact]
+    public async Task PermanentDeleteOfAnUnlinkedScan_LeavesNoExtractedContentOrMappings()
+    {
+        await using var h = await Harness.CreateAsync();
+        var bill = h.SeedBill("B-1");
+        var scanId = await h.SeedFiledScanAsync(bill);
+        await h.Db.DocumentCaptures.Where(c => c.Id == scanId).ExecuteUpdateAsync(s => s
+            .SetProperty(c => c.FieldsJson, "{\"vendorName\":\"Invented Paper Co\"}")
+            .SetProperty(c => c.AcceptedFieldsJson, "{\"vendorName\":\"Invented Paper Co\"}")
+            .SetProperty(c => c.RawText, "INVENTED PAPER CO total 12.00")
+            .SetProperty(c => c.WarningsJson, "[\"w\"]"));
+        h.Db.DocumentCaptureAiMappings.Add(new DocumentCaptureAiMapping
+        {
+            CompanyId = h.CompanyId, CaptureId = scanId, ExtractionGeneration = 1, Status = "done", Kind = "purchase-invoice",
+            ContentHash = new string('a', 64), RulesVersion = "r1", MappedFieldsJson = "{\"vendorName\":\"Invented Paper Co\"}",
+            CreatedAt = DateTime.UtcNow
+        });
+        await h.Db.SaveChangesAsync();
+        h.Db.ChangeTracker.Clear();
+
+        await DocumentLibraryService.RemoveLinksForDeletedTargetAsync(h.Db, h.CompanyId, "bill", bill.Id, default);
+        await h.Library.TrashAsync(scanId, default);
+        await h.Library.DeletePermanentlyAsync(scanId, default);
+
+        Assert.False(await h.Db.DocumentCaptures.AnyAsync(c => c.Id == scanId));
+        Assert.False(await h.Db.DocumentCaptureBlobs.AnyAsync(b => b.CaptureId == scanId));
+        Assert.False(await h.Db.DocumentCaptureAiMappings.AnyAsync(m => m.CaptureId == scanId));
+        Assert.False(await h.Db.DocumentCaptureLinks.AnyAsync(l => l.CaptureId == scanId));
     }
 
     [Fact]
