@@ -273,6 +273,7 @@ public static class AccountGoApp
         builder.Services.AddScoped<Api.DocumentCaptures.DocumentCaptureService>();
         builder.Services.AddScoped<Api.DocumentCaptures.DocumentCaptureRetentionService>();
         builder.Services.AddScoped<Api.DocumentCaptures.DocumentLibraryService>();
+        builder.Services.AddSingleton<Api.DocumentCaptures.IDocumentExportLease, Api.DocumentCaptures.ScopedDocumentExportLease>();
         builder.Services.AddScoped<Api.DocumentCaptures.DocumentExportService>();
         builder.Services.AddOptions<Api.DocumentCaptures.DocumentsOptions>()
             .Bind(builder.Configuration.GetSection(Api.DocumentCaptures.DocumentsOptions.SectionName))

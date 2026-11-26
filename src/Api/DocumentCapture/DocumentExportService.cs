@@ -41,17 +41,19 @@ public sealed class DocumentExportService(
     IDocumentCaptureAdmissionLock admissionLock,
     ITenantContext tenant,
     ISecurityAuditService? securityAudit = null,
-    TimeProvider? timeProvider = null)
+    TimeProvider? timeProvider = null,
+    IDocumentExportLease? lease = null,
+    DocumentExportLeaseSettings? leaseSettings = null)
 {
+    private readonly DocumentExportLeaseSettings _lease = leaseSettings ?? DocumentExportLeaseSettings.Default;
     public const string Ready = "ready";
     public const string Running = "running";
     public const string ServerFinished = "server_finished";
     public const string Failed = "failed";
     /// <summary>A ready run nobody downloads is failed after this long.</summary>
     public static readonly TimeSpan StaleAfter = TimeSpan.FromHours(2);
-    /// <summary>A running export must renew its heartbeat within this lease, or it is expired and fenced.</summary>
-    public static readonly TimeSpan StreamLease = TimeSpan.FromMinutes(5);
-    private static readonly TimeSpan HeartbeatEvery = TimeSpan.FromSeconds(30);
+    /// <summary>A running export must renew its heartbeat within this lease, or it is expired and fenced (retention default).</summary>
+    public static readonly TimeSpan StreamLease = DocumentExportLeaseSettings.Default.Lease;
     public static readonly TimeSpan KeepRunsFor = TimeSpan.FromDays(30);
     private static readonly string[] FilableKinds = ["document", "expense-receipt", "purchase-invoice", "sales-invoice"];
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
@@ -135,6 +137,14 @@ public sealed class DocumentExportService(
         var now = _timeProvider.GetUtcNow().UtcDateTime;
         await ClaimAsync(companyId, runId, now, requestAborted).ConfigureAwait(false);
 
+        // The lease is renewed on its own connection while the ZIP streams, independently of slow writes. Every write uses
+        // 'output', which the lease loop cancels when the run was fenced or renewals failed for SelfFenceAfter.
+        using var outputSource = CancellationTokenSource.CreateLinkedTokenSource(requestAborted);
+        using var stopLease = new CancellationTokenSource();
+        var output = outputSource.Token;
+        var leaseState = new LeaseState();
+        var leaseLoop = RunLeaseAsync(companyId, runId, now, leaseState, outputSource, stopLease.Token);
+
         // From here the run is "running": every outcome below ends in a terminal status. Failure is the default; only the
         // explicit success path at the end sets it to finished.
         var exportId = string.Empty;
@@ -144,7 +154,7 @@ public sealed class DocumentExportService(
         string failure = "server-error";
         try
         {
-            var run = await db.DocumentExportRuns.AsNoTracking().SingleAsync(r => r.CompanyId == companyId && r.Id == runId, requestAborted)
+            var run = await db.DocumentExportRuns.AsNoTracking().SingleAsync(r => r.CompanyId == companyId && r.Id == runId, output)
                 .ConfigureAwait(false);
             exportId = run.PublicId;
             var inventory = JsonSerializer.Deserialize<JsonElement[][]>(run.InventoryJson) ?? [];
@@ -162,19 +172,16 @@ public sealed class DocumentExportService(
             string? entryProblem = null;
             var body = new AsyncFlushingStream(response.Body);
             var zip = await ZipArchive.CreateAsync(body, ZipArchiveMode.Create, leaveOpen: true, entryNameEncoding: Encoding.UTF8,
-                cancellationToken: requestAborted).ConfigureAwait(false);
+                cancellationToken: output).ConfigureAwait(false);
             await using (zip.ConfigureAwait(false))
             {
                 var usedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                var lastBeat = now;
                 foreach (var item in inventory)
                 {
-                    requestAborted.ThrowIfCancellationRequested();
-                    if (_timeProvider.GetUtcNow().UtcDateTime - lastBeat >= HeartbeatEvery)
-                        lastBeat = await HeartbeatAsync(companyId, runId).ConfigureAwait(false);
+                    output.ThrowIfCancellationRequested();
                     var captureId = item[0].GetInt32();
                     var expectedHash = item[1].GetString() ?? string.Empty;
-                    var row = await WriteEntryAsync(zip, companyId, captureId, expectedHash, usedPaths, requestAborted).ConfigureAwait(false);
+                    var row = await WriteEntryAsync(zip, companyId, captureId, expectedHash, usedPaths, output).ConfigureAwait(false);
                     rows.Add(row);
                     if (row.Verification == "ok")
                         written++;
@@ -186,24 +193,31 @@ public sealed class DocumentExportService(
                 var complete = entryProblem is null && written == inventory.Length;
                 // Stored, not deflated: deflate flushes synchronously on dispose, which the server's response stream refuses.
                 var index = zip.CreateEntry("index.csv", CompressionLevel.NoCompression);
-                var indexStream = await index.OpenAsync(requestAborted).ConfigureAwait(false);
+                var indexStream = await index.OpenAsync(output).ConfigureAwait(false);
                 await using (indexStream.ConfigureAwait(false))
                 {
                     var bytes = Encoding.UTF8.GetBytes(BuildIndex(rows, complete, entryProblem, written, inventory.Length, run.PublicId));
-                    await indexStream.WriteAsync(bytes, requestAborted).ConfigureAwait(false);
+                    await indexStream.WriteAsync(bytes, output).ConfigureAwait(false);
                 }
             }
             // Disposing the archive wrote the central directory; only now is the ZIP valid.
-            await body.FlushAsync(requestAborted).ConfigureAwait(false);
+            await body.FlushAsync(output).ConfigureAwait(false);
             await response.CompleteAsync().ConfigureAwait(false);
-            await HeartbeatAsync(companyId, runId).ConfigureAwait(false);
+            if (leaseState.Lost)
+                throw new ExportLeaseLostException();
 
             if (requestAborted.IsCancellationRequested)
                 failure = "client-disconnected";
+            else if (leaseState.Lost)
+                failure = "lease-lost";
             else if (entryProblem is not null)
                 failure = entryProblem;
             else if (written == inventory.Length)
                 finished = true;
+        }
+        catch (OperationCanceledException) when (leaseState.Lost)
+        {
+            failure = "lease-lost";
         }
         catch (OperationCanceledException) when (requestAborted.IsCancellationRequested)
         {
@@ -220,6 +234,8 @@ public sealed class DocumentExportService(
         }
         finally
         {
+            await stopLease.CancelAsync().ConfigureAwait(false);
+            await leaseLoop.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
             var completedAt = _timeProvider.GetUtcNow().UtcDateTime;
             var finalStatus = finished ? ServerFinished : Failed;
             string? finalReason = finished ? null : failure;
@@ -290,15 +306,60 @@ public sealed class DocumentExportService(
         return exportConfirmed ? null : "DOCUMENT_EXPORT_CONFIRMATION_REQUIRED";
     }
 
-    /// <summary>Renews the lease; throws when the run was expired (fenced) so the stream stops writing for a dead run.</summary>
-    private async Task<DateTime> HeartbeatAsync(int companyId, int runId)
+    private sealed class LeaseState
     {
-        var now = _timeProvider.GetUtcNow().UtcDateTime;
-        var renewed = await db.DocumentExportRuns.Where(r => r.CompanyId == companyId && r.Id == runId && r.Status == Running)
-            .ExecuteUpdateAsync(s => s.SetProperty(r => r.LastHeartbeatAt, now), CancellationToken.None).ConfigureAwait(false);
-        if (renewed == 0)
-            throw new ExportLeaseLostException();
-        return now;
+        private int _lost;
+        public bool Lost => Volatile.Read(ref _lost) == 1;
+        public void MarkLost() => Volatile.Write(ref _lost, 1);
+    }
+
+    /// <summary>
+    /// Renews every <see cref="DocumentExportLeaseSettings.RenewEvery"/>. A fenced run (0 rows renewed) or
+    /// <see cref="DocumentExportLeaseSettings.SelfFenceAfter"/> without a successful renewal cancels the output, before any other
+    /// request may expire the run after <see cref="DocumentExportLeaseSettings.Lease"/>.
+    /// </summary>
+    private async Task RunLeaseAsync(int companyId, int runId, DateTime startedAt, LeaseState state, CancellationTokenSource output,
+        CancellationToken stop)
+    {
+        if (lease is null)
+            return;
+        var lastRenewed = startedAt;
+        while (!stop.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(_lease.RenewEvery, _timeProvider, stop).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
+            bool? renewed;
+            try
+            {
+                renewed = await lease.RenewAsync(companyId, runId, now, stop).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (stop.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException)
+            {
+                renewed = null; // could not reach the database; counts towards self-fencing
+            }
+            if (renewed == true)
+            {
+                lastRenewed = now;
+                continue;
+            }
+            if (renewed == false || now - lastRenewed >= _lease.SelfFenceAfter)
+            {
+                state.MarkLost();
+                await output.CancelAsync().ConfigureAwait(false);
+                return;
+            }
+        }
     }
 
     private async Task EnsureCompanyLiveAsync(int companyId, CancellationToken cancellationToken)
@@ -312,7 +373,7 @@ public sealed class DocumentExportService(
 
     private async Task ExpireStaleAsync(int companyId, DateTime now, CancellationToken cancellationToken)
     {
-        var staleBefore = now - StreamLease;
+        var staleBefore = now - _lease.Lease;
         await db.DocumentExportRuns
             .Where(r => r.CompanyId == companyId && r.Status == Running && r.LastHeartbeatAt <= staleBefore)
             .ExecuteUpdateAsync(s => s.SetProperty(r => r.Status, Failed).SetProperty(r => r.FailureReason, "stale")
