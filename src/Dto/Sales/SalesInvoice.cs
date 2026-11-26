@@ -150,7 +150,7 @@ namespace Dto.Sales
 
     public class InvoicePaymentItemDto
     {
-        [PublicId("rcpt")]
+        [PublicId("alloc")]
         public int Id { get; set; }
         public string? ReceiptNo { get; set; }
         public DateTime Date { get; set; }

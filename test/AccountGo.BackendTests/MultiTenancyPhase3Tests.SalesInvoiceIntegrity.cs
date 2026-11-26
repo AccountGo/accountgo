@@ -621,5 +621,175 @@ namespace AccountGo.BackendTests
             var nextAfterStart = JsonDocument.Parse(await nextAfterStartRes.Content.ReadAsStringAsync()).RootElement.GetProperty("next").GetString();
             Assert.Equal(nextBefore, nextAfterStart);
         }
+
+        [Fact]
+        public async Task SalesInvoice_PaymentHistory_PreservesReceiptFieldsDefaultsAndAllocationPublicId_AcrossFreshRequests()
+        {
+            // Create an invoice with grand total >= 100 so multiple partial payments can be recorded.
+            var invoiceDto = await NewInvoice();
+            invoiceDto.Status = "Draft";
+            invoiceDto.SalesInvoiceLines = new List<Dto.Sales.SalesInvoiceLine>
+            {
+                new() { ItemId = invoiceDto.SalesInvoiceLines[0].ItemId, Quantity = 2, Amount = 50m }
+            };
+            var saveRes = await Send(HttpMethod.Post, "/api/Sales/SaveSalesInvoice", invoiceDto);
+            Assert.True(saveRes.IsSuccessStatusCode, await saveRes.Content.ReadAsStringAsync());
+            var saved = await ReadDto<Dto.Sales.SalesInvoice>(saveRes);
+            var invoiceNo = await Issue(saved.Id);
+
+            // Seed an unallocated receipt first so SalesReceiptHeader.Id advances ahead of CustomerAllocation.Id.
+            WithDb(db =>
+            {
+                var customer = db.Customers.Find(saved.CustomerId);
+                var cashAccount = db.Accounts.First(a => a.AccountCode == "10110");
+                var priorReceipt = new SalesReceiptHeader
+                {
+                    CustomerId = customer.Id,
+                    Date = DateTime.UtcNow.Date,
+                    Amount = 25m,
+                    AccountToDebitId = cashAccount.Id,
+                    No = "PRIOR-ADV-1"
+                };
+                priorReceipt.SalesReceiptLines.Add(new SalesReceiptLine
+                {
+                    Quantity = 1,
+                    Amount = 25m,
+                    AmountPaid = 25m,
+                    AccountToCreditId = customer.CustomerAdvancesAccountId ?? 2
+                });
+                db.SalesReceiptHeaders.Add(priorReceipt);
+                db.SaveChanges();
+            });
+
+            // 1. Record partial payment with explicit reference, method, and notes.
+            var paymentDate1 = DateTime.UtcNow.Date;
+            var pay1Res = await Send(HttpMethod.Post, "/api/Sales/RecordPayment", new Dto.Sales.RecordInvoicePaymentDto
+            {
+                InvoiceId = saved.Id,
+                Amount = 40m,
+                PaymentDate = paymentDate1,
+                PaymentMethod = "Check",
+                ReferenceNo = "  WIRE-98421  ",
+                Notes = "  First installment  "
+            });
+            Assert.Equal(HttpStatusCode.OK, pay1Res.StatusCode);
+            var pay1Json = await Json(pay1Res);
+            var receipt1PubId = pay1Json.GetProperty("receiptId").GetString();
+            var receipt1No = pay1Json.GetProperty("receiptNo").GetString();
+            Assert.False(string.IsNullOrWhiteSpace(receipt1No));
+
+            int receipt1Id = IntId<SalesReceiptHeader>(receipt1PubId);
+            int alloc1Id = 0;
+            string alloc1PubId = null;
+            WithDb(db =>
+            {
+                var alloc = db.CustomerAllocations.Single(a => a.SalesInvoiceHeaderId == saved.Id && a.SalesReceiptHeaderId == receipt1Id);
+                alloc1Id = alloc.Id;
+                alloc1PubId = alloc.PublicId;
+            });
+            Assert.NotEqual(receipt1Id, alloc1Id);
+            Assert.StartsWith("alloc_", alloc1PubId);
+
+            // Fresh HTTP GET (separate scope / ApiDbContext — EF tracking from RecordPayment cannot hide missing loads).
+            var freshGet1 = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={PubId<SalesInvoiceHeader>(saved.Id)}");
+            Assert.Equal(HttpStatusCode.OK, freshGet1.StatusCode);
+            var wire1 = await Json(freshGet1);
+            var wirePayment1 = Assert.Single(wire1.GetProperty("payments").EnumerateArray());
+            Assert.Equal(alloc1PubId, wirePayment1.GetProperty("id").GetString());
+            Assert.Equal("WIRE-98421", wirePayment1.GetProperty("referenceNo").GetString());
+            Assert.Equal(receipt1No, wirePayment1.GetProperty("receiptNo").GetString());
+            Assert.Equal("Check", wirePayment1.GetProperty("paymentMethod").GetString());
+            Assert.Equal("First installment", wirePayment1.GetProperty("notes").GetString());
+            Assert.Equal(40m, wirePayment1.GetProperty("amount").GetDecimal());
+
+            // Verify rendered PDF shows method + reference under Payments Received, and does not print payment notes.
+            var pdfRes = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoicePdf?id={PubId<SalesInvoiceHeader>(saved.Id)}");
+            Assert.Equal(HttpStatusCode.OK, pdfRes.StatusCode);
+            var pdfBytes = await pdfRes.Content.ReadAsByteArrayAsync();
+            using (var pdf = UglyToad.PdfPig.PdfDocument.Open(pdfBytes))
+            {
+                var pdfText = string.Join("\n", pdf.GetPages().Select(p => p.Text));
+                Assert.Contains("PAYMENTS RECEIVED", pdfText);
+                Assert.Contains("Check", pdfText);
+                Assert.Contains("WIRE-98421", pdfText);
+                Assert.DoesNotContain("First installment", pdfText);
+            }
+
+            // 2. Record second payment with blank reference/method/notes -> recorder stores invoice.No as ReferenceNo.
+            var pay2Res = await Send(HttpMethod.Post, "/api/Sales/RecordPayment", new Dto.Sales.RecordInvoicePaymentDto
+            {
+                InvoiceId = saved.Id,
+                Amount = 30m,
+                PaymentDate = paymentDate1.AddDays(1),
+                PaymentMethod = "   ",
+                ReferenceNo = "   ",
+                Notes = "   "
+            });
+            Assert.Equal(HttpStatusCode.OK, pay2Res.StatusCode);
+            var pay2Json = await Json(pay2Res);
+            var receipt2No = pay2Json.GetProperty("receiptNo").GetString();
+
+            var reloadedAfterSecond = await GetInvoice(saved.Id);
+            Assert.Equal(2, reloadedAfterSecond.Payments.Count);
+            var secondPayment = reloadedAfterSecond.Payments.Single(p => p.Amount == 30m);
+            Assert.Equal(invoiceNo, secondPayment.ReferenceNo);
+            Assert.Equal(receipt2No, secondPayment.ReceiptNo);
+            Assert.Equal("Bank Transfer", secondPayment.PaymentMethod);
+            Assert.Null(secondPayment.Notes);
+
+            // 3. Valid customer-advance allocation with blank receipt fields normalizes blanks to null / "Payment".
+            var secondDraftId = await SaveDraft();
+            await Issue(secondDraftId);
+            var secondInvoice = await GetInvoice(secondDraftId);
+            int blankAdvanceReceiptId = 0;
+            WithDb(db =>
+            {
+                var customer = db.Customers.Find(secondInvoice.CustomerId);
+                var cashAccount = db.Accounts.First(a => a.AccountCode == "10110");
+                var advReceipt = new SalesReceiptHeader
+                {
+                    CustomerId = customer.Id,
+                    Date = DateTime.UtcNow.Date,
+                    Amount = secondInvoice.BalanceDue,
+                    AccountToDebitId = cashAccount.Id,
+                    No = "ADV-BLANK-01",
+                    PaymentMethod = "   ",
+                    ReferenceNo = "   ",
+                    Memo = "   "
+                };
+                advReceipt.SalesReceiptLines.Add(new SalesReceiptLine
+                {
+                    Quantity = 1,
+                    Amount = secondInvoice.BalanceDue,
+                    AmountPaid = secondInvoice.BalanceDue,
+                    AccountToCreditId = customer.CustomerAdvancesAccountId ?? 2
+                });
+                db.SalesReceiptHeaders.Add(advReceipt);
+                db.SaveChanges();
+                blankAdvanceReceiptId = advReceipt.Id;
+            });
+
+            var allocRes = await Send(HttpMethod.Post, "/api/Sales/SaveAllocation", new Api.Controllers.SalesController.SaveAllocationDto
+            {
+                CustomerId = secondInvoice.CustomerId,
+                ReceiptId = blankAdvanceReceiptId,
+                Date = DateTime.UtcNow.Date,
+                AllocationLines = new List<Api.Controllers.SalesController.SaveAllocationLineDto>
+                {
+                    new() { InvoiceId = secondInvoice.Id, AmountToAllocate = secondInvoice.BalanceDue }
+                }
+            });
+            Assert.Equal(HttpStatusCode.OK, allocRes.StatusCode);
+
+            var freshAdvGet = await Send(HttpMethod.Get, $"/api/Sales/SalesInvoice?id={PubId<SalesInvoiceHeader>(secondInvoice.Id)}");
+            Assert.Equal(HttpStatusCode.OK, freshAdvGet.StatusCode);
+            var advWire = await Json(freshAdvGet);
+            var advWirePayment = Assert.Single(advWire.GetProperty("payments").EnumerateArray());
+            Assert.StartsWith("alloc_", advWirePayment.GetProperty("id").GetString());
+            Assert.Equal(JsonValueKind.Null, advWirePayment.GetProperty("referenceNo").ValueKind);
+            Assert.Equal("ADV-BLANK-01", advWirePayment.GetProperty("receiptNo").GetString());
+            Assert.Equal("Payment", advWirePayment.GetProperty("paymentMethod").GetString());
+            Assert.Equal(JsonValueKind.Null, advWirePayment.GetProperty("notes").ValueKind);
+        }
     }
 }

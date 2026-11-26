@@ -377,6 +377,29 @@ namespace Services.Sales
 
             if (invoice != null)
             {
+                if (invoice.CustomerAllocations is { Count: > 0 } && _salesReceiptRepo.Table is { } receiptTable)
+                {
+                    var receiptIds = invoice.CustomerAllocations
+                        .Where(a => a.SalesReceiptHeader == null && a.SalesReceiptHeaderId > 0)
+                        .Select(a => a.SalesReceiptHeaderId)
+                        .Distinct()
+                        .ToList();
+                    if (receiptIds.Count > 0)
+                    {
+                        var receipts = receiptTable
+                            .Where(r => receiptIds.Contains(r.Id))
+                            .ToDictionary(r => r.Id);
+                        foreach (var allocation in invoice.CustomerAllocations)
+                        {
+                            if (allocation.SalesReceiptHeader == null
+                                && receipts.TryGetValue(allocation.SalesReceiptHeaderId, out var receipt))
+                            {
+                                allocation.SalesReceiptHeader = receipt;
+                            }
+                        }
+                    }
+                }
+
                 foreach (var line in invoice.SalesInvoiceLines)
                 {
                     line.Item = _itemRepo.GetById(line.ItemId);

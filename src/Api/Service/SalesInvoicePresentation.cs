@@ -111,12 +111,12 @@ namespace Api.Service
                     .Select(a => new Dto.Sales.InvoicePaymentItemDto
                     {
                         Id = a.Id,
-                        ReceiptNo = a.SalesReceiptHeader?.No,
+                        ReceiptNo = Blank(a.SalesReceiptHeader?.No),
                         Date = a.Date,
                         Amount = a.Amount,
-                        PaymentMethod = a.SalesReceiptHeader?.PaymentMethod ?? "Payment",
-                        ReferenceNo = a.SalesReceiptHeader?.ReferenceNo,
-                        Notes = a.SalesReceiptHeader?.Memo
+                        PaymentMethod = Blank(a.SalesReceiptHeader?.PaymentMethod) ?? "Payment",
+                        ReferenceNo = Blank(a.SalesReceiptHeader?.ReferenceNo),
+                        Notes = Blank(a.SalesReceiptHeader?.Memo)
                     }).ToList();
             }
 

@@ -115,6 +115,73 @@ public sealed class PublicIdQueryBudgetTests
                 token = (await services.GetRequiredService<IAuthenticationService>().CreateToken(user, true)).AccessToken;
             }
 
+            string paidInvoicePublicId;
+            using (var scope = factory.Services.CreateScope())
+            {
+                var services = scope.ServiceProvider;
+                var db = services.GetRequiredService<ApiDbContext>();
+                var company = db.Companies.IgnoreQueryFilters().First();
+                ((Api.Tenancy.TenantContext)services.GetRequiredService<Core.Tenancy.ITenantContext>())
+                    .SetTenant(company.Id, company.Slug!, CompanyMemberRole.Owner, Array.Empty<string>());
+
+                var customer = db.Customers.First();
+                var item = db.Items.First();
+                var uom = db.Measurements.First();
+                var salesAccount = db.Accounts.First(a => a.AccountCode.StartsWith("4"));
+                var cashAccount = db.Accounts.First(a => a.IsCash);
+
+                var paidInv = new SalesInvoiceHeader
+                {
+                    CompanyId = company.Id,
+                    CustomerId = customer.Id,
+                    No = "BUDGET-PAID-0001",
+                    Date = DateTime.UtcNow.Date,
+                    Status = SalesInvoiceStatus.Closed,
+                };
+                paidInv.SalesInvoiceLines.Add(new Core.Domain.Sales.SalesInvoiceLine
+                {
+                    CompanyId = company.Id,
+                    ItemId = item.Id,
+                    MeasurementId = uom.Id,
+                    Quantity = 1,
+                    Amount = 500m,
+                    SalesAccountId = salesAccount.Id,
+                    Description = "Paid invoice line"
+                });
+                db.SalesInvoiceHeaders.Add(paidInv);
+                await db.SaveChangesAsync();
+
+                for (var p = 1; p <= 5; p++)
+                {
+                    var rcpt = new SalesReceiptHeader
+                    {
+                        CompanyId = company.Id,
+                        CustomerId = customer.Id,
+                        AccountToDebitId = cashAccount.Id,
+                        Date = DateTime.UtcNow.Date.AddDays(p),
+                        Amount = 100m,
+                        No = $"BUDGET-RCPT-{p}",
+                        PaymentMethod = "Bank Transfer",
+                        ReferenceNo = $"REF-BUDGET-{p}",
+                        Memo = $"Installment {p}"
+                    };
+                    db.SalesReceiptHeaders.Add(rcpt);
+                    await db.SaveChangesAsync();
+
+                    db.CustomerAllocations.Add(new CustomerAllocation
+                    {
+                        CompanyId = company.Id,
+                        CustomerId = customer.Id,
+                        SalesInvoiceHeaderId = paidInv.Id,
+                        SalesReceiptHeaderId = rcpt.Id,
+                        Date = rcpt.Date,
+                        Amount = 100m
+                    });
+                }
+                await db.SaveChangesAsync();
+                paidInvoicePublicId = paidInv.PublicId;
+            }
+
             async Task<(HttpStatusCode Status, IReadOnlyList<string> Commands, string Body)> Send(string path)
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, path);
@@ -145,11 +212,33 @@ public sealed class PublicIdQueryBudgetTests
             // Distinct prefixes on SalesInvoices: inv, cus, term, il, item, uom, tax, acct -> at most 8 batched IN queries (0 N+1)
             Assert.True(invList.Commands.Count <= 16, $"SalesInvoices with 100 rows executed {invList.Commands.Count} queries (possible N+1).");
 
-            // Measure invoice detail
+            // Measure invoice detail (unpaid draft -> 0 receipt queries)
             var invDetail = await Send($"/api/Sales/SalesInvoice?id={sampleInvoicePublicId}");
             Assert.Equal(HttpStatusCode.OK, invDetail.Status);
-            _output.WriteLine($"/api/Sales/SalesInvoice: total={invDetail.Commands.Count}");
+            var unpaidReceiptQueries = invDetail.Commands.Count(c => c.Contains("\"SalesReceiptHeader\"", StringComparison.Ordinal) && c.Contains("SELECT", StringComparison.OrdinalIgnoreCase));
+            _output.WriteLine($"/api/Sales/SalesInvoice (unpaid): total={invDetail.Commands.Count}, receiptQueries={unpaidReceiptQueries}");
+            Assert.Equal(0, unpaidReceiptQueries);
             Assert.True(invDetail.Commands.Count <= 25, $"SalesInvoice detail executed {invDetail.Commands.Count} queries.");
+
+            // Measure invoice detail with 5 allocations -> 1 batched receipt query + 1 batched alloc PublicId prefetch (no N+1)
+            var paidDetail = await Send($"/api/Sales/SalesInvoice?id={paidInvoicePublicId}");
+            Assert.Equal(HttpStatusCode.OK, paidDetail.Status);
+            var paidDetailJson = JsonNode.Parse(paidDetail.Body)!;
+            var paidItems = paidDetailJson["payments"]?.AsArray();
+            Assert.NotNull(paidItems);
+            Assert.Equal(5, paidItems!.Count);
+            Assert.All(paidItems, p =>
+            {
+                Assert.StartsWith("alloc_", p!["id"]!.GetValue<string>());
+                Assert.StartsWith("REF-BUDGET-", p["referenceNo"]!.GetValue<string>());
+                Assert.StartsWith("BUDGET-RCPT-", p["receiptNo"]!.GetValue<string>());
+            });
+            var paidReceiptQueries = paidDetail.Commands.Count(c => c.Contains("\"SalesReceiptHeader\"", StringComparison.Ordinal) && c.Contains("SELECT", StringComparison.OrdinalIgnoreCase));
+            var paidAllocPrefetchQueries = paidDetail.Commands.Count(c => c.Contains("\"CustomerAllocation\"", StringComparison.Ordinal) && c.Contains("\"PublicId\"", StringComparison.Ordinal) && c.Contains("SELECT", StringComparison.OrdinalIgnoreCase) && c.Contains(" IN (", StringComparison.OrdinalIgnoreCase));
+            _output.WriteLine($"/api/Sales/SalesInvoice (5 payments): total={paidDetail.Commands.Count}, receiptQueries={paidReceiptQueries}, allocPrefetch={paidAllocPrefetchQueries}");
+            Assert.Equal(1, paidReceiptQueries);
+            Assert.Equal(1, paidAllocPrefetchQueries);
+            Assert.True(paidDetail.Commands.Count <= 25, $"Paid SalesInvoice detail executed {paidDetail.Commands.Count} queries.");
 
             // Measure dashboard
             var dash = await Send("/api/Dashboard/Summary");
