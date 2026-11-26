@@ -74,9 +74,9 @@ public sealed class TextLayoutTests
 
     [Fact]
     [Trait("Rule", "G-04")]
-    public void AnAlignedGridInOneTypeSizeKeepsRowsWithCellsSeparated()
+    public void AnAlignedGridOfShortCellsIsReadByColumnThenSideBySide()
     {
-        // Could be a parameter table: reading it by column would split each name from its type.
+        // Could be two short flows or a parameter table: columns first, then one marked line with the row pairings.
         TextLine[] page =
         [
             P("Name", 30, 100, 90), P("Type", 400, 100, 450),
@@ -84,8 +84,29 @@ public sealed class TextLayoutTests
             P("items", 30, 160, 90), P("array", 400, 160, 460),
         ];
 
-        Assert.Equal(["Name | Type", "note | string", "items | array"], Texts(TextLayout.ReadingLines(page)));
+        Assert.Equal(
+            ["Name", "note", "items", "Type", "string", "array", "(aligned side by side: Name | Type; note | string; items | array)"],
+            Texts(TextLayout.ReadingLines(page)));
         Assert.Equal(["Name Type", "note string", "items array"], Texts(TextLayout.Rows(page)));
+    }
+
+    [Fact]
+    [Trait("Rule", "G-04")]
+    public void AlignedProseColumnsInOneTypeSizeAreReadByColumnOnly()
+    {
+        TextLine[] page =
+        [
+            P("Requests are sent over HTTPS only.", 30, 100, 330), P("Responses use JSON with UTF-8 text.", 500, 100, 800),
+            P("Each request carries an API key header.", 30, 130, 340), P("Errors include a code and a message.", 500, 130, 790),
+            P("Keys can be rotated from the settings page.", 30, 160, 360), P("Retry failed calls after a short delay.", 500, 160, 780),
+        ];
+
+        Assert.Equal(
+            [
+                "Requests are sent over HTTPS only.", "Each request carries an API key header.", "Keys can be rotated from the settings page.",
+                "Responses use JSON with UTF-8 text.", "Errors include a code and a message.", "Retry failed calls after a short delay.",
+            ],
+            Texts(TextLayout.ReadingLines(page)));
     }
 
     [Fact]

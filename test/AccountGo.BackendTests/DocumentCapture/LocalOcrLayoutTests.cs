@@ -118,12 +118,53 @@ public sealed class LocalOcrLayoutTests(ITestOutputHelper output)
     [Trait("Rule", "G-04")]
     [InlineData("aligned-grid.png")]
     [InlineData("aligned-grid.pdf")]
-    public async Task AlignedGridInOneTypeSizeKeepsRowsWithCellsSeparated(string file)
+    public async Task AlignedShortGridInOneTypeSizeIsReadByColumnThenSideBySide(string file)
+    {
+        // The review's three-row reproduction in one type size: column order first, pairings on one marked line.
+        var lines = (await ExtractAsync(file, "assistant-attachment")).RawText!.Split('\n');
+        output.WriteLine(string.Join('\n', lines));
+
+        Assert.Equal(
+            [
+                "Navigation", "Overview", "Settings", "API Guide", "Request body", "Errors",
+                "(aligned side by side: Navigation | API Guide; Overview | Request body; Settings | Errors)",
+            ],
+            lines);
+    }
+
+    [LocalOcrTheory]
+    [Trait("Rule", "G-04")]
+    [InlineData("aligned-prose.png")]
+    [InlineData("aligned-prose.pdf")]
+    public async Task AlignedProseColumnsInOneTypeSizeAreReadByColumn(string file)
     {
         var lines = (await ExtractAsync(file, "assistant-attachment")).RawText!.Split('\n');
         output.WriteLine(string.Join('\n', lines));
 
-        Assert.Equal(["Navigation | API Guide", "Overview | Request body", "Settings | Errors"], lines);
+        Assert.Equal(
+            [
+                "Requests are sent over HTTPS only.", "Each request carries an API key header.", "Keys can be rotated from the settings page.",
+                "Responses use JSON with UTF-8 text.", "Errors include a code and a message.", "Retry failed calls after a short delay.",
+            ],
+            lines);
+    }
+
+    [LocalOcrTheory]
+    [Trait("Rule", "G-04")]
+    [InlineData("parameter-table.png")]
+    [InlineData("parameter-table.pdf")]
+    public async Task ParameterTableKeepsEachRowTogetherOnTheSideBySideLine(string file)
+    {
+        var result = await ExtractAsync(file, "assistant-attachment");
+        var lines = result.RawText!.Split('\n');
+        output.WriteLine(result.RawText);
+
+        Assert.Equal(["Name", "note", "items", "pinned"], lines[..4]);
+        Assert.Equal(
+            "(aligned side by side: Name | Type | Description; note | string | Text of the note.; "
+                + "items | array | Item ids to attach.; pinned | boolean | Keep it at the top.)",
+            lines[^1]);
+        Assert.Equal("{\"fields\":[]}", result.FieldsJson);
     }
 
     [LocalOcrTheory]

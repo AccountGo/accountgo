@@ -148,8 +148,41 @@ ALIGNED_GRID = """
 <div class="col" style="left: 420px"><span class="line">API Guide</span><span class="line">Request body</span><span class="line">Errors</span></div>
 """
 
+# Two prose columns in one type size whose lines align exactly (a newsletter-style layout).
+ALIGNED_PROSE = """
+<style>
+.col { position: absolute; top: 80px; width: 520px; font-size: 18px; }
+.col .line { height: 40px; line-height: 40px; }
+</style>
+<div class="col" style="left: 40px">
+  <span class="line">Requests are sent over HTTPS only.</span>
+  <span class="line">Each request carries an API key header.</span>
+  <span class="line">Keys can be rotated from the settings page.</span>
+</div>
+<div class="col" style="left: 660px">
+  <span class="line">Responses use JSON with UTF-8 text.</span>
+  <span class="line">Errors include a code and a message.</span>
+  <span class="line">Retry failed calls after a short delay.</span>
+</div>
+"""
+
+# An API parameter table: short name and type cells beside a description, all in one type size.
+PARAMETER_TABLE = """
+<style>
+table { position: absolute; left: 40px; top: 80px; border-collapse: collapse; font-size: 18px; }
+td, th { text-align: left; padding: 8px 60px 8px 0; }
+</style>
+<table>
+  <tr><th>Name</th><th>Type</th><th>Description</th></tr>
+  <tr><td>note</td><td>string</td><td>Text of the note.</td></tr>
+  <tr><td>items</td><td>array</td><td>Item ids to attach.</td></tr>
+  <tr><td>pinned</td><td>boolean</td><td>Keep it at the top.</td></tr>
+</table>
+"""
+
 FIXTURES = {"api-guide": API_GUIDE, "two-column-invoice": INVOICE, "bank-statement": STATEMENT,
-            "aligned-flows": ALIGNED_FLOWS, "aligned-grid": ALIGNED_GRID}
+            "aligned-flows": ALIGNED_FLOWS, "aligned-grid": ALIGNED_GRID, "aligned-prose": ALIGNED_PROSE,
+            "parameter-table": PARAMETER_TABLE}
 
 
 def render(name: str, body: str) -> None:

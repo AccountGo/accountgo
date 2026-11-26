@@ -96,18 +96,13 @@ public static class TextLayout
                 continue;
             }
 
+            foreach (var column in region.Value.Columns)
+                foreach (var row in column)
+                    yield return Join(row);
+            // An aligned grid of short text could be two flows or a table: after the columns, one marked line keeps
+            // which cells sat side by side, so a table's rows can still be read together.
             if (region.Value.Grid is { } grid)
-            {
-                // Ambiguous aligned grid: keep rows, but show the cell boundaries instead of merging the text.
-                foreach (var cells in grid)
-                    yield return JoinCells(cells);
-            }
-            else
-            {
-                foreach (var column in region.Value.Columns)
-                    foreach (var row in column)
-                        yield return Join(row);
-            }
+                yield return SideBySide(grid);
             index = region.Value.End;
         }
     }
@@ -117,9 +112,9 @@ public static class TextLayout
     /// of at least <paramref name="minGutter"/> empty. Rejected when fewer than <see cref="MinColumnRows"/> rows share the
     /// band, when the band has no text on one side, or when a column is mostly numbers. A row with two or more numeric
     /// pieces (a table row), the header row directly above one, or a row that crosses the band (a full-width heading) ends
-    /// the region. When every row fills every column, the region is read as columns only if the columns' text heights
-    /// differ (a heading beside navigation items); otherwise it is an aligned grid that could be a table, so it keeps its
-    /// rows with the cells separated (<see cref="Grid"/>).
+    /// the region. Columns are always read one at a time. When every row fills every column and the columns share one text
+    /// size and are not all prose, the region could equally be a table, so <see cref="Grid"/> also returns its rows for a
+    /// side-by-side line after the columns.
     /// </summary>
     private static (int End, List<List<List<TextLine>>> Columns, List<List<List<TextLine>>>? Grid)? FindColumnRegion(
         List<List<TextLine>> rows, int start, float left, float right, float minGutter)
@@ -175,7 +170,7 @@ public static class TextLayout
                 return null;
         }
 
-        if (filledEverywhere == regionRows.Count && !ColumnHeightsDiffer(columns))
+        if (filledEverywhere == regionRows.Count && !ColumnHeightsDiffer(columns) && !AllProse(columns))
             return (end, columns, grid);
         return (end, columns, null);
     }
@@ -189,14 +184,23 @@ public static class TextLayout
         return heights.Max() >= ColumnHeightRatio * heights.Min();
     }
 
-    private static TextLine JoinCells(List<List<TextLine>> cells)
+    // Prose: a column whose lines run to four or more words. Table cells (names, types, short labels) rarely do.
+    internal const int ProseWords = 4;
+
+    private static bool AllProse(List<List<List<TextLine>>> columns) =>
+        columns.All(column => Median(column.Select(row => (float)row.Sum(piece => WordCount(piece.Text)))) >= ProseWords);
+
+    private static int WordCount(string text) => text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
+
+    internal const string SideBySidePrefix = "(aligned side by side: ";
+
+    private static TextLine SideBySide(List<List<List<TextLine>>> grid)
     {
-        var pieces = cells.Where(cell => cell.Count > 0).Select(Join).ToList();
-        return pieces.Count == 1
-            ? pieces[0]
-            : new TextLine(pieces[0].Page, string.Join(" | ", pieces.Select(piece => piece.Text)),
-                pieces.Min(piece => piece.X0), pieces.Min(piece => piece.Y0), pieces.Max(piece => piece.X1),
-                pieces.Max(piece => piece.Y1), pieces[0].Source);
+        var rows = grid.Select(cells => string.Join(" | ", cells.Where(cell => cell.Count > 0).Select(cell => Join(cell).Text)));
+        var all = grid.SelectMany(cells => cells).SelectMany(cell => cell).ToList();
+        return new TextLine(all[0].Page, SideBySidePrefix + string.Join("; ", rows) + ")",
+            all.Min(piece => piece.X0), all.Min(piece => piece.Y0), all.Max(piece => piece.X1), all.Max(piece => piece.Y1),
+            all[0].Source);
     }
 
     private static int ColumnOf(TextLine piece, List<Band> gutters)
