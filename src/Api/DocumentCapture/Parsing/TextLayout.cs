@@ -11,8 +11,10 @@ namespace Api.DocumentCaptures.Parsing;
 /// <list type="bullet">
 /// <item><see cref="Rows"/>: pieces joined row by row, left to right. Field rules read these, so a table row keeps its
 /// description, quantity and amount on one line.</item>
-/// <item><see cref="ReadingLines"/>: the same text in reading order. Side-by-side columns (a navigation sidebar next to
-/// page content, an address block next to invoice details) are read one column at a time.</item>
+/// <item><see cref="ReadingLines"/>: the same text in reading order, each piece once. Side-by-side columns (a navigation
+/// sidebar next to page content, an address block next to invoice details) are read one column at a time.</item>
+/// <item><see cref="SideBySideLines"/>: optional association lines for aligned grids that could be tables. They repeat
+/// text, so callers add them after all of the reading text and only while they fit.</item>
 /// </list>
 /// Rotated pieces (stamps, watermarks) are never part of a row or column; they follow their page's body text.
 /// </summary>
@@ -33,15 +35,20 @@ public static class TextLayout
         return result;
     }
 
-    public static IReadOnlyList<TextLine> ReadingLines(IReadOnlyList<TextLine> pieces)
+    public static IReadOnlyList<TextLine> ReadingLines(IReadOnlyList<TextLine> pieces) => Read(pieces).Lines;
+
+    public static IReadOnlyList<TextLine> SideBySideLines(IReadOnlyList<TextLine> pieces) => Read(pieces).SideBySide;
+
+    public static (IReadOnlyList<TextLine> Lines, IReadOnlyList<TextLine> SideBySide) Read(IReadOnlyList<TextLine> pieces)
     {
-        var result = new List<TextLine>(pieces.Count);
+        var lines = new List<TextLine>(pieces.Count);
+        var sideBySide = new List<TextLine>();
         foreach (var page in Pages(pieces))
         {
-            result.AddRange(OrderPage(GroupRows(page.Body)));
-            result.AddRange(page.Rotated);
+            lines.AddRange(OrderPage(GroupRows(page.Body), sideBySide));
+            lines.AddRange(page.Rotated);
         }
-        return result;
+        return (lines, sideBySide);
     }
 
     private static IEnumerable<(List<TextLine> Body, List<TextLine> Rotated)> Pages(IReadOnlyList<TextLine> pieces) =>
@@ -76,7 +83,7 @@ public static class TextLayout
         return rows;
     }
 
-    private static IEnumerable<TextLine> OrderPage(List<List<TextLine>> rows)
+    private static IEnumerable<TextLine> OrderPage(List<List<TextLine>> rows, List<TextLine> sideBySide)
     {
         if (rows.Count == 0)
             yield break;
@@ -99,10 +106,10 @@ public static class TextLayout
             foreach (var column in region.Value.Columns)
                 foreach (var row in column)
                     yield return Join(row);
-            // An aligned grid of short text could be two flows or a table: after the columns, one marked line keeps
-            // which cells sat side by side, so a table's rows can still be read together.
+            // An aligned grid of short text could be two flows or a table: one marked line keeps which cells sat side
+            // by side, so a table's rows can still be read together. It repeats text, so it goes after everything else.
             if (region.Value.Grid is { } grid)
-                yield return SideBySide(grid);
+                sideBySide.Add(SideBySide(grid));
             index = region.Value.End;
         }
     }

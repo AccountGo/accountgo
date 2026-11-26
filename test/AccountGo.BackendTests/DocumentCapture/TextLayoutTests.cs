@@ -84,10 +84,29 @@ public sealed class TextLayoutTests
             P("items", 30, 160, 90), P("array", 400, 160, 460),
         ];
 
-        Assert.Equal(
-            ["Name", "note", "items", "Type", "string", "array", "(aligned side by side: Name | Type; note | string; items | array)"],
-            Texts(TextLayout.ReadingLines(page)));
+        Assert.Equal(["Name", "note", "items", "Type", "string", "array"], Texts(TextLayout.ReadingLines(page)));
+        Assert.Equal(["(aligned side by side: Name | Type; note | string; items | array)"], Texts(TextLayout.SideBySideLines(page)));
         Assert.Equal(["Name Type", "note string", "items array"], Texts(TextLayout.Rows(page)));
+    }
+
+    [Fact]
+    [Trait("Rule", "G-04")]
+    public void SideBySideLinesNeverSitBetweenTheReadingText()
+    {
+        // A grid, then a later paragraph and a second page: the reading text holds every piece once, in order.
+        var pieces = new List<TextLine>();
+        for (var row = 0; row < 5; row++)
+            pieces.AddRange([P($"field_{row}", 30, 100 + row * 30, 120), P("string", 400, 100 + row * 30, 460)]);
+        pieces.Add(P("A closing paragraph that runs across the whole page width.", 30, 300, 700));
+        pieces.Add(P("Page two text", 30, 50, 200, page: 2));
+
+        var read = TextLayout.Read(pieces);
+
+        Assert.Equal("A closing paragraph that runs across the whole page width.", read.Lines[^2].Text);
+        Assert.Equal("Page two text", read.Lines[^1].Text);
+        Assert.Equal(pieces.Count, read.Lines.Count);
+        Assert.DoesNotContain(read.Lines, line => line.Text.StartsWith("(aligned side by side:", StringComparison.Ordinal));
+        Assert.Single(read.SideBySide);
     }
 
     [Fact]

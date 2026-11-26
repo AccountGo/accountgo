@@ -40,6 +40,12 @@ public sealed class LocalOcrCorpusSnapshotTests(ITestOutputHelper output)
             var name = Path.GetFileName(file);
             var bytes = await File.ReadAllBytesAsync(file);
             var contentType = "application/pdf";
+            var pageCount = 1;
+            if (name.EndsWith(".pdf", StringComparison.Ordinal))
+            {
+                using var pdf = UglyToad.PdfPig.PdfDocument.Open(bytes);
+                pageCount = pdf.NumberOfPages;
+            }
             if (name.EndsWith(".png", StringComparison.Ordinal))
             {
                 var normalized = await DocumentCaptureImageNormalizer.NormalizeAsync(bytes, "image/png");
@@ -53,7 +59,7 @@ public sealed class LocalOcrCorpusSnapshotTests(ITestOutputHelper output)
                 : ["purchase-invoice"];
             foreach (var kind in kinds)
             {
-                var result = await extractor.ExtractAsync(new DocumentExtractionRequest(kind, 1, contentType, bytes, 1),
+                var result = await extractor.ExtractAsync(new DocumentExtractionRequest(kind, 1, contentType, bytes, pageCount),
                     CancellationToken.None);
                 var rawText = result.RawText ?? "";
                 var block = kind == "assistant-attachment"

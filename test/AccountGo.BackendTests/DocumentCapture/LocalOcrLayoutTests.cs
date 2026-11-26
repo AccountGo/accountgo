@@ -160,6 +160,7 @@ public sealed class LocalOcrLayoutTests(ITestOutputHelper output)
         output.WriteLine(result.RawText);
 
         Assert.Equal(["Name", "note", "items", "pinned"], lines[..4]);
+        Assert.Equal("Keep it at the top.", lines[^2]);
         Assert.Equal(
             "(aligned side by side: Name | Type | Description; note | string | Text of the note.; "
                 + "items | array | Item ids to attach.; pinned | boolean | Keep it at the top.)",
@@ -181,7 +182,30 @@ public sealed class LocalOcrLayoutTests(ITestOutputHelper output)
         Assert.Contains(labels, label => label is not null && Api.DocumentCaptures.Parsing.AssistantFinancialEvidence.IsBankLabel(label));
     }
 
-    private static async Task<DocumentExtractionResult> ExtractAsync(string file, string kind)
+    [LocalOcrFact]
+    [Trait("Rule", "G-04")]
+    public async Task LongTablesNeverPushLaterPagesOutOfTheStoredText()
+    {
+        // Review x-096: five pages of aligned tables, then a closing paragraph on page six. The unique text fits under the
+        // raw text cap; repeating every row would not. The paragraph must survive, the repeats only fill what is left.
+        var result = await ExtractAsync("long-table.pdf", "assistant-attachment", pageCount: 6);
+        var lines = result.RawText!.Split('\n');
+        output.WriteLine($"{result.RawText!.Length} characters, {lines.Count(IsSideBySide)} side-by-side lines");
+
+        Assert.True(result.RawText.Length <= DocumentCaptureFieldSchemas.MaxRawTextLength);
+        var closing = Array.IndexOf(lines, "Closing note: ZEBRA-7 marks the end of this reference.");
+        Assert.True(closing > 0, "The closing paragraph was dropped.");
+        Assert.Contains("field_150", lines);
+        Assert.Contains("Optional value 150", lines);
+        // Every side-by-side line comes after all of the document's own text, and each is whole.
+        Assert.All(lines[..(closing + 1)], line => Assert.False(IsSideBySide(line)));
+        Assert.All(lines[(closing + 1)..], line => Assert.True(IsSideBySide(line) && line.EndsWith(')')));
+        Assert.True(lines.Count(IsSideBySide) is > 0 and < 5);
+
+        static bool IsSideBySide(string line) => line.StartsWith("(aligned side by side:", StringComparison.Ordinal);
+    }
+
+    private static async Task<DocumentExtractionResult> ExtractAsync(string file, string kind, int pageCount = 1)
     {
         var options = new DocumentCaptureOptions { Extractor = "local-ocr" };
         options.OcrWorker.WorkerPath = Environment.GetEnvironmentVariable("ACCOUNTGO_TEST_OCR_WORKER");
@@ -195,12 +219,21 @@ public sealed class LocalOcrLayoutTests(ITestOutputHelper output)
             var normalized = await DocumentCaptureImageNormalizer.NormalizeAsync(bytes, "image/png");
             (bytes, contentType) = (normalized.Bytes, normalized.ContentType);
         }
-        return await extractor.ExtractAsync(new DocumentExtractionRequest(kind, 1, contentType, bytes, 1), CancellationToken.None);
+        return await extractor.ExtractAsync(new DocumentExtractionRequest(kind, 1, contentType, bytes, pageCount), CancellationToken.None);
     }
 
     internal static string FixtureDirectory => Path.Combine(
         Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../")),
         "test", "AccountGo.BackendTests", "Fixtures", "DocumentCapture", "Layout");
+
+    internal sealed class LocalOcrFactAttribute : FactAttribute
+    {
+        public LocalOcrFactAttribute()
+        {
+            if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ACCOUNTGO_TEST_OCR_WORKER")))
+                Skip = "Set ACCOUNTGO_TEST_OCR_WORKER to the built local OCR worker.";
+        }
+    }
 
     internal sealed class LocalOcrTheoryAttribute : TheoryAttribute
     {

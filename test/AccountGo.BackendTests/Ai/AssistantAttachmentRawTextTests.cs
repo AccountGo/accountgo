@@ -252,6 +252,24 @@ public sealed class AssistantAttachmentRawTextTests
 
     [Fact]
     [Trait("Rule", "A-03")]
+    public async Task MessageTruncationDropsTheSideBySideRepeatBeforeAnyDocumentText()
+    {
+        // The stored text ends with the optional repeat, so cutting to the message budget removes it first.
+        var unique = string.Join('\n', Enumerable.Range(1, 40).Select(n => $"field_{n:D2}\nstring"));
+        var repeat = "(aligned side by side: " + string.Join("; ", Enumerable.Range(1, 40).Select(n => $"field_{n:D2} | string")) + ")";
+        var raw = unique + "\n" + repeat;
+        var full = (await BuildAsync(NoFields, raw))!;
+
+        // Room for every unique line and the notice, but not for the repeat.
+        var block = (await BuildAsync(NoFields, raw, maxLength: full.Length - repeat.Length / 2))!;
+
+        Assert.Contains("| field_40\n| string\n", block.Replace("\r\n", "\n"), StringComparison.Ordinal);
+        Assert.DoesNotContain("aligned side by side", block, StringComparison.Ordinal);
+        Assert.Matches(@"\(truncated: showing \d+ of \d+ characters of document text\)", block);
+    }
+
+    [Fact]
+    [Trait("Rule", "A-03")]
     public async Task OneLongLineIsCutInsideTheLineWithoutSplittingASurrogatePair()
     {
         var raw = string.Concat(Enumerable.Repeat("ab\U0001F600", 400));

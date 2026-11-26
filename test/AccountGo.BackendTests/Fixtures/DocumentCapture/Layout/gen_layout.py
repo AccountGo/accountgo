@@ -180,9 +180,32 @@ td, th { text-align: left; padding: 8px 60px 8px 0; }
 </table>
 """
 
+# A long field reference: five pages of aligned three-column tables, then a closing paragraph on page six.
+# Its unique text fits under the 8,000-character raw text cap; repeating every table row would not.
+def _long_table() -> str:
+    pages = []
+    for page in range(5):
+        rows = "".join(
+            f"<tr><td>field_{page * 30 + n + 1:03d}</td><td>string</td><td>Optional value {page * 30 + n + 1}</td></tr>"
+            for n in range(30))
+        pages.append(f"<table style='page-break-after: always'>{rows}</table>")
+    closing = "<p class='closing'>Closing note: ZEBRA-7 marks the end of this reference.</p>"
+    return """
+<style>
+table { border-collapse: collapse; font-size: 16px; margin: 20px 40px; }
+td { padding: 2px 70px 2px 0; height: 24px; }
+.closing { font-size: 18px; margin: 40px; }
+</style>
+""" + "".join(pages) + closing
+
+LONG_TABLE = _long_table()
+
 FIXTURES = {"api-guide": API_GUIDE, "two-column-invoice": INVOICE, "bank-statement": STATEMENT,
             "aligned-flows": ALIGNED_FLOWS, "aligned-grid": ALIGNED_GRID, "aligned-prose": ALIGNED_PROSE,
-            "parameter-table": PARAMETER_TABLE}
+            "parameter-table": PARAMETER_TABLE, "long-table": LONG_TABLE}
+
+# Fixtures that only make sense as multi-page PDFs (a screenshot would show the first page only).
+PDF_ONLY = {"long-table"}
 
 
 def render(name: str, body: str) -> None:
@@ -194,8 +217,9 @@ def render(name: str, body: str) -> None:
         url = "file://" + page
         common = [CHROME, "--headless=new", "--disable-gpu", "--hide-scrollbars", "--force-device-scale-factor=1",
                   f"--user-data-dir={os.path.join(tmp, 'profile')}"]
-        subprocess.run(common + ["--window-size=1280,960", f"--screenshot={os.path.join(OUT, name + '.png')}", url],
-                       check=True, capture_output=True)
+        if name not in PDF_ONLY:
+            subprocess.run(common + ["--window-size=1280,960", f"--screenshot={os.path.join(OUT, name + '.png')}", url],
+                           check=True, capture_output=True)
         subprocess.run(common + ["--no-pdf-header-footer", f"--print-to-pdf={os.path.join(OUT, name + '.pdf')}", url],
                        check=True, capture_output=True)
 

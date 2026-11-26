@@ -2,6 +2,7 @@ using Api.DocumentCaptures;
 using System.Text.Json;
 using Api.DocumentCaptures.Parsing;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -170,6 +171,41 @@ public sealed class LocalOcrWorkerLimitsTests
 
     private static Task<byte[]> RunAsync(FakeWorker worker, TimeProvider? clock = null, CancellationToken token = default) =>
         CaptureWorkerRunner.RunAsync(worker, Header, Input, 1, clock ?? TimeProvider.System, token);
+
+    [Theory]
+    [Trait("Rule", "G-04")]
+    [InlineData(150, false)]
+    [InlineData(4, true)]
+    public async Task AssistantTextKeepsEveryPageBeforeOptionalSideBySideLines(int gridRows, bool sideBySideFits)
+    {
+        // Review x-096: an aligned grid on page one, a distinctive paragraph on page two. Repeating the grid must never
+        // push the paragraph past the raw text cap; the repeat is added after it, only if it fits whole.
+        var lines = new List<TextLine>();
+        for (var row = 0; row < gridRows; row++)
+        {
+            lines.Add(new TextLine(1, $"field_{row:D3}_name", 30, 100 + row * 20, 180, 116 + row * 20, TextLineSource.PdfTextLayer));
+            lines.Add(new TextLine(1, "string value", 400, 100 + row * 20, 520, 116 + row * 20, TextLineSource.PdfTextLayer));
+        }
+        lines.Add(new TextLine(2, "ZEBRA-7 closing paragraph on the last page.", 30, 50, 500, 66, TextLineSource.PdfTextLayer));
+        var json = JsonSerializer.SerializeToUtf8Bytes(new CaptureWorkerResult([.. lines], [], [], []), CaptureWorkerProtocol.Json);
+        var worker = new FakeWorker(json);
+        using var extractor = new LocalOcrDocumentFieldExtractor(Options.Create(new DocumentCaptureOptions()),
+            TimeProvider.System, NullLogger<LocalOcrDocumentFieldExtractor>.Instance, _ => worker);
+
+        var task = extractor.ExtractAsync(new DocumentExtractionRequest("assistant-attachment", 1, "application/pdf", Input, 2),
+            CancellationToken.None);
+        worker.Complete();
+        var raw = (await task).RawText!;
+        var rawLines = raw.Split('\n');
+
+        Assert.True(raw.Length <= DocumentCaptureFieldSchemas.MaxRawTextLength);
+        var closing = Array.IndexOf(rawLines, "ZEBRA-7 closing paragraph on the last page.");
+        Assert.True(closing > 0, "The later page was dropped.");
+        Assert.Equal(sideBySideFits ? closing + 2 : closing + 1, rawLines.Length);
+        if (sideBySideFits)
+            Assert.StartsWith("(aligned side by side: field_000_name | string value;", rawLines[^1], StringComparison.Ordinal);
+        Assert.DoesNotContain(rawLines[..closing], line => line.StartsWith("(aligned side by side:", StringComparison.Ordinal));
+    }
 
     internal sealed class FakeWorker(byte[] output) : ICaptureWorkerProcess
     {

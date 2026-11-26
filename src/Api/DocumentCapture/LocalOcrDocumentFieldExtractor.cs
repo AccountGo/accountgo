@@ -150,7 +150,10 @@ public sealed class LocalOcrDocumentFieldExtractor : IDocumentFieldExtractor, ID
             result = ParseWorkerResponse(payload, request.PageCount);
             var (lines, rawText) = BoundLines(segments ? TextLayout.Rows(result.Lines) : result.Lines);
             if (segments)
-                rawText = BoundLines(TextLayout.ReadingLines(result.Lines)).RawText;
+            {
+                var reading = TextLayout.Read(result.Lines);
+                rawText = AppendWithinCap(BoundLines(reading.Lines).RawText, reading.SideBySide);
+            }
             var parsed = DocumentTextFieldParser.Parse(request.Kind, lines);
             // Rule fields are returned as soon as the rules have read the document. An optional field mapper never runs here: a later
             // background job calls CaptureFieldMappingRunner, so a slow mapper can't delay a scan or hold the OCR admission slot.
@@ -287,6 +290,25 @@ public sealed class LocalOcrDocumentFieldExtractor : IDocumentFieldExtractor, ID
             result.Add(line with { Text = text });
         }
         return (result, raw.ToString());
+    }
+
+    /// <summary>
+    /// Adds optional side-by-side lines after all of the document's own text, whole lines only, while they fit under
+    /// <see cref="DocumentCaptureFieldSchemas.MaxRawTextLength"/>. They repeat text, so they never displace it.
+    /// </summary>
+    internal static string AppendWithinCap(string rawText, IReadOnlyList<TextLine> optional)
+    {
+        var raw = new StringBuilder(rawText);
+        foreach (var line in optional)
+        {
+            var needed = line.Text.Length + (raw.Length == 0 ? 0 : 1);
+            if (string.IsNullOrWhiteSpace(line.Text) || raw.Length + needed > DocumentCaptureFieldSchemas.MaxRawTextLength)
+                continue;
+            if (raw.Length > 0)
+                raw.Append('\n');
+            raw.Append(line.Text);
+        }
+        return raw.ToString();
     }
 
     private static DocumentCaptureServiceException InvalidOutput() => new(422, "DOCUMENT_PROVIDER_OUTPUT_INVALID");
