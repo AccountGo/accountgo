@@ -634,9 +634,13 @@ namespace Api.Controllers
         [HttpDelete]
         [Route("DeleteClient")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesCustomersManage)]
-        public IActionResult DeleteClient([Dto.Common.PublicId("cus")] int id)
+        public async Task<IActionResult> DeleteClient([Dto.Common.PublicId("cus")] int id, CancellationToken cancellationToken)
         {
             _tenantGuard.EnsureOwned<Core.Domain.Sales.Customer>(id, nameof(id));
+            var companyId = _tenantContext.RequireCompanyId();
+            await using var tx = await Api.DocumentCaptures.DocumentRecordDeletion.BeginAsync(HttpContext.RequestServices, _db, companyId, "customer", id, cancellationToken);
+            if (tx is null)
+                return Api.DocumentCaptures.DocumentRecordDeletion.Busy(Response);
             if (ClientHasRecords(id))
                 return BadRequest(new { message = "This client has invoices or payments, so it can't be deleted. Archive it instead." });
 
@@ -648,8 +652,8 @@ namespace Api.Controllers
                 .Distinct()
                 .ToList();
 
-            // Saved in foreign-key order.
-            using var tx = _db.Database.BeginTransaction();
+            // Saved in foreign-key order; document links go first (the files stay in the library).
+            await Api.DocumentCaptures.DocumentLibraryService.RemoveLinksForDeletedTargetAsync(_db, companyId, "customer", id, cancellationToken);
             _db.RemoveRange(_db.Set<Core.Domain.CustomerContact>().Where(cc => cc.CustomerId == id));
             customer.BillToContactId = null;
             customer.PrimaryContactId = null;
@@ -670,7 +674,7 @@ namespace Api.Controllers
                 && !_db.Vendors.Any(v => v.PartyId == p.Id)
                 && !_db.Contacts.Any(c => c.PartyId == p.Id)));
             _db.SaveChanges();
-            tx.Commit();
+            await tx.CommitAsync(cancellationToken);
 
             return NoContent();
         }
@@ -2366,8 +2370,13 @@ namespace Api.Controllers
 
         [HttpDelete("DeleteSalesInvoice")]
         [RequirePermission(Core.Domain.Security.SystemPermissions.SalesInvoicesCreate)]
-        public async Task<IActionResult> DeleteSalesInvoice([Dto.Common.PublicId("inv")] int id)
+        public async Task<IActionResult> DeleteSalesInvoice([Dto.Common.PublicId("inv")] int id, CancellationToken cancellationToken)
         {
+            var companyId = _tenantContext.RequireCompanyId();
+            // Documents lock order (design 3.11 U1): company admission lock, then this invoice's row, then its document links.
+            await using var tx = await Api.DocumentCaptures.DocumentRecordDeletion.BeginAsync(HttpContext.RequestServices, _db, companyId, "invoice", id, cancellationToken);
+            if (tx is null)
+                return Api.DocumentCaptures.DocumentRecordDeletion.Busy(Response);
             var invoiceDate = _db.SalesInvoiceHeaders
                 .Where(i => i.Id == id)
                 .Select(i => (DateTime?)i.Date)
@@ -2377,7 +2386,6 @@ namespace Api.Controllers
 
             // Saving an invoice records a sales order behind it; a deleted draft takes the order with it, so the
             // client isn't left with a record that keeps it from being deleted.
-            using var tx = _db.Database.BeginTransaction();
             var orderIds = _db.SalesInvoiceLines
                 .Where(l => l.SalesInvoiceHeaderId == id && l.SalesOrderLineId != null)
                 .Select(l => l.SalesOrderLine!.SalesOrderHeaderId)
@@ -2389,8 +2397,10 @@ namespace Api.Controllers
             if (result.IsFailure)
                 return BadRequest(result.Error.Message);
 
+            // Only a draft gets here (the service refuses issued invoices); its files stay in the library.
+            await Api.DocumentCaptures.DocumentLibraryService.RemoveLinksForDeletedTargetAsync(_db, companyId, "invoice", id, cancellationToken);
             DeleteUninvoicedOrders(orderIds);
-            tx.Commit();
+            await tx.CommitAsync(cancellationToken);
             return NoContent();
         }
 

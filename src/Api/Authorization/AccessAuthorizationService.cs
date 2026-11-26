@@ -95,6 +95,7 @@ namespace Api.Authorization
             SystemPermissions.FinancialsSettlementsReverse,
             SystemPermissions.InventoryAdjustmentsPost,
             SystemPermissions.DonationsManage,
+            SystemPermissions.DocumentsManage,
             SystemPermissions.AdminTaxesManage,
             SystemPermissions.AdminRolesManage
         };

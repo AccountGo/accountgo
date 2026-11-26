@@ -48,6 +48,17 @@ public sealed class DocumentCapture : BaseEntity, ICompanyOwned, IHasPublicId
     public DateTime ExpiresAt { get; set; }
     public DateTime? BytesDeletedAt { get; set; }
     public DateTime? FieldsWipedAt { get; set; }
+    public string? FileName { get; set; }
+    public string? Title { get; set; }
+    public string? Category { get; set; }
+    public DateTime? DocumentDate { get; set; }
+    public string? Notes { get; set; }
+    public DateTime? FiledAt { get; set; }
+    public string? FiledBy { get; set; }
+    public DateTime? ArchivedAt { get; set; }
+    public string? ArchivedBy { get; set; }
+    public DateTime? DeletedAt { get; set; }
+    public string? DeletedBy { get; set; }
 
     public DocumentCaptureBlob? Blob { get; set; }
     public ICollection<DocumentCaptureAttempt> Attempts { get; set; } = new List<DocumentCaptureAttempt>();
@@ -119,15 +130,66 @@ public sealed class CaptureAiMappingConsent : BaseEntity, ICompanyOwned
     public string? RevokedByUserId { get; set; }
 }
 
+public static class DocumentCaptureLinkRoles
+{
+    public const string Source = "source";
+    public const string Attachment = "attachment";
+}
+
 public sealed class DocumentCaptureLink : BaseEntity, ICompanyOwned
 {
     public int CompanyId { get; set; }
     public int CaptureId { get; set; }
     public string TargetType { get; set; } = string.Empty;
     public int TargetId { get; set; }
+    public string Role { get; set; } = DocumentCaptureLinkRoles.Source;
     public string LinkedBy { get; set; } = string.Empty;
     public DateTime LinkedAt { get; set; }
     /// <summary>How the document's tax was treated on the linked bill or invoice. Derived by the server, never client-supplied. Null when not derived.</summary>
     public string? TaxTreatment { get; set; }
     public DocumentCapture Capture { get; set; } = null!;
+}
+
+/// <summary>
+/// One admitted stored-document upload attempt, reserved before any decode work. Independent of the document rows, so deleting
+/// documents or failing validation never frees a slot in the per-workspace hourly upload limit. Cleared by the retention worker.
+/// </summary>
+public sealed class DocumentUploadAdmission : BaseEntity, ICompanyOwned
+{
+    public int CompanyId { get; set; }
+    public DateTime ReservedAt { get; set; }
+}
+
+/// <summary>
+/// One "Download all documents" run (design 3.9 S2/S3, 3.10 T1/T2). The selection (ids and stored hashes) and the document
+/// revision are fixed under the company lock when the run is created; the ZIP is then streamed once. <see cref="Status"/>:
+/// <c>ready</c> (selected, not yet downloaded), <c>running</c> (streaming), <c>server_finished</c> (every selected file written
+/// and verified, index and archive finalised, response completed without abort) or <c>failed</c> (with <see cref="FailureReason"/>).
+/// "server_finished" never claims the browser saved the file.
+/// </summary>
+[PublicIdPrefix("dex")]
+public sealed class DocumentExportRun : BaseEntity, ICompanyOwned, IHasPublicId
+{
+    public int CompanyId { get; set; }
+    public string PublicId { get; set; } = string.Empty;
+    public string Status { get; set; } = "ready";
+    public string RequestedBy { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+    public DateTime? StreamStartedAt { get; set; }
+    /// <summary>Renewed while the ZIP streams; a running export without a heartbeat for <c>StreamLease</c> is expired and fenced.</summary>
+    public DateTime? LastHeartbeatAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
+    public long SelectedRevision { get; set; }
+    public int SelectedCount { get; set; }
+    public long SelectedBytes { get; set; }
+    public int WrittenCount { get; set; }
+    public string? FailureReason { get; set; }
+    /// <summary>JSON array of [captureId, storedSha256] fixed at selection.</summary>
+    public string InventoryJson { get; set; } = "[]";
+}
+
+public sealed class DocumentLibraryRevision : ICompanyOwned
+{
+    public int CompanyId { get; set; }
+    public long Revision { get; set; }
 }

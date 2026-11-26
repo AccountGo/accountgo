@@ -411,6 +411,7 @@ namespace AccountGo.BackendTests.Architecture
             ["src/Api/Controllers/LinkedEntriesController.cs"] = "governance: linked entries management",
             ["src/Api/Controllers/OrganizationsController.PersonalBooks.cs"] = "governance: personal books ownership and link management",
             ["src/Api/Controllers/OrganizationsController.cs"] = "governance: organization administration and ownership transfer",
+            ["src/Api/Controllers/DocumentExportsController.cs"] = "governance: workspace-wide document export, same Owner + MFA authority as workspace deletion",
             ["src/Api/Controllers/SessionPolicyController.cs"] = "governance: session policy administration",
             ["src/Api/Controllers/SubscriptionController.cs"] = "governance: subscription administration",
             ["src/Api/Controllers/WorkspaceInvitationsController.cs"] = "governance: workspace invitation authorization",
@@ -431,6 +432,7 @@ namespace AccountGo.BackendTests.Architecture
             ["src/Web/src/lib/useAccessNextStep.ts"] = "governance: shared next-step choice for No-access and the refused-action notice; display only, the API decides every request",
             ["src/Web/src/lib/accessDirectory.ts"] = "governance: lists the workspace owners and admins by name for the ask-an-admin step; display only",
             ["src/Web/src/pages/Settings.tsx"] = "governance: workspace administration settings tabs",
+            ["src/Web/src/pages/Documents.tsx"] = "governance: Download all documents is a workspace-level Owner action, same authority as workspace deletion",
         };
 
         [Fact]

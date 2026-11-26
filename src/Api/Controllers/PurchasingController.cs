@@ -616,9 +616,13 @@ namespace Api.Controllers
         [HttpDelete]
         [Route("DeleteVendor")]
         [RequirePermission(SystemPermissions.PurchasesVendorsManage)]
-        public IActionResult DeleteVendor([Dto.Common.PublicId("ven")] int id)
+        public async Task<IActionResult> DeleteVendor([Dto.Common.PublicId("ven")] int id, CancellationToken cancellationToken)
         {
             _tenantGuard.EnsureOwned<Vendor>(id, nameof(id));
+            var companyId = _tenantContext.RequireCompanyId();
+            await using var tx = await Api.DocumentCaptures.DocumentRecordDeletion.BeginAsync(HttpContext.RequestServices, _db, companyId, "vendor", id, cancellationToken);
+            if (tx is null)
+                return Api.DocumentCaptures.DocumentRecordDeletion.Busy(Response);
             if (VendorHasRecords(id))
                 return BadRequest(new { message = "This vendor has bills or payments, so it can't be deleted. Archive it instead." });
 
@@ -630,8 +634,8 @@ namespace Api.Controllers
                 .Distinct()
                 .ToList();
 
-            // Saved in foreign-key order.
-            using var tx = _db.Database.BeginTransaction();
+            // Saved in foreign-key order; document links go first (the files stay in the library).
+            await Api.DocumentCaptures.DocumentLibraryService.RemoveLinksForDeletedTargetAsync(_db, companyId, "vendor", id, cancellationToken);
             _db.RemoveRange(_db.Set<VendorContact>().Where(vc => vc.VendorId == id));
             vendor.BillToContactId = null;
             vendor.PrimaryContactId = null;
@@ -653,7 +657,7 @@ namespace Api.Controllers
                 && !_db.Vendors.Any(v => v.PartyId == p.Id)
                 && !_db.Contacts.Any(c => c.PartyId == p.Id)));
             _db.SaveChanges();
-            tx.Commit();
+            await tx.CommitAsync(cancellationToken);
 
             return NoContent();
         }
@@ -1150,24 +1154,29 @@ namespace Api.Controllers
         [HttpDelete]
         [Route("DeleteBill")]
         [RequirePermission(SystemPermissions.PurchasesBillsCreate)]
-        public IActionResult DeleteBill([Dto.Common.PublicId("bill")] int id)
+        public async Task<IActionResult> DeleteBill([Dto.Common.PublicId("bill")] int id, CancellationToken cancellationToken)
         {
             _tenantGuard.EnsureOwned<PurchaseInvoiceHeader>(id, nameof(id));
+            var companyId = _tenantContext.RequireCompanyId();
+            // Documents lock order (design 3.11 U1): company admission lock, then this bill's row, then its document links.
+            await using var tx = await Api.DocumentCaptures.DocumentRecordDeletion.BeginAsync(HttpContext.RequestServices, _db, companyId, "bill", id, cancellationToken);
+            if (tx is null)
+                return Api.DocumentCaptures.DocumentRecordDeletion.Busy(Response);
             var bill = _db.PurchaseInvoiceHeaders.Include(b => b.PurchaseInvoiceLines).Single(b => b.Id == id);
             if (RefuseIfBooksLocked(bill.Date) is { } locked)
                 return locked;
             if (!bill.IsDraft)
                 return BadRequest(new { message = "Only a draft bill can be deleted. Void an approved bill instead." });
 
-            // Lines first, then the bill (foreign-key order).
-            using var tx = _db.Database.BeginTransaction();
+            // Document links first (the files stay in the library), then lines, then the bill (foreign-key order).
+            await Api.DocumentCaptures.DocumentLibraryService.RemoveLinksForDeletedTargetAsync(_db, companyId, "bill", id, cancellationToken);
             _db.BankStatementLines.Where(l => l.CompanyId == bill.CompanyId && l.DraftBillId == id)
                 .ExecuteUpdate(s => s.SetProperty(l => l.DraftBillId, (int?)null));
             _db.PurchaseInvoiceLines.RemoveRange(bill.PurchaseInvoiceLines);
             _db.SaveChanges();
             _db.PurchaseInvoiceHeaders.Remove(bill);
             _db.SaveChanges();
-            tx.Commit();
+            await tx.CommitAsync(cancellationToken);
             return NoContent();
         }
 

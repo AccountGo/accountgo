@@ -15,6 +15,9 @@ public partial class ApiDbContext
     public virtual DbSet<DocumentCaptureLink> DocumentCaptureLinks { get; set; } = null!;
     public virtual DbSet<DocumentCaptureAiMapping> DocumentCaptureAiMappings { get; set; } = null!;
     public virtual DbSet<CaptureAiMappingConsent> CaptureAiMappingConsents { get; set; } = null!;
+    public virtual DbSet<DocumentLibraryRevision> DocumentLibraryRevisions { get; set; } = null!;
+    public virtual DbSet<DocumentUploadAdmission> DocumentUploadAdmissions { get; set; } = null!;
+    public virtual DbSet<DocumentExportRun> DocumentExportRuns { get; set; } = null!;
     public virtual DbSet<PartyAlias> PartyAliases { get; set; } = null!;
 
     private static void ConfigureDocumentCaptureModel(ModelBuilder builder)
@@ -44,6 +47,14 @@ public partial class ApiDbContext
             entity.Property(capture => capture.CreatedBy).HasMaxLength(256).IsRequired();
             entity.Property(capture => capture.AcceptedBy).HasMaxLength(256);
             entity.Property(capture => capture.RejectedBy).HasMaxLength(256);
+            entity.Property(capture => capture.FileName).HasMaxLength(255);
+            entity.Property(capture => capture.Title).HasMaxLength(200);
+            entity.Property(capture => capture.Category).HasMaxLength(40);
+            entity.Property(capture => capture.DocumentDate).HasColumnType("date");
+            entity.Property(capture => capture.Notes).HasMaxLength(1_000);
+            entity.Property(capture => capture.FiledBy).HasMaxLength(256);
+            entity.Property(capture => capture.ArchivedBy).HasMaxLength(256);
+            entity.Property(capture => capture.DeletedBy).HasMaxLength(256);
             entity.HasIndex(capture => new { capture.CompanyId, capture.PublicId }).IsUnique();
             entity.HasIndex(capture => new { capture.CompanyId, capture.IdempotencyKey })
                 .IsUnique()
@@ -52,6 +63,9 @@ public partial class ApiDbContext
             entity.HasIndex(capture => capture.ExpiresAt)
                 .HasDatabaseName("IX_DocumentCaptures_ExpiresAt_Unaccepted")
                 .HasFilter("\"AcceptedAt\" IS NULL AND \"RejectedAt\" IS NULL AND \"BytesDeletedAt\" IS NULL");
+            entity.HasIndex(capture => new { capture.CompanyId, capture.FiledAt })
+                .HasDatabaseName("IX_DocumentCaptures_Filed")
+                .HasFilter("[FiledAt] IS NOT NULL AND [DeletedAt] IS NULL");
         });
 
         builder.Entity<DocumentCaptureBlob>(entity =>
@@ -119,14 +133,67 @@ public partial class ApiDbContext
             entity.ToTable("DocumentCaptureLinks");
             entity.HasKey(link => link.Id);
             entity.Property(link => link.TargetType).HasMaxLength(30).IsRequired();
+            entity.Property(link => link.Role).HasMaxLength(20).IsRequired().HasDefaultValue(DocumentCaptureLinkRoles.Source);
             entity.Property(link => link.LinkedBy).HasMaxLength(256).IsRequired();
             entity.Property(link => link.TaxTreatment).HasMaxLength(64);
-            entity.HasIndex(link => new { link.CompanyId, link.CaptureId }).IsUnique();
+            entity.HasIndex(link => new { link.CompanyId, link.CaptureId, link.TargetType, link.TargetId })
+                .HasDatabaseName("IX_DocumentCaptureLinks_Company_Capture_Target")
+                .IsUnique();
+            entity.HasIndex(link => new { link.CompanyId, link.CaptureId })
+                .HasDatabaseName("IX_DocumentCaptureLinks_SourceRole")
+                .IsUnique()
+                .HasFilter("[Role] = 'source'");
             entity.HasIndex(link => new { link.CompanyId, link.TargetType, link.TargetId });
             entity.HasOne(link => link.Capture)
                 .WithMany(capture => capture.Links)
                 .HasForeignKey(link => new { link.CompanyId, link.CaptureId })
                 .HasPrincipalKey(capture => new { capture.CompanyId, capture.Id })
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<DocumentExportRun>(entity =>
+        {
+            entity.ToTable("DocumentExportRuns");
+            entity.HasKey(run => run.Id);
+            entity.Property(run => run.PublicId).HasMaxLength(40).IsRequired();
+            entity.Property(run => run.Status).HasMaxLength(20).IsRequired();
+            entity.Property(run => run.RequestedBy).HasMaxLength(256).IsRequired();
+            entity.Property(run => run.FailureReason).HasMaxLength(200);
+            entity.Property(run => run.InventoryJson).IsRequired();
+            entity.HasIndex(run => new { run.CompanyId, run.PublicId }).IsUnique();
+            entity.HasIndex(run => new { run.CompanyId, run.CreatedAt });
+            // One streaming export per workspace at a time.
+            entity.HasIndex(run => run.CompanyId)
+                .HasDatabaseName("IX_DocumentExportRuns_OneRunning")
+                .IsUnique()
+                .HasFilter("[Status] = 'running'");
+            entity.HasOne<Company>()
+                .WithMany()
+                .HasForeignKey(run => run.CompanyId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<DocumentUploadAdmission>(entity =>
+        {
+            entity.ToTable("DocumentUploadAdmissions");
+            entity.HasKey(admission => admission.Id);
+            entity.HasIndex(admission => new { admission.CompanyId, admission.ReservedAt });
+            entity.HasIndex(admission => admission.ReservedAt);
+            entity.HasOne<Company>()
+                .WithMany()
+                .HasForeignKey(admission => admission.CompanyId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<DocumentLibraryRevision>(entity =>
+        {
+            entity.ToTable("DocumentLibraryRevisions");
+            entity.HasKey(revision => revision.CompanyId);
+            entity.Property(revision => revision.CompanyId).ValueGeneratedNever();
+            entity.Property(revision => revision.Revision).HasDefaultValue(0L);
+            entity.HasOne<Company>()
+                .WithMany()
+                .HasForeignKey(revision => revision.CompanyId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

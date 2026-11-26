@@ -35,6 +35,8 @@ export const PERMISSION_AREA_LABELS: Record<string, string> = {
   'reports.view': 'Reports',
   'donations.view': 'Donations',
   'donations.manage': 'Donations',
+  'documents.view': 'Documents',
+  'documents.manage': 'Documents',
   'audit.logs': 'Audit log',
   'admin.members': 'Members and access',
   'admin.roles': 'Roles',

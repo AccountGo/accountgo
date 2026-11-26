@@ -142,6 +142,7 @@ export interface DocumentCaptureLinkView {
   linkedAt: string;
   /** How the scanned tax was treated, derived by the server (for example `tax-rate:tax_…`, `in-cost`, `acknowledged`, `none`). */
   taxTreatment?: string | null;
+  role?: 'source' | 'attachment' | string;
 }
 
 export type CaptureAiMappingStatus = 'pending' | 'done' | 'failed' | 'skipped';
@@ -179,6 +180,8 @@ export interface DocumentCaptureView {
   contentHash: string;
   normalizationVersion: string;
   link: DocumentCaptureLinkView | null;
+  /** Readable links for this capture, including role (`source` or `attachment`). */
+  links?: DocumentCaptureLinkView[];
   /** The optional background field mapping. Absent or null when it isn't on for this capture. */
   aiMapping?: CaptureAiMappingView | null;
   createdAt: string;

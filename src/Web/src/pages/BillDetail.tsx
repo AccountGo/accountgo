@@ -17,6 +17,7 @@ import { BillTitle, billTitle } from '../lib/billTitle';
 import { useCapabilities } from '../lib/entitlements';
 import { BillStatementSources } from '../components/BillStatementSources';
 import { BillCaptureEvidence } from '../components/BillCaptureEvidence';
+import { RecordAttachments } from '../components/documents/RecordAttachments';
 import {
   computeCaptureDiscrepancy,
   DocumentCaptureView,
@@ -710,6 +711,7 @@ export const BillDetail: React.FC = () => {
       })()}
 
       <BillCaptureEvidence billId={bill.id} onCapturesLoaded={handleCapturesLoaded} />
+      <RecordAttachments targetType="bill" targetId={bill.id} canAttach={canEdit} canRemove={isDraft} recordLabel="bill" recordStatus={bill.status} />
 
       {isPaying && (
         <PayBillDialog

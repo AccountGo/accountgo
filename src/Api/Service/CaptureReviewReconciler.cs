@@ -115,7 +115,8 @@ public static class CaptureReviewReconciler
         if (targetId is > 0)
         {
             var linkedCaptureIds = db.DocumentCaptureLinks.AsNoTracking()
-                .Where(l => l.CompanyId == companyId && l.TargetType == policy.TargetType && l.TargetId == targetId.Value)
+                .Where(l => l.CompanyId == companyId && l.TargetType == policy.TargetType && l.TargetId == targetId.Value
+                    && l.Role == DocumentCaptureLinkRoles.Source)
                 .OrderBy(l => l.LinkedAt)
                 .Select(l => l.CaptureId)
                 .ToList();
@@ -319,7 +320,8 @@ public static class CaptureReviewReconciler
                 policy.StateConflictDetail, found.PublicId);
 
         var existingLink = db.DocumentCaptureLinks.AsNoTracking()
-            .SingleOrDefault(l => l.CompanyId == companyId && l.CaptureId == found.Id);
+            .SingleOrDefault(l => l.CompanyId == companyId && l.CaptureId == found.Id
+                && l.Role == DocumentCaptureLinkRoles.Source);
         if (existingLink is not null && (existingLink.TargetType != policy.TargetType || !targetId.HasValue || existingLink.TargetId != targetId.Value))
             return Problem(StatusCodes.Status409Conflict, "DOCUMENT_LINK_CONFLICT",
                 "This document capture is already linked to another record.", found.PublicId);

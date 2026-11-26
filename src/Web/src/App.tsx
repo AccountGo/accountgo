@@ -23,6 +23,7 @@ import { Bills } from './pages/Bills';
 import { BillEdit } from './pages/BillEdit';
 import { BillDetail } from './pages/BillDetail';
 import { ProductsServices } from './pages/ProductsServices';
+import { Documents } from './pages/Documents';
 import Inventory from './pages/Inventory';
 import GeneralLedger from './pages/GeneralLedger';
 import JournalEntries from './pages/JournalEntries';
@@ -339,6 +340,11 @@ export const orgRoutes: RouteObject[] = [
         <RouteGuard><ProductsServices /></RouteGuard>
       </RequiresModule>
     ),
+  },
+  {
+    path: 'documents',
+    handle: requires('documents.view', 'Documents'),
+    element: <RouteGuard><Documents /></RouteGuard>,
   },
   {
     path: 'items/inventory',

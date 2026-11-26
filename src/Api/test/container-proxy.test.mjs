@@ -26,6 +26,9 @@ import {
   MAX_DOCUMENT_CAPTURE_ACCEPT_BYTES,
   MAX_DOCUMENT_CAPTURE_LINK_BYTES,
   MAX_ASSISTANT_RUN_STREAM_BODY_BYTES,
+  MAX_DOCUMENT_LIBRARY_UPLOAD_BYTES,
+  MAX_DOCUMENT_LIBRARY_ACTION_BYTES,
+  isDocumentLibraryUploadRoute,
 } from "../container-proxy.ts";
 
 const ATTEMPTS = 4;
@@ -371,6 +374,55 @@ test("document capture and assistant routes have canonical method-specific reque
   assert.equal(maxRequestBodyBytesForRoute("/api/document-captures", "PUT"), undefined);
   assert.equal(maxRequestBodyBytesForRoute("/api/unrelated", "POST"), undefined);
   assert.equal(maxRequestBodyBytesForRoute("/api/invoice-branding/logo", "PUT"), MAX_LOGO_REQUEST_BYTES);
+});
+
+test("documents library routes have an upload bound and a small bound for every other write", () => {
+  assert.equal(MAX_DOCUMENT_LIBRARY_UPLOAD_BYTES, 15 * 1024 * 1024 + 256 * 1024);
+  assert.equal(isDocumentLibraryUploadRoute("/api/documents"), true);
+  assert.equal(isDocumentLibraryUploadRoute("/API//Documents/"), true);
+  assert.equal(isDocumentLibraryUploadRoute("/api/%64ocuments"), true);
+  assert.equal(isDocumentLibraryUploadRoute("/api/documents/cap_abc"), false);
+  assert.equal(maxRequestBodyBytesForRoute("/api/documents", "POST"), MAX_DOCUMENT_LIBRARY_UPLOAD_BYTES);
+  assert.equal(maxRequestBodyBytesForRoute("/api/%64ocuments/", "post"), MAX_DOCUMENT_LIBRARY_UPLOAD_BYTES);
+  assert.equal(maxRequestBodyBytesForRoute("/api/documents/cap_abc", "PATCH"), MAX_DOCUMENT_LIBRARY_ACTION_BYTES);
+  assert.equal(maxRequestBodyBytesForRoute("/api/documents/cap_abc/links", "POST"), MAX_DOCUMENT_LIBRARY_ACTION_BYTES);
+  assert.equal(maxRequestBodyBytesForRoute("/api/documents/cap_abc/archive", "POST"), MAX_DOCUMENT_LIBRARY_ACTION_BYTES);
+  assert.equal(maxRequestBodyBytesForRoute("/api/documents/exports", "POST"), MAX_DOCUMENT_LIBRARY_ACTION_BYTES);
+  assert.equal(maxRequestBodyBytesForRoute("/api/documents", "PUT"), MAX_DOCUMENT_LIBRARY_ACTION_BYTES);
+  assert.equal(maxRequestBodyBytesForRoute("/api/documents", "GET"), undefined);
+  assert.equal(maxRequestBodyBytesForRoute("/api/documents/cap_abc", "DELETE"), undefined);
+});
+
+test("bufferRequest accepts a documents upload at the exact bound and rejects one byte over, with or without a length", async () => {
+  const limit = maxRequestBodyBytesForRoute("/api/documents", "POST");
+  const exact = new Request("http://app.test/api/documents", { method: "POST", body: new Uint8Array(limit) });
+  const buffered = await bufferRequest(exact.url, exact, new Headers(exact.headers), { maxBytes: limit });
+  assert.equal(buffered.body?.byteLength, limit);
+
+  const declaredOver = new Request("http://app.test/api/documents", {
+    method: "POST", headers: { "content-length": String(limit + 1) }, body: new Uint8Array(limit + 1),
+  });
+  await assert.rejects(
+    () => bufferRequest(declaredOver.url, declaredOver, new Headers(declaredOver.headers), { maxBytes: limit }),
+    (error) => error instanceof PayloadTooLargeError && error.maxBytes === limit,
+  );
+
+  const chunkedOver = new Request("http://app.test/api/documents", {
+    method: "POST",
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array(limit));
+        controller.enqueue(new Uint8Array(1));
+        controller.close();
+      },
+    }),
+    duplex: "half",
+  });
+  await assert.rejects(
+    () => bufferRequest(chunkedOver.url, chunkedOver, new Headers(chunkedOver.headers), { maxBytes: limit }),
+    (error) => error instanceof PayloadTooLargeError && error.maxBytes === limit,
+  );
+  assert.equal(payloadTooLargeResponse(new PayloadTooLargeError("too large", limit)).status, 413);
 });
 
 test("bufferRequest rejects an unknown-length streamed capture upload over the route limit", async () => {

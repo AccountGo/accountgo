@@ -143,7 +143,7 @@ namespace Api.Data.Schema
                 // Ensure all indexes exist idempotently even if v1 was previously applied
                 EnsureAllIndexes(connection, logger);
                 EnsureLifecycleColumns(connection);
-                EnsureTables(connection);
+                EnsureTables(connection, logger);
                 // Outside EnsureTables so JournalEntryHeader upgrades even when optional later tables are absent.
                 EnsurePriorPeriodAdjustment(connection);
                 EnsureSourceJournalColumns(connection);
@@ -803,9 +803,9 @@ WHERE ""DisabledModulesJson"" IS NULL
               AND (""Status"" IN (1, 2, 3) OR ((""Status"" IS NULL OR ""Status"" = 4) AND ""GeneralLedgerHeaderId"" IS NOT NULL));";
 
         // Tables added after the first release; the same statements are in the D1 migrations.
-        private static void EnsureTables(DbConnection connection)
+        private static void EnsureTables(DbConnection connection, ILogger? logger = null)
         {
-            EnsureDocumentCaptureSchema(connection);
+            EnsureDocumentCaptureSchema(connection, logger);
             EnsureAssistantPseudonymsSchema(connection);
 
             if (!TableExists(connection, "SalesInvoiceHeader")
@@ -884,29 +884,97 @@ WHERE ""DisabledModulesJson"" IS NULL
             CREATE INDEX IF NOT EXISTS ""IX_AssistantPseudonyms_ExpiresAt""
             ON ""AssistantPseudonyms"" (""ExpiresAt"");";
 
-        private static void EnsureDocumentCaptureSchema(DbConnection connection)
+        public const string SchemaMarkersTableName = "__AccountGoSchemaMarkers";
+        public const string DocumentsLibraryMarkerKey = "documents-library-v1";
+        public const string MarkerStatusApplied = "applied";
+        public const string MarkerStatusRolledBack = "rolled-back";
+
+        private static void EnsureDocumentCaptureSchema(DbConnection connection, ILogger? logger = null)
         {
+            using (var markerTableCmd = connection.CreateCommand())
+            {
+                markerTableCmd.CommandText = SchemaMarkersTableSql;
+                markerTableCmd.ExecuteNonQuery();
+            }
+            AddColumnIfMissing(connection, SchemaMarkersTableName, "Status", "TEXT NOT NULL DEFAULT 'applied'");
+
+            string? markerStatus = GetSchemaMarkerStatus(connection, DocumentsLibraryMarkerKey);
+            if (string.Equals(markerStatus, MarkerStatusRolledBack, StringComparison.OrdinalIgnoreCase))
+            {
+                const string message =
+                    "Refusing to start: SQLite schema marker 'documents-library-v1' has status 'rolled-back'. " +
+                    "Migrate the database up (DocumentsLibraryFoundation) or run the older pre-documents-library build.";
+                logger?.LogError(message);
+                throw new InvalidOperationException(message);
+            }
+
             foreach (var sql in new[]
             {
                 DocumentCaptureTableSql,
                 DocumentCaptureBlobTableSql,
                 DocumentCaptureAttemptTableSql,
                 DocumentCaptureLinkTableSql,
+                DocumentLibraryRevisionsTableSql,
+                DocumentUploadAdmissionsTableSql,
+                DocumentExportRunsTableSql,
+                DocumentExportRunsCreatedIndexSql,
+                DocumentExportRunsPublicIdCompanyIndexSql,
+                DocumentExportRunsOneRunningIndexSql,
+                DocumentExportRunsPublicIdIndexSql,
+                DocumentUploadAdmissionsCompanyIndexSql,
+                DocumentUploadAdmissionsReservedIndexSql,
+                DocumentCaptureAiMappingTableSql,
+                CaptureAiMappingConsentTableSql,
+                PartyAliasesTableSql
+            })
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText = sql;
+                command.ExecuteNonQuery();
+            }
+
+            // Drop legacy unique index BEFORE adding multi-links or new indexes so multi-link rows never collide on restart.
+            using (var dropOldIndexCmd = connection.CreateCommand())
+            {
+                dropOldIndexCmd.CommandText = @"
+                    DROP INDEX IF EXISTS ""IX_DocumentCaptureLinks_CompanyId_CaptureId"";
+                    DROP INDEX IF EXISTS ""IX_DocumentCaptures_CompanyId_Status_ExpiresAt"";";
+                dropOldIndexCmd.ExecuteNonQuery();
+            }
+
+            AddColumnIfMissing(connection, "DocumentCaptureLinks", "TaxTreatment", "TEXT NULL");
+            AddColumnIfMissing(connection, "DocumentCaptureLinks", "Role", "TEXT NOT NULL DEFAULT 'source'");
+            AddColumnIfMissing(connection, "DocumentCaptures", "TextPageCount", "INTEGER NOT NULL DEFAULT 0");
+            AddColumnIfMissing(connection, "DocumentCaptures", "FileName", "TEXT NULL");
+            AddColumnIfMissing(connection, "DocumentCaptures", "Title", "TEXT NULL");
+            AddColumnIfMissing(connection, "DocumentCaptures", "Category", "TEXT NULL");
+            AddColumnIfMissing(connection, "DocumentCaptures", "DocumentDate", "TEXT NULL");
+            AddColumnIfMissing(connection, "DocumentCaptures", "Notes", "TEXT NULL");
+            AddColumnIfMissing(connection, "DocumentCaptures", "FiledAt", "TEXT NULL");
+            AddColumnIfMissing(connection, "DocumentCaptures", "FiledBy", "TEXT NULL");
+            AddColumnIfMissing(connection, "DocumentCaptures", "ArchivedAt", "TEXT NULL");
+            AddColumnIfMissing(connection, "DocumentCaptures", "ArchivedBy", "TEXT NULL");
+            AddColumnIfMissing(connection, "DocumentCaptures", "DeletedAt", "TEXT NULL");
+            AddColumnIfMissing(connection, "DocumentCaptures", "DeletedBy", "TEXT NULL");
+            AddColumnIfMissing(connection, "DocumentCaptureAiMappings", "ReservedPages", "INTEGER NOT NULL DEFAULT 0");
+            AddColumnIfMissing(connection, "DocumentCaptureAiMappings", "ReservedAt", "TEXT NULL");
+
+            foreach (var sql in new[]
+            {
                 DocumentCapturePublicIdIndexSql,
                 DocumentCaptureIdempotencyIndexSql,
                 DocumentCaptureSourceHashIndexSql,
                 DocumentCaptureAbandonedExpiryIndexSql,
+                DocumentCaptureFiledIndexSql,
                 DocumentCaptureAttemptsGenerationIndexSql,
                 DocumentCaptureAttemptsReservationIndexSql,
-                DocumentCaptureLinksCaptureIndexSql,
+                DocumentCaptureLinksCompanyCaptureTargetIndexSql,
+                DocumentCaptureLinksSourceRoleIndexSql,
                 DocumentCaptureLinksTargetIndexSql,
-                DocumentCaptureAiMappingTableSql,
                 DocumentCaptureAiMappingUniqueIndexSql,
                 DocumentCaptureAiMappingLeaseIndexSql,
                 DocumentCaptureAiMappingCacheIndexSql,
-                CaptureAiMappingConsentTableSql,
                 CaptureAiMappingConsentCompanyIndexSql,
-                PartyAliasesTableSql,
                 PartyAliasesUniqueIndexSql,
                 PartyAliasesPartyIndexSql
             })
@@ -916,17 +984,74 @@ WHERE ""DisabledModulesJson"" IS NULL
                 command.ExecuteNonQuery();
             }
 
-            AddColumnIfMissing(connection, "DocumentCaptureLinks", "TaxTreatment", "TEXT NULL");
-            AddColumnIfMissing(connection, "DocumentCaptures", "TextPageCount", "INTEGER NOT NULL DEFAULT 0");
-            AddColumnIfMissing(connection, "DocumentCaptureAiMappings", "ReservedPages", "INTEGER NOT NULL DEFAULT 0");
-            AddColumnIfMissing(connection, "DocumentCaptureAiMappings", "ReservedAt", "TEXT NULL");
-
-            using (var command = connection.CreateCommand())
+            if (markerStatus is null)
             {
-                command.CommandText = "DROP INDEX IF EXISTS \"IX_DocumentCaptures_CompanyId_Status_ExpiresAt\";";
-                command.ExecuteNonQuery();
+                using (var backfillCmd = connection.CreateCommand())
+                {
+                    backfillCmd.CommandText = DocumentCaptureFilingBackfillSql;
+                    backfillCmd.ExecuteNonQuery();
+                }
+
+                using (var writeMarkerCmd = connection.CreateCommand())
+                {
+                    writeMarkerCmd.CommandText = @"
+                        INSERT INTO ""__AccountGoSchemaMarkers"" (""Key"", ""AppliedAt"", ""Status"")
+                        VALUES ($key, $appliedAt, 'applied')
+                        ON CONFLICT (""Key"") DO UPDATE
+                        SET ""AppliedAt"" = excluded.""AppliedAt"",
+                            ""Status"" = 'applied';";
+                    var keyParam = writeMarkerCmd.CreateParameter();
+                    keyParam.ParameterName = "$key";
+                    keyParam.Value = DocumentsLibraryMarkerKey;
+                    writeMarkerCmd.Parameters.Add(keyParam);
+                    var appliedParam = writeMarkerCmd.CreateParameter();
+                    appliedParam.ParameterName = "$appliedAt";
+                    appliedParam.Value = DateTime.UtcNow.ToString("o");
+                    writeMarkerCmd.Parameters.Add(appliedParam);
+                    writeMarkerCmd.ExecuteNonQuery();
+                }
             }
         }
+
+        private static string? GetSchemaMarkerStatus(DbConnection connection, string key)
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = @"SELECT ""Status"" FROM ""__AccountGoSchemaMarkers"" WHERE ""Key"" = $key;";
+            var p = cmd.CreateParameter();
+            p.ParameterName = "$key";
+            p.Value = key;
+            cmd.Parameters.Add(p);
+            var raw = cmd.ExecuteScalar();
+            if (raw is null)
+                return null;
+            if (raw == DBNull.Value)
+                return MarkerStatusApplied;
+            var text = Convert.ToString(raw)?.Trim();
+            return string.IsNullOrEmpty(text) ? MarkerStatusApplied : text;
+        }
+
+        private const string SchemaMarkersTableSql = @"
+            CREATE TABLE IF NOT EXISTS ""__AccountGoSchemaMarkers"" (
+                ""Key"" TEXT NOT NULL PRIMARY KEY,
+                ""AppliedAt"" TEXT NOT NULL,
+                ""Status"" TEXT NOT NULL DEFAULT 'applied'
+            );";
+
+        private const string DocumentCaptureFilingBackfillSql = @"
+            UPDATE ""DocumentCaptures""
+            SET ""FiledAt"" = ""AcceptedAt"",
+                ""FiledBy"" = ""AcceptedBy""
+            WHERE ""FiledAt"" IS NULL
+              AND ""AcceptedAt"" IS NOT NULL
+              AND ""Kind"" IN ('expense-receipt', 'purchase-invoice', 'sales-invoice')
+              AND EXISTS (
+                  SELECT 1 FROM ""DocumentCaptureLinks"" l
+                  WHERE l.""CompanyId"" = ""DocumentCaptures"".""CompanyId""
+                    AND l.""CaptureId"" = ""DocumentCaptures"".""Id"")
+              AND EXISTS (
+                  SELECT 1 FROM ""DocumentCaptureBlobs"" b
+                  WHERE b.""CompanyId"" = ""DocumentCaptures"".""CompanyId""
+                    AND b.""CaptureId"" = ""DocumentCaptures"".""Id"");";
 
         private const string DocumentCaptureTableSql = @"
             CREATE TABLE IF NOT EXISTS ""DocumentCaptures"" (
@@ -968,6 +1093,17 @@ WHERE ""DisabledModulesJson"" IS NULL
                 ""ExpiresAt"" TEXT NOT NULL,
                 ""BytesDeletedAt"" TEXT NULL,
                 ""FieldsWipedAt"" TEXT NULL,
+                ""FileName"" TEXT NULL,
+                ""Title"" TEXT NULL,
+                ""Category"" TEXT NULL,
+                ""DocumentDate"" TEXT NULL,
+                ""Notes"" TEXT NULL,
+                ""FiledAt"" TEXT NULL,
+                ""FiledBy"" TEXT NULL,
+                ""ArchivedAt"" TEXT NULL,
+                ""ArchivedBy"" TEXT NULL,
+                ""DeletedAt"" TEXT NULL,
+                ""DeletedBy"" TEXT NULL,
                 CONSTRAINT ""AK_DocumentCaptures_CompanyId_Id"" UNIQUE (""CompanyId"", ""Id"")
             );";
 
@@ -998,11 +1134,74 @@ WHERE ""DisabledModulesJson"" IS NULL
                 ""CaptureId"" INTEGER NOT NULL,
                 ""TargetType"" TEXT NOT NULL,
                 ""TargetId"" INTEGER NOT NULL,
+                ""Role"" TEXT NOT NULL DEFAULT 'source',
                 ""LinkedBy"" TEXT NOT NULL,
                 ""LinkedAt"" TEXT NOT NULL,
                 ""TaxTreatment"" TEXT NULL,
                 CONSTRAINT ""FK_DocumentCaptureLinks_DocumentCaptures_CompanyId_CaptureId""
                     FOREIGN KEY (""CompanyId"", ""CaptureId"") REFERENCES ""DocumentCaptures"" (""CompanyId"", ""Id"") ON DELETE CASCADE
+            );";
+
+        private const string DocumentExportRunsTableSql = @"
+            CREATE TABLE IF NOT EXISTS ""DocumentExportRuns"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_DocumentExportRuns"" PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""PublicId"" TEXT NOT NULL DEFAULT '',
+                ""Status"" TEXT NOT NULL,
+                ""RequestedBy"" TEXT NOT NULL,
+                ""CreatedAt"" TEXT NOT NULL,
+                ""StreamStartedAt"" TEXT NULL,
+                ""LastHeartbeatAt"" TEXT NULL,
+                ""CompletedAt"" TEXT NULL,
+                ""SelectedRevision"" INTEGER NOT NULL,
+                ""SelectedCount"" INTEGER NOT NULL,
+                ""SelectedBytes"" INTEGER NOT NULL,
+                ""WrittenCount"" INTEGER NOT NULL,
+                ""FailureReason"" TEXT NULL,
+                ""InventoryJson"" TEXT NOT NULL,
+                CONSTRAINT ""FK_DocumentExportRuns_Company_CompanyId""
+                    FOREIGN KEY (""CompanyId"") REFERENCES ""Company"" (""Id"") ON DELETE CASCADE
+            );";
+
+        private const string DocumentExportRunsCreatedIndexSql = @"
+            CREATE INDEX IF NOT EXISTS ""IX_DocumentExportRuns_CompanyId_CreatedAt""
+            ON ""DocumentExportRuns"" (""CompanyId"", ""CreatedAt"");";
+
+        private const string DocumentExportRunsPublicIdCompanyIndexSql = @"
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_DocumentExportRuns_CompanyId_PublicId""
+            ON ""DocumentExportRuns"" (""CompanyId"", ""PublicId"");";
+
+        private const string DocumentExportRunsOneRunningIndexSql = @"
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_DocumentExportRuns_OneRunning""
+            ON ""DocumentExportRuns"" (""CompanyId"") WHERE ""Status"" = 'running';";
+
+        private const string DocumentExportRunsPublicIdIndexSql = @"
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_DocumentExportRuns_PublicId""
+            ON ""DocumentExportRuns"" (""PublicId"") WHERE ""PublicId"" <> '';";
+
+        private const string DocumentUploadAdmissionsTableSql = @"
+            CREATE TABLE IF NOT EXISTS ""DocumentUploadAdmissions"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_DocumentUploadAdmissions"" PRIMARY KEY AUTOINCREMENT,
+                ""CompanyId"" INTEGER NOT NULL,
+                ""ReservedAt"" TEXT NOT NULL,
+                CONSTRAINT ""FK_DocumentUploadAdmissions_Company_CompanyId""
+                    FOREIGN KEY (""CompanyId"") REFERENCES ""Company"" (""Id"") ON DELETE CASCADE
+            );";
+
+        private const string DocumentUploadAdmissionsCompanyIndexSql = @"
+            CREATE INDEX IF NOT EXISTS ""IX_DocumentUploadAdmissions_CompanyId_ReservedAt""
+            ON ""DocumentUploadAdmissions"" (""CompanyId"", ""ReservedAt"");";
+
+        private const string DocumentUploadAdmissionsReservedIndexSql = @"
+            CREATE INDEX IF NOT EXISTS ""IX_DocumentUploadAdmissions_ReservedAt""
+            ON ""DocumentUploadAdmissions"" (""ReservedAt"");";
+
+        private const string DocumentLibraryRevisionsTableSql = @"
+            CREATE TABLE IF NOT EXISTS ""DocumentLibraryRevisions"" (
+                ""CompanyId"" INTEGER NOT NULL PRIMARY KEY,
+                ""Revision"" INTEGER NOT NULL DEFAULT 0,
+                CONSTRAINT ""FK_DocumentLibraryRevisions_Company_CompanyId""
+                    FOREIGN KEY (""CompanyId"") REFERENCES ""Company"" (""Id"") ON DELETE CASCADE
             );";
 
         private const string DocumentCaptureAiMappingTableSql = @"
@@ -1075,6 +1274,11 @@ WHERE ""DisabledModulesJson"" IS NULL
             ON ""DocumentCaptures"" (""ExpiresAt"")
             WHERE ""AcceptedAt"" IS NULL AND ""RejectedAt"" IS NULL AND ""BytesDeletedAt"" IS NULL;";
 
+        private const string DocumentCaptureFiledIndexSql = @"
+            CREATE INDEX IF NOT EXISTS ""IX_DocumentCaptures_Filed""
+            ON ""DocumentCaptures"" (""CompanyId"", ""FiledAt"")
+            WHERE ""FiledAt"" IS NOT NULL AND ""DeletedAt"" IS NULL;";
+
         private const string DocumentCaptureAttemptsGenerationIndexSql = @"
             CREATE UNIQUE INDEX IF NOT EXISTS ""IX_DocumentCaptureAttempts_CompanyId_CaptureId_Generation""
             ON ""DocumentCaptureAttempts"" (""CompanyId"", ""CaptureId"", ""Generation"");";
@@ -1083,9 +1287,14 @@ WHERE ""DisabledModulesJson"" IS NULL
             CREATE INDEX IF NOT EXISTS ""IX_DocumentCaptureAttempts_ReservedAt""
             ON ""DocumentCaptureAttempts"" (""ReservedAt"");";
 
-        private const string DocumentCaptureLinksCaptureIndexSql = @"
-            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_DocumentCaptureLinks_CompanyId_CaptureId""
-            ON ""DocumentCaptureLinks"" (""CompanyId"", ""CaptureId"");";
+        private const string DocumentCaptureLinksCompanyCaptureTargetIndexSql = @"
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_DocumentCaptureLinks_Company_Capture_Target""
+            ON ""DocumentCaptureLinks"" (""CompanyId"", ""CaptureId"", ""TargetType"", ""TargetId"");";
+
+        private const string DocumentCaptureLinksSourceRoleIndexSql = @"
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_DocumentCaptureLinks_SourceRole""
+            ON ""DocumentCaptureLinks"" (""CompanyId"", ""CaptureId"")
+            WHERE ""Role"" = 'source';";
 
         private const string DocumentCaptureLinksTargetIndexSql = @"
             CREATE INDEX IF NOT EXISTS ""IX_DocumentCaptureLinks_CompanyId_TargetType_TargetId""

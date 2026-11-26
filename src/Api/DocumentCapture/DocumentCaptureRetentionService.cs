@@ -10,7 +10,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Api.DocumentCaptures;
 
 public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCaptureAdmissionLock admissionLock,
-    TimeProvider? timeProvider = null, ILogger<DocumentCaptureRetentionService>? logger = null)
+    TimeProvider? timeProvider = null, ILogger<DocumentCaptureRetentionService>? logger = null,
+    Microsoft.Extensions.Options.IOptions<DocumentsOptions>? documentsOptions = null,
+    Api.Service.ISecurityAuditService? securityAudit = null)
 {
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
     private readonly ILogger<DocumentCaptureRetentionService> _logger = logger ?? NullLogger<DocumentCaptureRetentionService>.Instance;
@@ -68,6 +70,7 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
         {
             var abandoned = await db.DocumentCaptures.IgnoreQueryFilters().AsNoTracking()
                 .Where(capture => capture.ExpiresAt <= utcNow && capture.AcceptedAt == null && capture.RejectedAt == null
+                    && capture.FiledAt == null
                     && (capture.BytesDeletedAt == null || capture.FieldsWipedAt == null)
                     && !stalledAbandonedCaptures.Contains(capture.Id))
                 .OrderBy(capture => capture.ExpiresAt)
@@ -103,6 +106,7 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
         {
             var rejectedResidue = await db.DocumentCaptures.IgnoreQueryFilters().AsNoTracking()
                 .Where(capture => capture.AcceptedAt == null && capture.RejectedAt != null
+                    && capture.FiledAt == null
                     && (capture.BytesDeletedAt == null || capture.FieldsWipedAt == null)
                     && !stalledRejectedCaptures.Contains(capture.Id))
                 .OrderBy(capture => capture.RejectedAt)
@@ -131,6 +135,74 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
             }
             if (!madeProgress && rejectedResidue.All(item => stalledRejectedCaptures.Contains(item.Id)))
                 break;
+        }
+
+        // Library trash older than the retention period: purge the row, blob and links (design 3.9 S4, R5).
+        var trashCutoff = utcNow.AddDays(-(documentsOptions?.Value.TrashRetentionDays ?? 30));
+        var stalledTrash = new HashSet<int>();
+        while (WithinPassBudget(passStarted))
+        {
+            var expiredTrash = await db.DocumentCaptures.IgnoreQueryFilters().AsNoTracking()
+                .Where(capture => capture.FiledAt != null && capture.DeletedAt != null && capture.DeletedAt <= trashCutoff
+                    && !stalledTrash.Contains(capture.Id))
+                .OrderBy(capture => capture.DeletedAt)
+                .Select(capture => new { capture.CompanyId, capture.Id })
+                .Take(BatchSize)
+                .ToListAsync(cancellationToken).ConfigureAwait(false);
+            if (expiredTrash.Count == 0)
+                break;
+            var madeProgress = false;
+            foreach (var item in expiredTrash)
+            {
+                if (!WithinPassBudget(passStarted))
+                    break;
+                try
+                {
+                    if (await PurgeExpiredTrashAsync(item.CompanyId, item.Id, trashCutoff, cancellationToken).ConfigureAwait(false))
+                    {
+                        madeProgress = true;
+                        purgedCaptures++;
+                    }
+                    else
+                    {
+                        stalledTrash.Add(item.Id);
+                    }
+                }
+                catch (DocumentCaptureAdmissionBusyException)
+                {
+                    stalledTrash.Add(item.Id);
+                    busyItems++;
+                }
+            }
+            if (!madeProgress && expiredTrash.All(item => stalledTrash.Contains(item.Id)))
+                break;
+        }
+
+        // Export runs: fail stale ones and drop runs older than 30 days (metadata only; no file content is ever stored).
+        if (WithinPassBudget(passStarted))
+        {
+            var readyBefore = utcNow - DocumentExportService.StaleAfter;
+            var leaseBefore = utcNow - DocumentExportService.StreamLease;
+            await db.DocumentExportRuns.IgnoreQueryFilters()
+                .Where(run => (run.Status == DocumentExportService.Running && run.LastHeartbeatAt <= leaseBefore)
+                    || (run.Status == DocumentExportService.Ready && run.CreatedAt <= readyBefore))
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(run => run.Status, DocumentExportService.Failed)
+                    .SetProperty(run => run.FailureReason, "stale")
+                    .SetProperty(run => run.CompletedAt, utcNow), cancellationToken).ConfigureAwait(false);
+            var keepAfter = utcNow - DocumentExportService.KeepRunsFor;
+            await db.DocumentExportRuns.IgnoreQueryFilters()
+                .Where(run => run.CreatedAt <= keepAfter)
+                .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        // Upload admissions only matter for the hourly limit; keep a day, then remove.
+        if (WithinPassBudget(passStarted))
+        {
+            var admissionCutoff = utcNow.AddDays(-1);
+            await db.DocumentUploadAdmissions.IgnoreQueryFilters()
+                .Where(admission => admission.ReservedAt <= admissionCutoff)
+                .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         }
 
         var stalledAttemptCompanies = new HashSet<int>();
@@ -183,12 +255,17 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
             return 0;
         }
 
+        var hadFiledCaptures = await db.DocumentCaptures.IgnoreQueryFilters()
+            .AnyAsync(capture => capture.CompanyId == companyId && capture.FiledAt != null, cancellationToken)
+            .ConfigureAwait(false);
         var deleted = await db.DocumentCaptures.IgnoreQueryFilters()
             .Where(capture => capture.CompanyId == companyId)
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         await db.DocumentCaptureAttempts.IgnoreQueryFilters()
             .Where(attempt => attempt.CompanyId == companyId)
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        if (hadFiledCaptures)
+            await DocumentRevision.BumpAsync(db, companyId, cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         db.ChangeTracker.Clear();
         return deleted;
@@ -204,9 +281,10 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
     private async Task<bool> PurgeAbandonedContentAsync(int companyId, int captureId, DateTime utcNow, CancellationToken cancellationToken)
     {
         await using var transaction = await admissionLock.AcquireCompanyAsync(companyId, cancellationToken).ConfigureAwait(false);
-        var capture = await db.DocumentCaptures.IgnoreQueryFilters()
+        var capture = await db.DocumentCaptures.IgnoreQueryFilters().AsNoTracking()
             .SingleOrDefaultAsync(item => item.CompanyId == companyId && item.Id == captureId
                 && item.ExpiresAt <= utcNow && item.AcceptedAt == null && item.RejectedAt == null
+                && item.FiledAt == null
                 && (item.BytesDeletedAt == null || item.FieldsWipedAt == null)
                 && (item.Status != "extracting" || item.LeaseExpiresAt == null || item.LeaseExpiresAt <= utcNow)
                 && db.Companies.IgnoreQueryFilters().Any(company => company.Id == companyId && company.DeletedAt == null),
@@ -217,7 +295,11 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
             return false;
         }
 
-        await WipeCaptureContentAsync(capture, companyId, captureId, utcNow, cancellationToken).ConfigureAwait(false);
+        if (!await WipeUnfiledCaptureContentAsync(capture.Kind, companyId, captureId, utcNow, cancellationToken).ConfigureAwait(false))
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            return false;
+        }
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         db.ChangeTracker.Clear();
         return true;
@@ -226,9 +308,10 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
     private async Task<bool> PurgeRejectedResidueAsync(int companyId, int captureId, DateTime utcNow, CancellationToken cancellationToken)
     {
         await using var transaction = await admissionLock.AcquireCompanyAsync(companyId, cancellationToken).ConfigureAwait(false);
-        var capture = await db.DocumentCaptures.IgnoreQueryFilters()
+        var capture = await db.DocumentCaptures.IgnoreQueryFilters().AsNoTracking()
             .SingleOrDefaultAsync(item => item.CompanyId == companyId && item.Id == captureId
                 && item.AcceptedAt == null && item.RejectedAt != null
+                && item.FiledAt == null
                 && (item.BytesDeletedAt == null || item.FieldsWipedAt == null)
                 && db.Companies.IgnoreQueryFilters().Any(company => company.Id == companyId && company.DeletedAt == null),
                 cancellationToken).ConfigureAwait(false);
@@ -238,29 +321,115 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
             return false;
         }
 
-        await WipeCaptureContentAsync(capture, companyId, captureId, utcNow, cancellationToken).ConfigureAwait(false);
+        if (!await WipeUnfiledCaptureContentAsync(capture.Kind, companyId, captureId, utcNow, cancellationToken).ConfigureAwait(false))
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            return false;
+        }
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         db.ChangeTracker.Clear();
         return true;
     }
 
-    private async Task WipeCaptureContentAsync(Core.Domain.DocumentCapture capture, int companyId, int captureId,
+    private async Task<bool> WipeUnfiledCaptureContentAsync(string kind, int companyId, int captureId,
         DateTime utcNow, CancellationToken cancellationToken)
     {
+        var emptyFields = DocumentCaptureFieldSchemas.EmptyFieldsJsonForKind(kind);
+        var updated = await db.DocumentCaptures.IgnoreQueryFilters()
+            .Where(item => item.CompanyId == companyId && item.Id == captureId && item.FiledAt == null)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(item => item.BytesDeletedAt, item => item.BytesDeletedAt ?? utcNow)
+                .SetProperty(item => item.FieldsWipedAt, utcNow)
+                .SetProperty(item => item.FieldsJson, emptyFields)
+                .SetProperty(item => item.RawText, (string?)null)
+                .SetProperty(item => item.TextPageCount, 0)
+                .SetProperty(item => item.WarningsJson, (string?)null), cancellationToken)
+            .ConfigureAwait(false);
+        if (updated == 0)
+            return false;
+
         await db.DocumentCaptureBlobs.IgnoreQueryFilters()
-            .Where(blob => blob.CompanyId == companyId && blob.CaptureId == captureId)
+            .Where(blob => blob.CompanyId == companyId && blob.CaptureId == captureId
+                && db.DocumentCaptures.IgnoreQueryFilters()
+                    .Any(item => item.CompanyId == companyId && item.Id == captureId && item.FiledAt == null))
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         // The mapped fields and hints hold the same document values as the fields wiped below, for every extraction generation.
         await db.DocumentCaptureAiMappings.IgnoreQueryFilters()
-            .Where(job => job.CompanyId == companyId && job.CaptureId == captureId)
+            .Where(job => job.CompanyId == companyId && job.CaptureId == captureId
+                && db.DocumentCaptures.IgnoreQueryFilters()
+                    .Any(item => item.CompanyId == companyId && item.Id == captureId && item.FiledAt == null))
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
-        capture.BytesDeletedAt ??= utcNow;
-        capture.FieldsWipedAt = utcNow;
-        capture.FieldsJson = DocumentCaptureFieldSchemas.EmptyFieldsJsonForKind(capture.Kind);
-        capture.RawText = null;
-        capture.TextPageCount = 0;
-        capture.WarningsJson = null;
-        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return true;
+    }
+
+    /// <summary>
+    /// Under the company lock and the linked records' row locks: purges a trashed library file whose retention has passed, unless
+    /// it was restored, is a scan's source, or a linked bill/invoice is no longer a draft (it then stays in the trash as evidence).
+    /// </summary>
+    private async Task<bool> PurgeExpiredTrashAsync(int companyId, int captureId, DateTime trashCutoff, CancellationToken cancellationToken)
+    {
+        await using var transaction = await admissionLock.AcquireCompanyAsync(companyId, cancellationToken).ConfigureAwait(false);
+        var links = await db.DocumentCaptureLinks.IgnoreQueryFilters().AsNoTracking()
+            .Where(link => link.CompanyId == companyId && link.CaptureId == captureId)
+            .Select(link => new { link.TargetType, link.TargetId, link.Role })
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        if (links.Any(link => link.Role == Core.Domain.DocumentCaptureLinkRoles.Source))
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            return false;
+        }
+        await DocumentTargetLocks.LockAsync(db, companyId, links.Select(link => (link.TargetType, link.TargetId)), cancellationToken)
+            .ConfigureAwait(false);
+        var billIds = links.Where(link => link.TargetType == "bill").Select(link => link.TargetId).ToArray();
+        var invoiceIds = links.Where(link => link.TargetType == "invoice").Select(link => link.TargetId).ToArray();
+        var locked = await db.PurchaseInvoiceHeaders.IgnoreQueryFilters().AsNoTracking()
+                .AnyAsync(h => h.CompanyId == companyId && billIds.Contains(h.Id)
+                    && ((h.Status != null && h.Status != Core.Domain.PurchaseInvoiceStatus.Draft) || h.GeneralLedgerHeaderId != null), cancellationToken)
+                .ConfigureAwait(false)
+            || await db.SalesInvoiceHeaders.IgnoreQueryFilters().AsNoTracking()
+                .AnyAsync(h => h.CompanyId == companyId && invoiceIds.Contains(h.Id)
+                    && ((h.Status != null && h.Status != Core.Domain.SalesInvoiceStatus.Draft) || h.GeneralLedgerHeaderId != null), cancellationToken)
+                .ConfigureAwait(false);
+        if (locked)
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            return false;
+        }
+        var snapshot = await db.DocumentCaptures.IgnoreQueryFilters().AsNoTracking()
+            .Where(capture => capture.CompanyId == companyId && capture.Id == captureId && capture.FiledAt != null
+                && capture.DeletedAt != null && capture.DeletedAt <= trashCutoff)
+            .Select(capture => new { capture.PublicId, capture.Kind, capture.ByteCount, capture.DeletedAt, capture.DeletedBy })
+            .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        var deleted = snapshot is null ? 0 : await db.DocumentCaptures.IgnoreQueryFilters()
+            .Where(capture => capture.CompanyId == companyId && capture.Id == captureId && capture.FiledAt != null
+                && capture.DeletedAt != null && capture.DeletedAt <= trashCutoff)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        if (deleted == 0)
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            return false;
+        }
+        await DocumentRevision.BumpAsync(db, companyId, cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        db.ChangeTracker.Clear();
+        // Written only after the purge committed; the system is the actor (no user), and no document content is logged.
+        if (securityAudit is not null)
+        {
+            await securityAudit.LogEventAsync("document.purged", "success", null, companyId, new
+            {
+                documentId = snapshot!.PublicId,
+                details = new
+                {
+                    kind = snapshot.Kind,
+                    byteCount = snapshot.ByteCount,
+                    trashedAt = snapshot.DeletedAt,
+                    trashedBy = snapshot.DeletedBy,
+                    purgedAt = _timeProvider.GetUtcNow().UtcDateTime,
+                    reason = "trash-retention"
+                }
+            }).ConfigureAwait(false);
+        }
+        return true;
     }
 
     private async Task<int> PurgeOldAttemptsAsync(int companyId, DateTime cutoff, CancellationToken cancellationToken)

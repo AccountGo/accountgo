@@ -64,7 +64,8 @@ public static class CaptureTaxTreatment
     {
         var companyId = tenant.RequireCompanyId();
         var links = db.DocumentCaptureLinks
-            .Where(link => link.CompanyId == companyId && link.TargetType == targetType && link.TargetId == targetId)
+            .Where(link => link.CompanyId == companyId && link.TargetType == targetType && link.TargetId == targetId
+                && link.Role == DocumentCaptureLinkRoles.Source)
             .ToList();
         if (links.Count == 0)
             return;

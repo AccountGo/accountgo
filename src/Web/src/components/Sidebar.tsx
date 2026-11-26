@@ -13,6 +13,7 @@ import {
   Users,
   X,
   Sparkles,
+  FolderOpen,
 } from 'lucide-react';
 import { OrgDetails, UserProfile, SidebarMode, SubscriptionInfo, ModuleKey } from '../types';
 import { canShowTaxNav } from '../lib/taxReport';
@@ -31,6 +32,8 @@ interface SidebarProps {
   hasPermission?: (permission: string | string[]) => boolean;
   /** Offer plans with the general ledger: the current plan lacks it and a self-service plan has it. */
   showLedgerUpsell?: boolean;
+  /** The documents library is switched on for this workspace (server capabilities). */
+  showDocuments?: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -43,6 +46,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   hasModule,
   hasPermission,
   showLedgerUpsell = false,
+  showDocuments = false,
 }) => {
   const isCollapsed = sidebarMode === 'collapsed';
 
@@ -89,6 +93,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
       module: ['sales', 'purchases'],
       permission: 'inventory.items.view',
     },
+    ...(showDocuments
+      ? [
+          {
+            // Every plan and module: contracts, receipts and the files behind bills and invoices.
+            name: 'Documents',
+            path: `/org/${currentOrg.slug}/documents`,
+            icon: FolderOpen,
+            permission: 'documents.view',
+          },
+        ]
+      : []),
     {
       name: currentOrg.isPersonalBooks ? 'Transactions' : 'General Ledger',
       path: `/org/${currentOrg.slug}/financials`,

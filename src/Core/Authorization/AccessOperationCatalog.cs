@@ -105,6 +105,10 @@ namespace Core.Authorization
         public const string DonationsView = SystemPermissions.DonationsView;
         public const string DonationsManage = SystemPermissions.DonationsManage;
 
+        // --- Documents library ---
+        public const string DocumentsView = SystemPermissions.DocumentsView;
+        public const string DocumentsManage = SystemPermissions.DocumentsManage;
+
         // --- Dashboard & Audit Operations ---
         public const string DashboardSummaryView = "dashboard.summary.view";
         public const string AuditLogsView = SystemPermissions.AuditLogsView;
@@ -215,6 +219,7 @@ namespace Core.Authorization
             new AccessPathMigrationEntry("HTTP-INVENTORY", "HTTP Controller", "InventoryController & InventoryControlController (Items, Categories, Measurements, ICJ)", InventoryItemsView, AccessMigrationStatus.Migrated, "Inventory"),
             new AccessPathMigrationEntry("HTTP-DONATIONS", "HTTP Controller", "DonorsController & DonationsController", DonationsView, AccessMigrationStatus.Migrated, "Donations"),
             new AccessPathMigrationEntry("HTTP-TAX", "HTTP Controller", "TaxController & AdministrationController.Taxes", AdminTaxesManage, AccessMigrationStatus.Migrated, "Tax Reference Configuration"),
+            new AccessPathMigrationEntry("HTTP-DOCUMENTS", "HTTP Controller", "DocumentsController (Upload, List, Metadata, Links, Archive, Trash, Restore)", DocumentsView, AccessMigrationStatus.Migrated, "Documents Library"),
             new AccessPathMigrationEntry("HTTP-AUDIT-PLATFORM", "HTTP Controller", "AdministrationController (AuditLogs, Roles)", AuditLogsView, AccessMigrationStatus.Migrated, "Audit & Platform Admin"),
             new AccessPathMigrationEntry("MCP-FINANCIAL-TOOLS", "MCP Tool Adapter", "FinancialMcpTools (GetChartOfAccounts, GetTrialBalance, GetBalanceSheet, GetIncomeStatement, GetGeneralLedgerDetail, GetCustomerAging, GetVendorBalances, GetFiscalYearStatus)", FinancialsAccountsView, AccessMigrationStatus.Migrated, "MCP Server"),
             new AccessPathMigrationEntry("MOD-EMAIL", "Commercial Module", "EmailSettingsEndpoints / InvoiceEmailEndpoint / EmailAuthorization / CustomEmailDomainReconciliationRunner", WorkspaceEmailSettingsManage, AccessMigrationStatus.Migrated, "Commercial Email Module"),
@@ -726,6 +731,17 @@ namespace Core.Authorization
                         SystemPermissions.BankingAccountsView
                     },
                     description: "View domain-scoped dashboard summary metrics."),
+                // --- Documents library (every plan; no module requirement) ---
+                Functional(
+                    DocumentsView,
+                    "POL-DOCS-VIEW",
+                    permissionsAll: new[] { SystemPermissions.DocumentsView },
+                    description: "View the workspace documents library."),
+                Functional(
+                    DocumentsManage,
+                    "POL-DOCS-MANAGE",
+                    permissionsAll: new[] { SystemPermissions.DocumentsManage },
+                    description: "Upload, edit, archive, trash, restore, or permanently delete library documents."),
                 Functional(
                     AuditLogsView,
                     "POL-AUDIT-LOGS-VIEW",

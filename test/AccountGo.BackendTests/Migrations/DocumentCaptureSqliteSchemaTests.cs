@@ -45,10 +45,24 @@ public sealed class DocumentCaptureSqliteSchemaTests
             "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'IX_DocumentCaptureAttempts_ReservedAt';"), StringComparison.Ordinal);
         Assert.Equal(0, ScalarInt(connection,
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'IX_DocumentCaptures_CompanyId_Status_ExpiresAt';"));
-        Assert.All(new[] { "DocumentCaptures", "DocumentCaptureBlobs", "DocumentCaptureAttempts", "DocumentCaptureLinks", "DocumentCaptureAiMappings" }, table =>
+        Assert.All(new[] { "DocumentCaptures", "DocumentCaptureBlobs", "DocumentCaptureAttempts", "DocumentCaptureLinks", "DocumentCaptureAiMappings", "DocumentLibraryRevisions" }, table =>
             Assert.DoesNotContain(table, SqliteSchemaUpgrader.TenantTables));
         Assert.Equal(1, ScalarInt(connection,
             "SELECT COUNT(*) FROM pragma_table_info('DocumentCaptureLinks') WHERE name = 'TaxTreatment' AND \"notnull\" = 0;"));
+        Assert.Equal(1, ScalarInt(connection,
+            "SELECT COUNT(*) FROM pragma_table_info('DocumentCaptureLinks') WHERE name = 'Role' AND \"notnull\" = 1;"));
+        Assert.Equal(0, ScalarInt(connection,
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'IX_DocumentCaptureLinks_CompanyId_CaptureId';"));
+        Assert.Equal(1, ScalarInt(connection,
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'IX_DocumentCaptureLinks_Company_Capture_Target';"));
+        Assert.Equal(1, ScalarInt(connection,
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'IX_DocumentCaptureLinks_SourceRole';"));
+        Assert.Equal(1, ScalarInt(connection,
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'IX_DocumentCaptures_Filed';"));
+        Assert.Equal(1, ScalarInt(connection,
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'DocumentLibraryRevisions';"));
+        Assert.Equal(1, ScalarInt(connection,
+            "SELECT COUNT(*) FROM \"__AccountGoSchemaMarkers\" WHERE \"Key\" = 'documents-library-v1' AND \"Status\" = 'applied';"));
     }
 
     [Fact]

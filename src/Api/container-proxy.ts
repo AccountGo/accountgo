@@ -161,6 +161,11 @@ export const MAX_DOCUMENT_CAPTURE_FILE_BYTES = 8 * 1024 * 1024;
 export const MAX_DOCUMENT_CAPTURE_REQUEST_BYTES = MAX_DOCUMENT_CAPTURE_FILE_BYTES + 64 * 1024;
 export const MAX_DOCUMENT_CAPTURE_ACCEPT_BYTES = 256 * 1024;
 export const MAX_DOCUMENT_CAPTURE_LINK_BYTES = 4 * 1024;
+// Stored documents (library): the largest file any plan allows plus bounded multipart overhead (title, notes, link fields).
+export const MAX_DOCUMENT_LIBRARY_FILE_BYTES = 15 * 1024 * 1024;
+export const MAX_DOCUMENT_LIBRARY_UPLOAD_BYTES = MAX_DOCUMENT_LIBRARY_FILE_BYTES + 256 * 1024;
+// Every other write under /api/documents carries small JSON (metadata, link, export request).
+export const MAX_DOCUMENT_LIBRARY_ACTION_BYTES = 4 * 1024;
 // An 8,000-character message can expand to 48 KiB when JSON escapes each UTF-16 code unit.
 export const MAX_ASSISTANT_RUN_STREAM_BODY_BYTES = 64 * 1024;
 
@@ -197,6 +202,11 @@ function canonicalSegments(pathname: string): string[] {
 export function isDocumentCaptureUploadRoute(pathname: string): boolean {
   const segments = canonicalSegments(pathname);
   return segments.length === 2 && segments[0] === "api" && segments[1] === "document-captures";
+}
+
+export function isDocumentLibraryUploadRoute(pathname: string): boolean {
+  const segments = canonicalSegments(pathname);
+  return segments.length === 2 && segments[0] === "api" && segments[1] === "documents";
 }
 
 export function isDocumentCaptureCapabilitiesRoute(pathname: string): boolean {
@@ -254,6 +264,10 @@ export function maxRequestBodyBytesForRoute(pathname: string, method?: string): 
     const action = segments.at(-1);
     if (action === "accept") return MAX_DOCUMENT_CAPTURE_ACCEPT_BYTES;
     if (action === "link" || action === "links" || action === "reject") return MAX_DOCUMENT_CAPTURE_LINK_BYTES;
+  }
+  if (segments[0] === "api" && segments[1] === "documents") {
+    if (m === "POST" && isDocumentLibraryUploadRoute(pathname)) return MAX_DOCUMENT_LIBRARY_UPLOAD_BYTES;
+    return MAX_DOCUMENT_LIBRARY_ACTION_BYTES;
   }
   if (m === "POST" && segments.length === 4 && segments[0] === "api" && segments[1] === "ai"
       && segments[2] === "chat" && segments[3] === "run-stream") {

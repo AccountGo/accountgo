@@ -23,7 +23,7 @@ namespace Api.Data.Postgres
         // Bookkeeping tables of the D1/SQLite path; EF owns __EFMigrationsHistory on the Postgres side.
         private static readonly HashSet<string> SkippedTables = new(StringComparer.OrdinalIgnoreCase)
         {
-            "d1_migrations", "__SchemaVersion", "__EFMigrationsHistory",
+            "d1_migrations", "__SchemaVersion", "__AccountGoSchemaMarkers", "__EFMigrationsHistory",
         };
 
         private sealed record TargetColumn(string Name, string DataType);

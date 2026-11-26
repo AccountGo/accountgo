@@ -272,6 +272,17 @@ public static class AccountGoApp
             serviceProvider.GetRequiredService<Api.DocumentCaptures.DocumentCaptureAdmissionLock>());
         builder.Services.AddScoped<Api.DocumentCaptures.DocumentCaptureService>();
         builder.Services.AddScoped<Api.DocumentCaptures.DocumentCaptureRetentionService>();
+        builder.Services.AddScoped<Api.DocumentCaptures.DocumentLibraryService>();
+        builder.Services.AddSingleton<Api.DocumentCaptures.IDocumentExportLease, Api.DocumentCaptures.ScopedDocumentExportLease>();
+        builder.Services.AddScoped<Api.DocumentCaptures.DocumentExportService>();
+        builder.Services.AddOptions<Api.DocumentCaptures.DocumentsOptions>()
+            .Bind(builder.Configuration.GetSection(Api.DocumentCaptures.DocumentsOptions.SectionName))
+            .Validate(options =>
+            {
+                Api.DocumentCaptures.DocumentsOptions.Validate(options);
+                return true;
+            }, "Documents options are invalid.")
+            .ValidateOnStart();
         builder.Services.AddHostedService<Api.DocumentCaptures.DocumentCapturePdfWarmup>();
         builder.Services.AddHostedService<Api.DocumentCaptures.DocumentCaptureRetentionWorker>();
         builder.Services.AddHostedService<Api.Service.AuditRetentionWorker>();
@@ -910,7 +921,7 @@ public static class AccountGoApp
         }
 
         // Apply SQLite schema upgrader (multi-tenancy columns, tables, indexes, security tables)
-        Api.Data.Schema.SqliteSchemaUpgrader.Upgrade(apiDbContext.Database.GetDbConnection());
+        Api.Data.Schema.SqliteSchemaUpgrader.Upgrade(apiDbContext.Database.GetDbConnection(), logger);
         schemaSw.Stop();
 
         var seedStatus = "skipped";
