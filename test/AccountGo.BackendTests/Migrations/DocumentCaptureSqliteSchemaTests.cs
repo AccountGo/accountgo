@@ -62,7 +62,7 @@ public sealed class DocumentCaptureSqliteSchemaTests
         Assert.Equal(1, ScalarInt(connection,
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'DocumentLibraryRevisions';"));
         Assert.Equal(1, ScalarInt(connection,
-            "SELECT COUNT(*) FROM \"__AccountGoSchemaMarkers\" WHERE \"Key\" = 'documents-library-v1';"));
+            "SELECT COUNT(*) FROM \"__AccountGoSchemaMarkers\" WHERE \"Key\" = 'documents-library-v1' AND \"Status\" = 'applied';"));
     }
 
     [Fact]

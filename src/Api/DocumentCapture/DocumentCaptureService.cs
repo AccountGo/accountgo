@@ -351,8 +351,6 @@ public sealed class DocumentCaptureService(
     public async Task<DocumentCaptureView> GetAsync(int captureId, CancellationToken cancellationToken)
     {
         var companyId = tenant.RequireCompanyId();
-        if (!await IsCompanyLiveAsync(companyId, cancellationToken).ConfigureAwait(false))
-            throw new DocumentCaptureServiceException(404, "DOCUMENT_NOT_FOUND");
         var capture = await db.DocumentCaptures.AsNoTracking()
             .SingleOrDefaultAsync(c => c.CompanyId == companyId && c.Id == captureId
                 && db.Companies.IgnoreQueryFilters().Any(company => company.Id == companyId && company.DeletedAt == null), cancellationToken)
@@ -363,11 +361,9 @@ public sealed class DocumentCaptureService(
         var access = DocumentCaptureAccessPolicy.AuthorizeRead(entitlements, companyId, tenant.Permissions, capture.Kind);
         if (access != DocumentCaptureAccessFailure.None)
             throw AccessFailure(access, capture.Kind, companyId);
-        await EnsureLinkedTargetReadAsync(capture, companyId, cancellationToken).ConfigureAwait(false);
+        var (link, links) = await LoadAuthorizedLinksForCaptureAsync(capture.Id, companyId, cancellationToken).ConfigureAwait(false);
         var bytesAvailable = await db.DocumentCaptureBlobs.AsNoTracking()
             .AnyAsync(b => b.CompanyId == companyId && b.CaptureId == captureId, cancellationToken).ConfigureAwait(false);
-        var link = await GetLinkViewAsync(capture, companyId, cancellationToken).ConfigureAwait(false);
-        var links = await GetReadableLinkViewsAsync(capture.Id, companyId, cancellationToken).ConfigureAwait(false);
         var canWrite = DocumentCaptureAccessPolicy.AuthorizeNew(entitlements, companyId, tenant.Permissions, capture.Kind)
             == DocumentCaptureAccessFailure.None;
         var aiMapping = await GetAiMappingViewAsync(capture, companyId, cancellationToken).ConfigureAwait(false);
@@ -494,6 +490,9 @@ public sealed class DocumentCaptureService(
             return await GetAsync(captureId, cancellationToken).ConfigureAwait(false);
         }
 
+        // IX_DocumentCaptureLinks_Company_Capture_Target allows at most one link row per (CompanyId, CaptureId, TargetType, TargetId).
+        // Scan kinds only enter links via this source flow (the S-A2 attach flow rejects scan kinds), so an existing non-source
+        // link on the same target is rejected explicitly with 409 rather than silently rewriting link roles.
         if (await db.DocumentCaptureLinks.IgnoreQueryFilters().AsNoTracking()
                 .AnyAsync(link => link.CompanyId == companyId && link.CaptureId == captureId
                     && link.TargetType == targetType && link.TargetId == targetId, cancellationToken)
@@ -1029,35 +1028,51 @@ public sealed class DocumentCaptureService(
         return string.IsNullOrWhiteSpace(targetPublicId) ? null : targetPublicId;
     }
 
-    private async Task<DocumentCaptureLinkView?> GetLinkViewAsync(DocumentCapture capture, int companyId, CancellationToken cancellationToken)
-    {
-        var link = await db.DocumentCaptureLinks.AsNoTracking()
-            .SingleOrDefaultAsync(item => item.CompanyId == companyId && item.CaptureId == capture.Id
-                && item.Role == DocumentCaptureLinkRoles.Source, cancellationToken)
-            .ConfigureAwait(false);
-        if (link is null)
-            return null;
-
-        var targetPublicId = await ResolveReadableTargetPublicIdAsync(companyId, link.TargetType, link.TargetId, cancellationToken)
-            .ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(targetPublicId))
-            throw new DocumentCaptureServiceException(404, "DOCUMENT_NOT_FOUND");
-        return new DocumentCaptureLinkView(
-            link.TargetType,
-            targetPublicId,
-            DateTime.SpecifyKind(link.LinkedAt, DateTimeKind.Utc),
-            link.TaxTreatment,
-            link.Role);
-    }
-
-    private async Task<IReadOnlyList<DocumentCaptureLinkView>> GetReadableLinkViewsAsync(
+    private async Task<(DocumentCaptureLinkView? SourceLink, IReadOnlyList<DocumentCaptureLinkView> ReadableLinks)> LoadAuthorizedLinksForCaptureAsync(
         int captureId,
         int companyId,
         CancellationToken cancellationToken)
     {
-        var byCapture = await GetReadableLinkViewsByCaptureAsync([captureId], companyId, knownTarget: null, cancellationToken)
+        var rawLinks = await db.DocumentCaptureLinks.AsNoTracking()
+            .Where(item => item.CompanyId == companyId && item.CaptureId == captureId)
+            .OrderBy(item => item.LinkedAt)
+            .ThenBy(item => item.Id)
+            .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
-        return byCapture.TryGetValue(captureId, out var views) ? views : Array.Empty<DocumentCaptureLinkView>();
+        if (rawLinks.Count == 0)
+            return (null, Array.Empty<DocumentCaptureLinkView>());
+
+        var resolvedPublicIds = await ResolveReadableTargetPublicIdsAsync(rawLinks, companyId, knownTarget: null, cancellationToken)
+            .ConfigureAwait(false);
+
+        var sourceRow = rawLinks.SingleOrDefault(item => item.Role == DocumentCaptureLinkRoles.Source);
+        DocumentCaptureLinkView? sourceView = null;
+        if (sourceRow is not null)
+        {
+            if (!resolvedPublicIds.TryGetValue((sourceRow.TargetType, sourceRow.TargetId), out var sourcePublicId))
+                throw new DocumentCaptureServiceException(404, "DOCUMENT_NOT_FOUND");
+            sourceView = new DocumentCaptureLinkView(
+                sourceRow.TargetType,
+                sourcePublicId,
+                DateTime.SpecifyKind(sourceRow.LinkedAt, DateTimeKind.Utc),
+                sourceRow.TaxTreatment,
+                sourceRow.Role);
+        }
+
+        var readableViews = new List<DocumentCaptureLinkView>(rawLinks.Count);
+        foreach (var item in rawLinks)
+        {
+            if (!resolvedPublicIds.TryGetValue((item.TargetType, item.TargetId), out var targetPublicId))
+                continue;
+            readableViews.Add(new DocumentCaptureLinkView(
+                item.TargetType,
+                targetPublicId,
+                DateTime.SpecifyKind(item.LinkedAt, DateTimeKind.Utc),
+                item.Role == DocumentCaptureLinkRoles.Source ? item.TaxTreatment : null,
+                item.Role));
+        }
+
+        return (sourceView, readableViews);
     }
 
     private async Task<Dictionary<int, IReadOnlyList<DocumentCaptureLinkView>>> GetReadableLinkViewsByCaptureAsync(
@@ -1079,6 +1094,35 @@ public sealed class DocumentCaptureService(
         if (rawLinks.Count == 0)
             return result;
 
+        var resolvedPublicIds = await ResolveReadableTargetPublicIdsAsync(rawLinks, companyId, knownTarget, cancellationToken)
+            .ConfigureAwait(false);
+
+        foreach (var captureGroup in rawLinks.GroupBy(item => item.CaptureId))
+        {
+            var views = new List<DocumentCaptureLinkView>();
+            foreach (var item in captureGroup)
+            {
+                if (!resolvedPublicIds.TryGetValue((item.TargetType, item.TargetId), out var targetPublicId))
+                    continue;
+                views.Add(new DocumentCaptureLinkView(
+                    item.TargetType,
+                    targetPublicId,
+                    DateTime.SpecifyKind(item.LinkedAt, DateTimeKind.Utc),
+                    item.Role == DocumentCaptureLinkRoles.Source ? item.TaxTreatment : null,
+                    item.Role));
+            }
+            result[captureGroup.Key] = views;
+        }
+
+        return result;
+    }
+
+    private async Task<Dictionary<(string TargetType, int TargetId), string>> ResolveReadableTargetPublicIdsAsync(
+        IReadOnlyCollection<DocumentCaptureLink> rawLinks,
+        int companyId,
+        (string TargetType, int TargetId, string PublicId)? knownTarget,
+        CancellationToken cancellationToken)
+    {
         var resolvedPublicIds = new Dictionary<(string TargetType, int TargetId), string>();
         if (knownTarget is { } known && !string.IsNullOrWhiteSpace(known.PublicId))
             resolvedPublicIds[(known.TargetType, known.TargetId)] = known.PublicId;
@@ -1141,24 +1185,7 @@ public sealed class DocumentCaptureService(
             }
         }
 
-        foreach (var captureGroup in rawLinks.GroupBy(item => item.CaptureId))
-        {
-            var views = new List<DocumentCaptureLinkView>();
-            foreach (var item in captureGroup)
-            {
-                if (!resolvedPublicIds.TryGetValue((item.TargetType, item.TargetId), out var targetPublicId))
-                    continue;
-                views.Add(new DocumentCaptureLinkView(
-                    item.TargetType,
-                    targetPublicId,
-                    DateTime.SpecifyKind(item.LinkedAt, DateTimeKind.Utc),
-                    item.Role == DocumentCaptureLinkRoles.Source ? item.TaxTreatment : null,
-                    item.Role));
-            }
-            result[captureGroup.Key] = views;
-        }
-
-        return result;
+        return resolvedPublicIds;
     }
 
     private void EnsureCreatorAccess(DocumentCapture capture)

@@ -163,6 +163,110 @@ public sealed class DocumentsLibraryFoundationSliceTests
     }
 
     [Fact]
+    public async Task MatchParty_EnforcesSourceTargetReadabilityAndIgnoresUnreadableAttachmentLinks()
+    {
+        await using var harness = await SliceHarness.CreateAsync();
+
+        var vendor = new Vendor
+        {
+            CompanyId = harness.CompanyId,
+            No = "VEND-1",
+            Party = new Party { CompanyId = harness.CompanyId, Name = "Fixture Vendor", PartyType = PartyTypes.Vendor }
+        };
+        harness.Db.Vendors.Add(vendor);
+        await harness.Db.SaveChangesAsync();
+
+        var billA = harness.SeedBill("BILL-MP-A", 100.00m);
+        var invoiceC = harness.SeedSalesInvoice("INV-MP-C", 250.00m);
+        var invoiceD = harness.SeedSalesInvoice("INV-MP-D", 300.00m);
+
+        var uploaded = await harness.Service.UploadAsync("purchase-invoice", 1, "image/png", CreatePng(11), "mp-r3", CancellationToken.None);
+        var captureId = await harness.Db.DocumentCaptures.Where(c => c.PublicId == uploaded.Id).Select(c => c.Id).SingleAsync();
+        await harness.Service.AcceptAsync(captureId, """{"date":"2026-11-20","vendorName":"Fixture Vendor"}""", CancellationToken.None);
+
+        // Link source to billA and add an unreadable attachment link to invoiceC
+        await harness.Service.LinkAsync(captureId, "bill", billA.PublicId, CancellationToken.None);
+        harness.Db.DocumentCaptureLinks.Add(new DocumentCaptureLink
+        {
+            CompanyId = harness.CompanyId,
+            CaptureId = captureId,
+            TargetType = "invoice",
+            TargetId = invoiceC.Id,
+            Role = DocumentCaptureLinkRoles.Attachment,
+            LinkedBy = "actor-1",
+            LinkedAt = DateTime.UtcNow.AddSeconds(5)
+        });
+        await harness.Db.SaveChangesAsync();
+        harness.Db.ChangeTracker.Clear();
+
+        // User with bill-capture + vendor rights (no SalesInvoicesView) can still match-party when source billA is readable
+        harness.Tenant.SetPermissions(
+            SystemPermissions.PurchasesBillsView,
+            SystemPermissions.PurchasesBillsCreate,
+            SystemPermissions.PurchasesVendorsView);
+        var matchesWithReadableSource = await harness.Service.MatchPartyAsync("vendor", captureId, CancellationToken.None);
+        Assert.NotEmpty(matchesWithReadableSource);
+
+        // User has bill-capture rights (PurchasesBillsView + PurchasesVendorsView), but the source target is an invoice
+        // they lack view permission on -> 404 DOCUMENT_NOT_FOUND (R3: kind policy AND source target readable)
+        await harness.Db.DocumentCaptureLinks
+            .Where(l => l.CompanyId == harness.CompanyId && l.CaptureId == captureId && l.Role == DocumentCaptureLinkRoles.Source)
+            .ExecuteUpdateAsync(s => s.SetProperty(l => l.TargetType, "invoice").SetProperty(l => l.TargetId, invoiceD.Id));
+        var missingInvoicePerm = await Assert.ThrowsAsync<DocumentCaptureServiceException>(() =>
+            harness.Service.MatchPartyAsync("vendor", captureId, CancellationToken.None));
+        Assert.Equal(404, missingInvoicePerm.StatusCode);
+        Assert.Equal("DOCUMENT_NOT_FOUND", missingInvoicePerm.ErrorCode);
+
+        // Likewise, if the source link points to a bill that is no longer readable/present in the workspace -> 404 DOCUMENT_NOT_FOUND
+        await harness.Db.DocumentCaptureLinks
+            .Where(l => l.CompanyId == harness.CompanyId && l.CaptureId == captureId && l.Role == DocumentCaptureLinkRoles.Source)
+            .ExecuteUpdateAsync(s => s.SetProperty(l => l.TargetType, "bill").SetProperty(l => l.TargetId, 999_999));
+        var missingBill = await Assert.ThrowsAsync<DocumentCaptureServiceException>(() =>
+            harness.Service.MatchPartyAsync("vendor", captureId, CancellationToken.None));
+        Assert.Equal(404, missingBill.StatusCode);
+        Assert.Equal("DOCUMENT_NOT_FOUND", missingBill.ErrorCode);
+    }
+
+    [Fact]
+    public async Task LinkAsync_WhenNonSourceLinkExistsForSameTarget_Returns409Conflict_AndAllowsSourceLinkToDifferentTarget()
+    {
+        await using var harness = await SliceHarness.CreateAsync();
+        var billSame = harness.SeedBill("BILL-SAME", 75.00m);
+        var billOther = harness.SeedBill("BILL-OTHER", 75.00m);
+
+        var uploaded = await harness.Service.UploadAsync("purchase-invoice", 1, "image/png", CreatePng(12), "link-a2", CancellationToken.None);
+        var captureId = await harness.Db.DocumentCaptures.Where(c => c.PublicId == uploaded.Id).Select(c => c.Id).SingleAsync();
+        await harness.Service.AcceptAsync(captureId, """{"date":"2026-11-20","vendorName":"Conflict Vendor"}""", CancellationToken.None);
+
+        // Pre-seed an attachment link to billSame (no source link exists yet)
+        harness.Db.DocumentCaptureLinks.Add(new DocumentCaptureLink
+        {
+            CompanyId = harness.CompanyId,
+            CaptureId = captureId,
+            TargetType = "bill",
+            TargetId = billSame.Id,
+            Role = DocumentCaptureLinkRoles.Attachment,
+            LinkedBy = "actor-1",
+            LinkedAt = DateTime.UtcNow
+        });
+        await harness.Db.SaveChangesAsync();
+        harness.Db.ChangeTracker.Clear();
+
+        // Attempting to source-link the capture to billSame returns 409 DOCUMENT_LINK_CONFLICT and keeps the attachment row untouched
+        var sameTargetConflict = await Assert.ThrowsAsync<DocumentCaptureServiceException>(() =>
+            harness.Service.LinkAsync(captureId, "bill", billSame.PublicId, CancellationToken.None));
+        Assert.Equal(409, sameTargetConflict.StatusCode);
+        Assert.Equal("DOCUMENT_LINK_CONFLICT", sameTargetConflict.ErrorCode);
+        Assert.Equal(0L, await DocumentRevision.GetCurrentAsync(harness.Db, harness.CompanyId));
+
+        // Source-linking to a different target (billOther) succeeds, files the capture, and bumps revision
+        var linked = await harness.Service.LinkAsync(captureId, "bill", billOther.PublicId, CancellationToken.None);
+        Assert.Equal(billOther.PublicId, linked.Link?.TargetId);
+        Assert.Equal(2, linked.Links.Count);
+        Assert.Equal(1L, await DocumentRevision.GetCurrentAsync(harness.Db, harness.CompanyId));
+    }
+
+    [Fact]
     public async Task Retention_NeverPurgesFiledCapture_AndBarrierRaceBetweenCandidateSelectionAndFilingPreservesBytes()
     {
         await using var harness = await SliceHarness.CreateAsync();

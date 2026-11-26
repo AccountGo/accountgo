@@ -850,6 +850,70 @@ public sealed class DocumentCaptureServiceTests
     }
 
     [Fact]
+    public async Task Get_UsesBoundedBatchQueriesAcrossMultipleReadableLinks()
+    {
+        var queryCounter = new QueryCountingInterceptor();
+        using var harness = new Harness(enabled: true, interceptor: queryCounter);
+        var bills = Enumerable.Range(1, 3)
+            .Select(i => new PurchaseInvoiceHeader
+            {
+                CompanyId = 1,
+                PublicId = $"bill_get_{i}",
+                Date = new DateTime(2026, 11, 20),
+                VendorInvoiceNo = $"GET-{i}"
+            })
+            .ToArray();
+        harness.Db.PurchaseInvoiceHeaders.AddRange(bills);
+
+        var customer = new Core.Domain.Sales.Customer
+        {
+            CompanyId = 1,
+            No = "CUST-GET",
+            Party = new Party { CompanyId = 1, Name = "Get Customer", PartyType = PartyTypes.Customer }
+        };
+        harness.Db.Customers.Add(customer);
+        await harness.Db.SaveChangesAsync();
+
+        var invoices = Enumerable.Range(1, 3)
+            .Select(i => new Core.Domain.Sales.SalesInvoiceHeader
+            {
+                CompanyId = 1,
+                CustomerId = customer.Id,
+                PublicId = $"inv_get_{i}",
+                No = $"INV-GET-{i}",
+                Date = new DateTime(2026, 11, 20),
+                Status = SalesInvoiceStatus.Draft
+            })
+            .ToArray();
+        harness.Db.SalesInvoiceHeaders.AddRange(invoices);
+        await harness.Db.SaveChangesAsync();
+
+        harness.PublicIds.Setup(ids => ids.ResolveAsync("bill_get_1", "bill", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(PublicIdLookupResult.Success(bills[0].Id));
+
+        var uploaded = await harness.Service.UploadAsync("purchase-invoice", 1, "image/png", CreatePng(55), "get-bounded", CancellationToken.None);
+        var captureId = await harness.Db.DocumentCaptures.Where(c => c.PublicId == uploaded.Id).Select(c => c.Id).SingleAsync();
+        await harness.Service.AcceptAsync(captureId, "{\"date\":\"2026-11-20\",\"vendorName\":\"Bounded\"}", CancellationToken.None);
+        await harness.Service.LinkAsync(captureId, "bill", "bill_get_1", CancellationToken.None);
+
+        harness.Db.DocumentCaptureLinks.AddRange(
+            new DocumentCaptureLink { CompanyId = 1, CaptureId = captureId, TargetType = "bill", TargetId = bills[1].Id, Role = DocumentCaptureLinkRoles.Attachment, LinkedBy = "creator-1", LinkedAt = DateTime.UtcNow.AddSeconds(1) },
+            new DocumentCaptureLink { CompanyId = 1, CaptureId = captureId, TargetType = "bill", TargetId = bills[2].Id, Role = DocumentCaptureLinkRoles.Attachment, LinkedBy = "creator-1", LinkedAt = DateTime.UtcNow.AddSeconds(2) },
+            new DocumentCaptureLink { CompanyId = 1, CaptureId = captureId, TargetType = "invoice", TargetId = invoices[0].Id, Role = DocumentCaptureLinkRoles.Attachment, LinkedBy = "creator-1", LinkedAt = DateTime.UtcNow.AddSeconds(3) },
+            new DocumentCaptureLink { CompanyId = 1, CaptureId = captureId, TargetType = "invoice", TargetId = invoices[1].Id, Role = DocumentCaptureLinkRoles.Attachment, LinkedBy = "creator-1", LinkedAt = DateTime.UtcNow.AddSeconds(4) },
+            new DocumentCaptureLink { CompanyId = 1, CaptureId = captureId, TargetType = "invoice", TargetId = invoices[2].Id, Role = DocumentCaptureLinkRoles.Attachment, LinkedBy = "creator-1", LinkedAt = DateTime.UtcNow.AddSeconds(5) });
+        await harness.Db.SaveChangesAsync();
+        harness.Db.ChangeTracker.Clear();
+        queryCounter.Reset();
+
+        var view = await harness.Service.GetAsync(captureId, CancellationToken.None);
+
+        Assert.Equal("bill_get_1", view.Link?.TargetId);
+        Assert.Equal(6, view.Links.Count);
+        Assert.InRange(queryCounter.SelectCount, 1, 6);
+    }
+
+    [Fact]
     public async Task Upload_ForceBypassesContentDedupeButStillReservesAnAttempt()
     {
         using var harness = new Harness(enabled: true);

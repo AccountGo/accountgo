@@ -886,7 +886,8 @@ WHERE ""DisabledModulesJson"" IS NULL
 
         public const string SchemaMarkersTableName = "__AccountGoSchemaMarkers";
         public const string DocumentsLibraryMarkerKey = "documents-library-v1";
-        public const string DocumentsLibraryMigrationSuffix = "_DocumentsLibraryFoundation";
+        public const string MarkerStatusApplied = "applied";
+        public const string MarkerStatusRolledBack = "rolled-back";
 
         private static void EnsureDocumentCaptureSchema(DbConnection connection, ILogger? logger = null)
         {
@@ -895,15 +896,14 @@ WHERE ""DisabledModulesJson"" IS NULL
                 markerTableCmd.CommandText = SchemaMarkersTableSql;
                 markerTableCmd.ExecuteNonQuery();
             }
+            AddColumnIfMissing(connection, SchemaMarkersTableName, "Status", "TEXT NOT NULL DEFAULT 'applied'");
 
-            bool markerPresent = SchemaMarkerExists(connection, DocumentsLibraryMarkerKey);
-            if (markerPresent
-                && TableExists(connection, "__EFMigrationsHistory")
-                && !EfMigrationApplied(connection, DocumentsLibraryMigrationSuffix))
+            string? markerStatus = GetSchemaMarkerStatus(connection, DocumentsLibraryMarkerKey);
+            if (string.Equals(markerStatus, MarkerStatusRolledBack, StringComparison.OrdinalIgnoreCase))
             {
                 const string message =
-                    "Refusing to start: SQLite schema marker 'documents-library-v1' is present, " +
-                    "but EF migration history does not contain DocumentsLibraryFoundation (migration was rolled back).";
+                    "Refusing to start: SQLite schema marker 'documents-library-v1' has status 'rolled-back'. " +
+                    "Migrate the database up (DocumentsLibraryFoundation) or run the older pre-documents-library build.";
                 logger?.LogError(message);
                 throw new InvalidOperationException(message);
             }
@@ -976,7 +976,7 @@ WHERE ""DisabledModulesJson"" IS NULL
                 command.ExecuteNonQuery();
             }
 
-            if (!markerPresent)
+            if (markerStatus is null)
             {
                 using (var backfillCmd = connection.CreateCommand())
                 {
@@ -987,8 +987,11 @@ WHERE ""DisabledModulesJson"" IS NULL
                 using (var writeMarkerCmd = connection.CreateCommand())
                 {
                     writeMarkerCmd.CommandText = @"
-                        INSERT OR IGNORE INTO ""__AccountGoSchemaMarkers"" (""Key"", ""AppliedAt"")
-                        VALUES ($key, $appliedAt);";
+                        INSERT INTO ""__AccountGoSchemaMarkers"" (""Key"", ""AppliedAt"", ""Status"")
+                        VALUES ($key, $appliedAt, 'applied')
+                        ON CONFLICT (""Key"") DO UPDATE
+                        SET ""AppliedAt"" = excluded.""AppliedAt"",
+                            ""Status"" = 'applied';";
                     var keyParam = writeMarkerCmd.CreateParameter();
                     keyParam.ParameterName = "$key";
                     keyParam.Value = DocumentsLibraryMarkerKey;
@@ -1002,32 +1005,28 @@ WHERE ""DisabledModulesJson"" IS NULL
             }
         }
 
-        private static bool SchemaMarkerExists(DbConnection connection, string key)
+        private static string? GetSchemaMarkerStatus(DbConnection connection, string key)
         {
             using var cmd = connection.CreateCommand();
-            cmd.CommandText = @"SELECT COUNT(*) FROM ""__AccountGoSchemaMarkers"" WHERE ""Key"" = $key;";
+            cmd.CommandText = @"SELECT ""Status"" FROM ""__AccountGoSchemaMarkers"" WHERE ""Key"" = $key;";
             var p = cmd.CreateParameter();
             p.ParameterName = "$key";
             p.Value = key;
             cmd.Parameters.Add(p);
-            return Convert.ToInt32(cmd.ExecuteScalar()) > 0;
-        }
-
-        private static bool EfMigrationApplied(DbConnection connection, string migrationSuffix)
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = @"SELECT COUNT(*) FROM ""__EFMigrationsHistory"" WHERE ""MigrationId"" LIKE $pattern;";
-            var p = cmd.CreateParameter();
-            p.ParameterName = "$pattern";
-            p.Value = "%" + migrationSuffix;
-            cmd.Parameters.Add(p);
-            return Convert.ToInt32(cmd.ExecuteScalar()) > 0;
+            var raw = cmd.ExecuteScalar();
+            if (raw is null)
+                return null;
+            if (raw == DBNull.Value)
+                return MarkerStatusApplied;
+            var text = Convert.ToString(raw)?.Trim();
+            return string.IsNullOrEmpty(text) ? MarkerStatusApplied : text;
         }
 
         private const string SchemaMarkersTableSql = @"
             CREATE TABLE IF NOT EXISTS ""__AccountGoSchemaMarkers"" (
                 ""Key"" TEXT NOT NULL PRIMARY KEY,
-                ""AppliedAt"" TEXT NOT NULL
+                ""AppliedAt"" TEXT NOT NULL,
+                ""Status"" TEXT NOT NULL DEFAULT 'applied'
             );";
 
         private const string DocumentCaptureFilingBackfillSql = @"

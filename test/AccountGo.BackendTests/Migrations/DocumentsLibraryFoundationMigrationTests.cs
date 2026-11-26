@@ -204,7 +204,7 @@ public sealed class DocumentsLibraryFoundationMigrationTests
     }
 
     [Fact]
-    public async Task RealHostStartup_Sqlite_FreshUpgradeIdempotentRestartAndRolledBackRefusal()
+    public async Task RealHostStartup_Sqlite_FreshUpgradeWithOrWithoutHistoryIdempotentRestartsAndExplicitRollbackLifecycle()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), $"accountgo_sa1_host_{Guid.NewGuid():N}");
         Directory.CreateDirectory(tempDir);
@@ -215,92 +215,197 @@ public sealed class DocumentsLibraryFoundationMigrationTests
             await BootHostAsync(freshDbPath);
             using (var conn = OpenSqlite(freshDbPath))
             {
-                Assert.Equal(1, ScalarInt(conn, "SELECT COUNT(*) FROM \"__AccountGoSchemaMarkers\" WHERE \"Key\" = 'documents-library-v1';"));
+                Assert.Equal("applied", ScalarText(conn, "SELECT \"Status\" FROM \"__AccountGoSchemaMarkers\" WHERE \"Key\" = 'documents-library-v1';"));
                 Assert.Equal(1, ScalarInt(conn, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'DocumentLibraryRevisions';"));
                 Assert.Equal(0, ScalarInt(conn, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'IX_DocumentCaptureLinks_CompanyId_CaptureId';"));
             }
-            // Restart fresh DB twice (marker present, no EF history -> normal start)
+            // Restart fresh DB twice (marker 'applied', no EF history -> normal start)
+            await BootHostAsync(freshDbPath);
             await BootHostAsync(freshDbPath);
 
-            // 2. Upgrade from pre-S-A1 SQLite database with old single links, then restart with multi-links
-            var upgradeDbPath = Path.Combine(tempDir, "upgrade.db");
-            await BootHostAsync(upgradeDbPath);
-            using (var conn = OpenSqlite(upgradeDbPath))
-            {
-                // Revert capture schema to pre-S-A1 state (old unique index, no marker, no new columns, no DocumentLibraryRevisions)
-                ExecuteSqlite(conn, """
-                    PRAGMA foreign_keys = OFF;
-                    DROP TABLE IF EXISTS "__AccountGoSchemaMarkers";
-                    DROP TABLE IF EXISTS "DocumentLibraryRevisions";
-                    DROP INDEX IF EXISTS "IX_DocumentCaptureLinks_Company_Capture_Target";
-                    DROP INDEX IF EXISTS "IX_DocumentCaptureLinks_SourceRole";
-                    DROP INDEX IF EXISTS "IX_DocumentCaptures_Filed";
-                    ALTER TABLE "DocumentCaptureLinks" DROP COLUMN "Role";
-                    ALTER TABLE "DocumentCaptures" DROP COLUMN "FileName";
-                    ALTER TABLE "DocumentCaptures" DROP COLUMN "Title";
-                    ALTER TABLE "DocumentCaptures" DROP COLUMN "Category";
-                    ALTER TABLE "DocumentCaptures" DROP COLUMN "DocumentDate";
-                    ALTER TABLE "DocumentCaptures" DROP COLUMN "Notes";
-                    ALTER TABLE "DocumentCaptures" DROP COLUMN "FiledAt";
-                    ALTER TABLE "DocumentCaptures" DROP COLUMN "FiledBy";
-                    ALTER TABLE "DocumentCaptures" DROP COLUMN "ArchivedAt";
-                    ALTER TABLE "DocumentCaptures" DROP COLUMN "ArchivedBy";
-                    ALTER TABLE "DocumentCaptures" DROP COLUMN "DeletedAt";
-                    ALTER TABLE "DocumentCaptures" DROP COLUMN "DeletedBy";
-                    CREATE UNIQUE INDEX "IX_DocumentCaptureLinks_CompanyId_CaptureId" ON "DocumentCaptureLinks" ("CompanyId", "CaptureId");
-                    INSERT INTO "DocumentCaptures" ("Id", "CompanyId", "PublicId", "Kind", "SchemaVersion", "Status", "SourceHash", "ContentHash", "NormalizationVersion", "ContentType", "ByteCount", "PageCount", "TextPageCount", "RequestFingerprint", "ExtractionGeneration", "CreatedBy", "CreatedAt", "AcceptedBy", "AcceptedAt", "ExpiresAt")
-                    VALUES (901, 1, 'cap_01hostupgrade00000000001', 'purchase-invoice', 1, 'accepted', '1111111111111111111111111111111111111111111111111111111111111111', '2222222222222222222222222222222222222222222222222222222222222222', 'v2', 'image/png', 16, 1, 0, '3333333333333333333333333333333333333333333333333333333333333333', 1, 'upgrader', '2026-11-20T00:00:00', 'approver', '2026-11-20T01:00:00', '2026-11-21T00:00:00');
-                    INSERT INTO "DocumentCaptureBlobs" ("CaptureId", "CompanyId", "DocumentBytes")
-                    VALUES (901, 1, X'01020304');
-                    INSERT INTO "DocumentCaptureLinks" ("CompanyId", "CaptureId", "TargetType", "TargetId", "LinkedBy", "LinkedAt")
-                    VALUES (1, 901, 'bill', 1001, 'approver', '2026-11-20T01:05:00');
-                    """);
-            }
+            // 2. Upgrade from pre-S-A1 SQLite database WITHOUT EF history, then restart with multi-links
+            var noHistoryUpgradePath = Path.Combine(tempDir, "upgrade_no_history.db");
+            await BootHostAsync(noHistoryUpgradePath);
+            RevertToPreFoundationSqliteSchemaAndSeedLegacyCapture(noHistoryUpgradePath, withPreexistingEfHistory: false);
 
-            // Boot real host -> upgrades schema, backfills capture 901, drops old unique index, writes marker
-            await BootHostAsync(upgradeDbPath);
-            using (var conn = OpenSqlite(upgradeDbPath))
+            await BootHostAsync(noHistoryUpgradePath);
+            using (var conn = OpenSqlite(noHistoryUpgradePath))
             {
+                Assert.Equal("applied", ScalarText(conn, "SELECT \"Status\" FROM \"__AccountGoSchemaMarkers\" WHERE \"Key\" = 'documents-library-v1';"));
                 Assert.Equal(0, ScalarInt(conn, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'IX_DocumentCaptureLinks_CompanyId_CaptureId';"));
                 Assert.Equal(1, ScalarInt(conn, "SELECT COUNT(*) FROM \"DocumentCaptures\" WHERE \"Id\" = 901 AND \"FiledAt\" = '2026-11-20T01:00:00' AND \"FiledBy\" = 'approver';"));
                 Assert.Equal(1, ScalarInt(conn, "SELECT COUNT(*) FROM \"DocumentCaptureLinks\" WHERE \"CaptureId\" = 901 AND \"Role\" = 'source';"));
 
-                // Insert a second link (attachment) on capture 901 to verify second restart does not recreate the old index
                 ExecuteSqlite(conn, """
                     INSERT INTO "DocumentCaptureLinks" ("CompanyId", "CaptureId", "TargetType", "TargetId", "Role", "LinkedBy", "LinkedAt")
                     VALUES (1, 901, 'bill', 1002, 'attachment', 'approver', '2026-11-20T02:00:00');
                     """);
             }
+            await BootHostAsync(noHistoryUpgradePath);
 
-            // Second restart with multi-links must succeed cleanly
-            await BootHostAsync(upgradeDbPath);
+            // 3. Upgrade from pre-S-A1 SQLite database WITH preexisting __EFMigrationsHistory (older migrations, NO foundation)
+            //    -> first boot upgrades & backfills without forging __EFMigrationsHistory -> second and third boots succeed!
+            var historyUpgradePath = Path.Combine(tempDir, "upgrade_with_history.db");
+            await BootHostAsync(historyUpgradePath);
+            RevertToPreFoundationSqliteSchemaAndSeedLegacyCapture(historyUpgradePath, withPreexistingEfHistory: true);
 
-            // 3. Rolled-back case (T3): marker is present AND __EFMigrationsHistory exists WITHOUT DocumentsLibraryFoundation -> host refuses to start
-            var rolledBackPath = Path.Combine(tempDir, "rolledback.db");
-            File.Copy(freshDbPath, rolledBackPath);
-            using (var conn = OpenSqlite(rolledBackPath))
+            // First boot: upgrades schema & writes marker 'applied' without touching __EFMigrationsHistory
+            await BootHostAsync(historyUpgradePath);
+            using (var conn = OpenSqlite(historyUpgradePath))
+            {
+                Assert.Equal("applied", ScalarText(conn, "SELECT \"Status\" FROM \"__AccountGoSchemaMarkers\" WHERE \"Key\" = 'documents-library-v1';"));
+                Assert.Equal(1, ScalarInt(conn, "SELECT COUNT(*) FROM \"DocumentCaptures\" WHERE \"Id\" = 901 AND \"FiledAt\" = '2026-11-20T01:00:00' AND \"FiledBy\" = 'approver';"));
+                // Verify __EFMigrationsHistory was NOT forged with DocumentsLibraryFoundation
+                Assert.Equal(1, ScalarInt(conn, "SELECT COUNT(*) FROM \"__EFMigrationsHistory\";"));
+                Assert.Equal(0, ScalarInt(conn, "SELECT COUNT(*) FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" LIKE '%DocumentsLibraryFoundation%';"));
+
+                // Add a second attachment link before subsequent restarts
+                ExecuteSqlite(conn, """
+                    INSERT INTO "DocumentCaptureLinks" ("CompanyId", "CaptureId", "TargetType", "TargetId", "Role", "LinkedBy", "LinkedAt")
+                    VALUES (1, 901, 'bill', 1002, 'attachment', 'approver', '2026-11-20T02:00:00');
+                    """);
+            }
+            // Second and third boots with preexisting EF history + multi-links must succeed cleanly
+            await BootHostAsync(historyUpgradePath);
+            await BootHostAsync(historyUpgradePath);
+
+            // 4. Legacy 2-column marker table (missing Status column) is upgraded via AddColumnIfMissing and treated as 'applied'
+            var twoColMarkerPath = Path.Combine(tempDir, "two_col_marker.db");
+            File.Copy(freshDbPath, twoColMarkerPath);
+            using (var conn = OpenSqlite(twoColMarkerPath))
             {
                 ExecuteSqlite(conn, """
-                    CREATE TABLE "__EFMigrationsHistory" (
-                        "MigrationId" TEXT NOT NULL PRIMARY KEY,
-                        "ProductVersion" TEXT NOT NULL
+                    DROP TABLE "__AccountGoSchemaMarkers";
+                    CREATE TABLE "__AccountGoSchemaMarkers" (
+                        "Key" TEXT NOT NULL PRIMARY KEY,
+                        "AppliedAt" TEXT NOT NULL
                     );
-                    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-                    VALUES ('20261126040444_BillSourceDocumentType', '10.0.0');
+                    INSERT INTO "__AccountGoSchemaMarkers" ("Key", "AppliedAt")
+                    VALUES ('documents-library-v1', '2026-11-26T00:00:00Z');
                     """);
+            }
+            await BootHostAsync(twoColMarkerPath);
+            using (var conn = OpenSqlite(twoColMarkerPath))
+            {
+                Assert.Equal("applied", ScalarText(conn, "SELECT \"Status\" FROM \"__AccountGoSchemaMarkers\" WHERE \"Key\" = 'documents-library-v1';"));
+            }
+
+            // 5. Real EF Down migration on SQLite -> sets Status='rolled-back' -> next host boot refused -> EF Up -> host boot succeeds;
+            //    and real EF Down migration refuses when multi-links exist!
+            var rollbackLifecyclePath = Path.Combine(tempDir, "rollback_lifecycle.db");
+            await BootHostAsync(rollbackLifecyclePath);
+
+            // Run real EF Down migration on rollbackLifecyclePath (only single/zero links exist, so Down succeeds and marks 'rolled-back')
+            ApplyEfMigrationToFile(rollbackLifecyclePath, up: false);
+            using (var conn = OpenSqlite(rollbackLifecyclePath))
+            {
+                Assert.Equal("rolled-back", ScalarText(conn, "SELECT \"Status\" FROM \"__AccountGoSchemaMarkers\" WHERE \"Key\" = 'documents-library-v1';"));
+                Assert.Equal(0, ScalarInt(conn, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'DocumentLibraryRevisions';"));
             }
 
             var logs = new List<string>();
-            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => BootHostAsync(rolledBackPath, logs));
-            Assert.Contains("documents-library-v1", ex.Message, StringComparison.Ordinal);
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => BootHostAsync(rollbackLifecyclePath, logs));
+            Assert.Contains("rolled-back", ex.Message, StringComparison.Ordinal);
             Assert.Contains("DocumentsLibraryFoundation", ex.Message, StringComparison.Ordinal);
-            Assert.Contains(logs, msg => msg.Contains("documents-library-v1", StringComparison.Ordinal));
+            Assert.Contains(logs, msg => msg.Contains("rolled-back", StringComparison.Ordinal));
+
+            // Confirm the refused startup did NOT silently re-upgrade the rolled-back database
+            using (var conn = OpenSqlite(rollbackLifecyclePath))
+            {
+                Assert.Equal("rolled-back", ScalarText(conn, "SELECT \"Status\" FROM \"__AccountGoSchemaMarkers\" WHERE \"Key\" = 'documents-library-v1';"));
+                Assert.Equal(0, ScalarInt(conn, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'DocumentLibraryRevisions';"));
+            }
+
+            // Migrate forward (EF Up) -> updates marker to 'applied' -> host boots cleanly again!
+            ApplyEfMigrationToFile(rollbackLifecyclePath, up: true);
+            using (var conn = OpenSqlite(rollbackLifecyclePath))
+            {
+                Assert.Equal("applied", ScalarText(conn, "SELECT \"Status\" FROM \"__AccountGoSchemaMarkers\" WHERE \"Key\" = 'documents-library-v1';"));
+            }
+            await BootHostAsync(rollbackLifecyclePath);
+
+            // Also verify real EF Down refuses on historyUpgradePath (which holds multi-links on capture 901), keeping marker 'applied'
+            Assert.ThrowsAny<Exception>(() => ApplyEfMigrationToFile(historyUpgradePath, up: false));
+            using (var conn = OpenSqlite(historyUpgradePath))
+            {
+                Assert.Equal("applied", ScalarText(conn, "SELECT \"Status\" FROM \"__AccountGoSchemaMarkers\" WHERE \"Key\" = 'documents-library-v1';"));
+                Assert.Equal(2, ScalarInt(conn, "SELECT COUNT(*) FROM \"DocumentCaptureLinks\" WHERE \"CaptureId\" = 901;"));
+            }
+            await BootHostAsync(historyUpgradePath);
         }
         finally
         {
             SqliteConnection.ClearAllPools();
             try { Directory.Delete(tempDir, recursive: true); } catch { }
         }
+    }
+
+    private static void RevertToPreFoundationSqliteSchemaAndSeedLegacyCapture(string dbPath, bool withPreexistingEfHistory)
+    {
+        using var conn = OpenSqlite(dbPath);
+        ExecuteSqlite(conn, """
+            PRAGMA foreign_keys = OFF;
+            DROP TABLE IF EXISTS "__AccountGoSchemaMarkers";
+            DROP TABLE IF EXISTS "DocumentLibraryRevisions";
+            DROP INDEX IF EXISTS "IX_DocumentCaptureLinks_Company_Capture_Target";
+            DROP INDEX IF EXISTS "IX_DocumentCaptureLinks_SourceRole";
+            DROP INDEX IF EXISTS "IX_DocumentCaptures_Filed";
+            ALTER TABLE "DocumentCaptureLinks" DROP COLUMN "Role";
+            ALTER TABLE "DocumentCaptures" DROP COLUMN "FileName";
+            ALTER TABLE "DocumentCaptures" DROP COLUMN "Title";
+            ALTER TABLE "DocumentCaptures" DROP COLUMN "Category";
+            ALTER TABLE "DocumentCaptures" DROP COLUMN "DocumentDate";
+            ALTER TABLE "DocumentCaptures" DROP COLUMN "Notes";
+            ALTER TABLE "DocumentCaptures" DROP COLUMN "FiledAt";
+            ALTER TABLE "DocumentCaptures" DROP COLUMN "FiledBy";
+            ALTER TABLE "DocumentCaptures" DROP COLUMN "ArchivedAt";
+            ALTER TABLE "DocumentCaptures" DROP COLUMN "ArchivedBy";
+            ALTER TABLE "DocumentCaptures" DROP COLUMN "DeletedAt";
+            ALTER TABLE "DocumentCaptures" DROP COLUMN "DeletedBy";
+            CREATE UNIQUE INDEX "IX_DocumentCaptureLinks_CompanyId_CaptureId" ON "DocumentCaptureLinks" ("CompanyId", "CaptureId");
+            INSERT INTO "DocumentCaptures" ("Id", "CompanyId", "PublicId", "Kind", "SchemaVersion", "Status", "SourceHash", "ContentHash", "NormalizationVersion", "ContentType", "ByteCount", "PageCount", "TextPageCount", "RequestFingerprint", "ExtractionGeneration", "CreatedBy", "CreatedAt", "AcceptedBy", "AcceptedAt", "ExpiresAt")
+            VALUES (901, 1, 'cap_01hostupgrade00000000001', 'purchase-invoice', 1, 'accepted', '1111111111111111111111111111111111111111111111111111111111111111', '2222222222222222222222222222222222222222222222222222222222222222', 'v2', 'image/png', 16, 1, 0, '3333333333333333333333333333333333333333333333333333333333333333', 1, 'upgrader', '2026-11-20T00:00:00', 'approver', '2026-11-20T01:00:00', '2026-11-21T00:00:00');
+            INSERT INTO "DocumentCaptureBlobs" ("CaptureId", "CompanyId", "DocumentBytes")
+            VALUES (901, 1, X'01020304');
+            INSERT INTO "DocumentCaptureLinks" ("CompanyId", "CaptureId", "TargetType", "TargetId", "LinkedBy", "LinkedAt")
+            VALUES (1, 901, 'bill', 1001, 'approver', '2026-11-20T01:05:00');
+            PRAGMA foreign_keys = ON;
+            """);
+
+        if (withPreexistingEfHistory)
+        {
+            ExecuteSqlite(conn, """
+                CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory" (
+                    "MigrationId" TEXT NOT NULL PRIMARY KEY,
+                    "ProductVersion" TEXT NOT NULL
+                );
+                INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+                VALUES ('20261126040444_BillSourceDocumentType', '10.0.0');
+                """);
+        }
+    }
+
+    private static void ApplyEfMigrationToFile(string dbPath, bool up)
+    {
+        using var conn = OpenSqlite(dbPath);
+        using var db = new ApiDbContext(new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(conn).Options)
+        {
+            SuppressTenantSecurityCheck = true
+        };
+        var migration = new Api.Data.Migrations.ApiDb.DocumentsLibraryFoundation
+        {
+            ActiveProvider = db.Database.ProviderName!
+        };
+        var rawTargetModel = up
+            ? migration.TargetModel
+            : new Api.Data.Migrations.ApiDb.BillSourceDocumentType().TargetModel;
+        var targetModel = db.GetService<IModelRuntimeInitializer>()
+            .Initialize(((Microsoft.EntityFrameworkCore.Metadata.IMutableModel)rawTargetModel).FinalizeModel(), designTime: true);
+        var operations = up ? migration.UpOperations : migration.DownOperations;
+        var commands = db.GetService<IMigrationsSqlGenerator>().Generate(operations, targetModel);
+        var executor = db.GetService<IMigrationCommandExecutor>();
+        var relationalConnection = db.GetService<Microsoft.EntityFrameworkCore.Storage.IRelationalConnection>();
+        executor.ExecuteNonQuery(commands, relationalConnection);
     }
 
     private static async Task BootHostAsync(string dbPath, List<string>? capturedErrorLogs = null)
@@ -343,6 +448,13 @@ public sealed class DocumentsLibraryFoundationMigrationTests
         using var cmd = conn.CreateCommand();
         cmd.CommandText = sql;
         return Convert.ToInt32(cmd.ExecuteScalar());
+    }
+
+    private static string ScalarText(SqliteConnection conn, string sql)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        return Convert.ToString(cmd.ExecuteScalar()) ?? string.Empty;
     }
 
     private sealed class ListLoggerProvider(List<string> sink) : ILoggerProvider

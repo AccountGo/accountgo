@@ -149,7 +149,18 @@ namespace Api.Data.Migrations.ApiDb
                       AND EXISTS (
                           SELECT 1 FROM ""DocumentCaptureBlobs"" b
                           WHERE b.""CompanyId"" = ""DocumentCaptures"".""CompanyId""
-                            AND b.""CaptureId"" = ""DocumentCaptures"".""Id"");");
+                            AND b.""CaptureId"" = ""DocumentCaptures"".""Id"");
+
+                    CREATE TABLE IF NOT EXISTS ""__AccountGoSchemaMarkers"" (
+                        ""Key"" TEXT NOT NULL PRIMARY KEY,
+                        ""AppliedAt"" TEXT NOT NULL,
+                        ""Status"" TEXT NOT NULL DEFAULT 'applied'
+                    );
+                    INSERT INTO ""__AccountGoSchemaMarkers"" (""Key"", ""AppliedAt"", ""Status"")
+                    VALUES ('documents-library-v1', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), 'applied')
+                    ON CONFLICT (""Key"") DO UPDATE
+                    SET ""AppliedAt"" = excluded.""AppliedAt"",
+                        ""Status"" = 'applied';");
             }
             else
             {
@@ -215,7 +226,18 @@ namespace Api.Data.Migrations.ApiDb
                     ALTER TABLE ""DocumentCaptures"" DROP COLUMN ""Title"";
                     ALTER TABLE ""DocumentCaptureLinks"" DROP COLUMN ""Role"";
                     CREATE UNIQUE INDEX ""IX_DocumentCaptureLinks_CompanyId_CaptureId""
-                        ON ""DocumentCaptureLinks"" (""CompanyId"", ""CaptureId"");");
+                        ON ""DocumentCaptureLinks"" (""CompanyId"", ""CaptureId"");
+
+                    CREATE TABLE IF NOT EXISTS ""__AccountGoSchemaMarkers"" (
+                        ""Key"" TEXT NOT NULL PRIMARY KEY,
+                        ""AppliedAt"" TEXT NOT NULL,
+                        ""Status"" TEXT NOT NULL DEFAULT 'applied'
+                    );
+                    INSERT INTO ""__AccountGoSchemaMarkers"" (""Key"", ""AppliedAt"", ""Status"")
+                    VALUES ('documents-library-v1', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), 'rolled-back')
+                    ON CONFLICT (""Key"") DO UPDATE
+                    SET ""AppliedAt"" = excluded.""AppliedAt"",
+                        ""Status"" = 'rolled-back';");
                 return;
             }
             else
