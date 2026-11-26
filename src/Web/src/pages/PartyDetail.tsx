@@ -19,6 +19,7 @@ import {
 import { PageHeader, HeaderButton, HeaderMenu, StatusPill } from '../components/PageHeader';
 import { PartyFormDialog } from '../components/PartyFormDialog';
 import { ContactFormDialog } from '../components/ContactFormDialog';
+import { RecordAttachments } from '../components/documents/RecordAttachments';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { InvoiceStatusBadge } from '../components/InvoiceStatusBadge';
 import { usePermissions } from '../components/Gating';
@@ -497,6 +498,11 @@ export const PartyDetail: React.FC<{ role: PartyRole }> = ({ role }) => {
             </div>
           )}
         </section>
+      )}
+
+      {party.id && (
+        <RecordAttachments targetType={role === 'vendor' ? 'vendor' : 'customer'} targetId={party.id} canAttach={canManage}
+          canRemove recordLabel={role === 'vendor' ? 'vendor' : 'client'} />
       )}
 
       {isEditing && (

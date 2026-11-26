@@ -9,15 +9,20 @@ import { DocumentDetailDialog } from '../src/components/documents/DocumentDetail
 import { WorkspaceDeleteDocumentsStep } from '../src/components/documents/WorkspaceDeleteDocumentsStep';
 import { useDeleteCurrentWorkspace } from '../src/lib/useDeleteCurrentWorkspace';
 import { Sidebar } from '../src/components/Sidebar';
+import { RecordAttachments } from '../src/components/documents/RecordAttachments';
 import type { DocumentCapabilities, LibraryDocument } from '../src/lib/documents';
 
-const { authFetch, outlet, navigate } = vi.hoisted(() => ({
+const { authFetch, outlet, navigate, permissions } = vi.hoisted(() => ({
+  permissions: { set: new Set<string>(['documents.view']) },
   authFetch: vi.fn(),
   outlet: { currentOrg: { id: 'ws_1', name: 'Acme', slug: 'acme', role: 'Member' as string, currency: 'USD' } },
   navigate: vi.fn(),
 }));
 
 vi.mock('../src/auth/AuthContext', () => ({ useAuth: () => ({ authFetch }) }));
+vi.mock('../src/components/Gating', () => ({
+  usePermissions: () => ({ hasPermission: (p: string) => permissions.set.has(p) }),
+}));
 vi.mock('../src/components/OrgSwitcher', () => ({ OrgSwitcher: () => null }));
 vi.mock('../src/components/UserProfileSection', () => ({ UserProfileSection: () => null }));
 vi.mock('react-router-dom', async () => {
@@ -249,5 +254,76 @@ describe('Sidebar', () => {
     expect(screen.queryByRole('link', { name: /Documents/ })).toBeNull();
     rerender(<MemoryRouter><Sidebar {...props} showDocuments hasPermission={(p) => p !== 'documents.view'} /></MemoryRouter>);
     expect(screen.queryByRole('link', { name: /Documents/ })).toBeNull();
+  });
+});
+
+describe('Record attachments', () => {
+  const attached = (overrides: Partial<LibraryDocument> = {}) =>
+    doc({ id: 'cap_receipt', title: 'Taxi receipt', links: [{ targetType: 'bill', targetId: 'bill_1', role: 'attachment', linkedAt: '', locked: false }], ...overrides });
+  const scan = doc({ id: 'cap_scan', title: 'Scanned bill', kind: 'purchase-invoice', links: [{ targetType: 'bill', targetId: 'bill_1', role: 'source', linkedAt: '', locked: false }] });
+
+  it('lists attachments (not the scanned source), uploads to the record and removes from a draft', async () => {
+    let items = [attached(), scan];
+    const calls: { url: string; init?: RequestInit }[] = [];
+    authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      if (url.startsWith('/api/documents/linked/bill/bill_1')) return json({ items, total: items.length, page: 1, pageSize: 100 });
+      if (url === '/api/documents' && init?.method === 'POST') return json(attached({ id: 'cap_new', title: 'New' }));
+      if (init?.method === 'DELETE') {
+        items = [scan];
+        return new Response(null, { status: 204 });
+      }
+      return json({}, 404);
+    });
+    render(<RecordAttachments targetType="bill" targetId="bill_1" canAttach canRemove recordLabel="bill" />);
+    expect(await screen.findByText('Taxi receipt')).toBeTruthy();
+    expect(screen.queryByText('Scanned bill')).toBeNull();
+
+    fireEvent.change(screen.getByLabelText('Attach files to this bill'), { target: { files: [new File(['%PDF'], 'r.pdf', { type: 'application/pdf' })] } });
+    await waitFor(() => expect(calls.some((c) => c.init?.method === 'POST')).toBe(true));
+    const form = calls.find((c) => c.init?.method === 'POST')!.init!.body as FormData;
+    expect([form.get('LinkTargetType'), form.get('LinkTargetId')]).toEqual(['bill', 'bill_1']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Taxi receipt' }));
+    await waitFor(() => expect(screen.queryByText('Taxi receipt')).toBeNull());
+    expect(calls.some((c) => c.url === '/api/documents/cap_receipt/links/bill/bill_1' && c.init?.method === 'DELETE')).toBe(true);
+  });
+
+  it('keeps attachments of a posted record and offers no removal', async () => {
+    authFetch.mockResolvedValue(json({ items: [attached({ links: [{ targetType: 'bill', targetId: 'bill_1', role: 'attachment', linkedAt: '', locked: true }] })], total: 1, page: 1, pageSize: 100 }));
+    render(<RecordAttachments targetType="bill" targetId="bill_1" canAttach canRemove={false} recordLabel="bill" />);
+    expect(await screen.findByText('Kept as evidence for this posted bill')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Remove/ })).toBeNull();
+  });
+
+  it('links an existing library file, and only offers the library to users who can view it', async () => {
+    const posts: string[] = [];
+    authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.startsWith('/api/documents/linked/')) return json({ items: [], total: 0, page: 1, pageSize: 100 });
+      if (url.startsWith('/api/documents?')) return json({ items: [doc({ id: 'cap_contract', title: 'Supply contract' })], total: 1, page: 1, pageSize: 50 });
+      if (url.endsWith('/links') && init?.method === 'POST') {
+        posts.push(String(init.body));
+        return json(doc());
+      }
+      return json({}, 404);
+    });
+    const { unmount } = render(<RecordAttachments targetType="vendor" targetId="ven_1" canAttach canRemove recordLabel="vendor" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Choose from Documents/ }));
+    fireEvent.click(await screen.findByText('Supply contract'));
+    await waitFor(() => expect(posts).toHaveLength(1));
+    expect(JSON.parse(posts[0])).toEqual({ targetType: 'vendor', targetId: 'ven_1' });
+    unmount();
+
+    permissions.set = new Set<string>();
+    render(<RecordAttachments targetType="vendor" targetId="ven_1" canAttach canRemove recordLabel="vendor" />);
+    await screen.findByText(/No files attached/);
+    expect(screen.queryByRole('button', { name: /Choose from Documents/ })).toBeNull();
+    permissions.set = new Set(['documents.view']);
+  });
+
+  it('is hidden when the library is switched off', async () => {
+    authFetch.mockResolvedValue(json({ code: 'DOCUMENTS_DISABLED' }, 404));
+    const { container } = render(<RecordAttachments targetType="invoice" targetId="inv_1" canAttach canRemove recordLabel="invoice" />);
+    await waitFor(() => expect(container.querySelector('section')).toBeNull());
   });
 });
