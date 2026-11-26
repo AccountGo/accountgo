@@ -232,8 +232,8 @@ public sealed class DocumentLibraryServiceTests
         var trash = await Assert.ThrowsAsync<DocumentCaptureServiceException>(() => h.Library.TrashAsync(id, default));
         Assert.Equal("DOCUMENT_LOCKED_BY_POSTED_RECORD", trash.ErrorCode);
 
-        var afterUnlink = await h.Library.UnlinkAsync(id, "bill", draft.PublicId, default);
-        Assert.Single(afterUnlink.Links);
+        await h.Library.UnlinkAsync(id, "bill", draft.PublicId, default);
+        Assert.Single((await h.Library.GetAsync(id, default)).Links);
         Assert.NotNull(await h.Library.ArchiveAsync(id, default));
 
         // A hidden locked record still locks the file.
@@ -387,9 +387,19 @@ public sealed class DocumentLibraryServiceTests
         await h.Db.PurchaseInvoiceHeaders.Where(b => b.Id == bill.Id).ExecuteUpdateAsync(s => s.SetProperty(b => b.Status, PurchaseInvoiceStatus.Open));
         var revision = await DocumentRevision.GetCurrentAsync(h.Db, h.CompanyId);
 
+        var retentionAudit = new Mock<ISecurityAuditService>();
         var retention = new DocumentCaptureRetentionService(h.Db, new DocumentCaptureAdmissionLock(h.Db),
-            documentsOptions: Options.Create(new DocumentsOptions { TrashRetentionDays = 30 }));
+            documentsOptions: Options.Create(new DocumentsOptions { TrashRetentionDays = 30 }), securityAudit: retentionAudit.Object);
+        var expiredPublicId = await h.Db.DocumentCaptures.Where(c => c.Id == expired).Select(c => c.PublicId).SingleAsync();
         Assert.Equal(1, await retention.PurgeAsync(now, default));
+
+        // One audit event, for the purge that committed; the refused (locked) and kept items write none.
+        var purgedEvent = Assert.Single(retentionAudit.Invocations, i => i.Method.Name == nameof(ISecurityAuditService.LogEventAsync));
+        Assert.Equal("document.purged", purgedEvent.Arguments[0]);
+        Assert.Null(purgedEvent.Arguments[2]);
+        Assert.Contains(expiredPublicId, System.Text.Json.JsonSerializer.Serialize(purgedEvent.Arguments[4]));
+        Assert.Equal(0, await retention.PurgeAsync(now, default));
+        Assert.Single(retentionAudit.Invocations, i => i.Method.Name == nameof(ISecurityAuditService.LogEventAsync));
 
         Assert.False(await h.Db.DocumentCaptures.AnyAsync(c => c.Id == expired));
         Assert.False(await h.Db.DocumentCaptureBlobs.AnyAsync(b => b.CaptureId == expired));

@@ -103,8 +103,11 @@ public sealed class DocumentsController(DocumentLibraryService documents, ITenan
     [HttpDelete("{id}/links/{targetType}/{targetId}")]
     public async Task<IActionResult> Unlink([Dto.Common.PublicId("cap")] int id, string targetType, string targetId,
         CancellationToken cancellationToken) =>
-        await Run(async () => Ok(await documents.UnlinkAsync(id, targetType, targetId, cancellationToken).ConfigureAwait(false)))
-            .ConfigureAwait(false);
+        await Run(async () =>
+        {
+            await documents.UnlinkAsync(id, targetType, targetId, cancellationToken).ConfigureAwait(false);
+            return NoContent();
+        }).ConfigureAwait(false);
 
     [HttpPost("{id}/archive")]
     [RequireOperation(AccessOperationCatalog.DocumentsManage)]

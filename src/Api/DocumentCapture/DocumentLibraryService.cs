@@ -96,6 +96,7 @@ public sealed class DocumentLibraryService(
 
     // ---------- capabilities ----------
 
+    /// <summary>Always answers (also when the library is switched off) so the client can hide the library: <c>Enabled</c> says which.</summary>
     public async Task<DocumentCapabilitiesView> GetCapabilitiesAsync(CancellationToken cancellationToken)
     {
         var companyId = tenant.RequireCompanyId();
@@ -139,7 +140,9 @@ public sealed class DocumentLibraryService(
         if (linkTargetType is not null)
         {
             EnsureKnownTargetType(linkTargetType);
-            if (!Has(AttachPermission(linkTargetType)))
+            // Attaching needs the record's write permission and its read permission: the new file is then always readable
+            // through that link, so the response after commit can never be a not-found.
+            if (!Has(AttachPermission(linkTargetType)) || !Has(ReadPermission(linkTargetType)))
                 throw new DocumentCaptureServiceException(403, "DOCUMENT_PERMISSION_REQUIRED");
             linkTargetId = await ResolveTargetIdAsync(linkTargetType, linkTargetPublicId!, cancellationToken).ConfigureAwait(false);
         }
@@ -345,6 +348,7 @@ public sealed class DocumentLibraryService(
     public async Task<DocumentPage> ListLinkedAsync(string targetType, string targetPublicId, int page, int pageSize,
         CancellationToken cancellationToken)
     {
+        EnsureEnabled();
         var companyId = tenant.RequireCompanyId();
         EnsureKnownTargetType(targetType);
         if (!Has(ReadPermission(targetType)))
@@ -409,7 +413,7 @@ public sealed class DocumentLibraryService(
         var companyId = tenant.RequireCompanyId();
         var actorId = RequireActor();
         EnsureKnownTargetType(targetType);
-        if (!Has(AttachPermission(targetType)))
+        if (!Has(AttachPermission(targetType)) || !Has(ReadPermission(targetType)))
             throw new DocumentCaptureServiceException(403, "DOCUMENT_PERMISSION_REQUIRED");
         var targetId = await ResolveTargetIdAsync(targetType, targetPublicId, cancellationToken).ConfigureAwait(false);
         string publicId;
@@ -450,7 +454,11 @@ public sealed class DocumentLibraryService(
         return await GetAsync(captureId, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<DocumentView> UnlinkAsync(int captureId, string targetType, string targetPublicId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Removes an attachment link. Returns nothing: the link may have been the caller's only read path to the file, so the
+    /// result is not re-read after commit (the caller already knows the outcome).
+    /// </summary>
+    public async Task UnlinkAsync(int captureId, string targetType, string targetPublicId, CancellationToken cancellationToken)
     {
         EnsureEnabled();
         var companyId = tenant.RequireCompanyId();
@@ -480,7 +488,6 @@ public sealed class DocumentLibraryService(
         }
         db.ChangeTracker.Clear();
         await AuditAsync("document.unlinked", companyId, publicId, new { targetType, targetId = targetPublicId }).ConfigureAwait(false);
-        return await GetAsync(captureId, cancellationToken).ConfigureAwait(false);
     }
 
     public Task<DocumentView> ArchiveAsync(int captureId, CancellationToken cancellationToken) =>

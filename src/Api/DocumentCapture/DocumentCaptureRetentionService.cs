@@ -11,7 +11,8 @@ namespace Api.DocumentCaptures;
 
 public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCaptureAdmissionLock admissionLock,
     TimeProvider? timeProvider = null, ILogger<DocumentCaptureRetentionService>? logger = null,
-    Microsoft.Extensions.Options.IOptions<DocumentsOptions>? documentsOptions = null)
+    Microsoft.Extensions.Options.IOptions<DocumentsOptions>? documentsOptions = null,
+    Api.Service.ISecurityAuditService? securityAudit = null)
 {
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
     private readonly ILogger<DocumentCaptureRetentionService> _logger = logger ?? NullLogger<DocumentCaptureRetentionService>.Instance;
@@ -367,7 +368,12 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
             await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
             return false;
         }
-        var deleted = await db.DocumentCaptures.IgnoreQueryFilters()
+        var snapshot = await db.DocumentCaptures.IgnoreQueryFilters().AsNoTracking()
+            .Where(capture => capture.CompanyId == companyId && capture.Id == captureId && capture.FiledAt != null
+                && capture.DeletedAt != null && capture.DeletedAt <= trashCutoff)
+            .Select(capture => new { capture.PublicId, capture.Kind, capture.ByteCount, capture.DeletedAt, capture.DeletedBy })
+            .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        var deleted = snapshot is null ? 0 : await db.DocumentCaptures.IgnoreQueryFilters()
             .Where(capture => capture.CompanyId == companyId && capture.Id == captureId && capture.FiledAt != null
                 && capture.DeletedAt != null && capture.DeletedAt <= trashCutoff)
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
@@ -379,6 +385,23 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
         await DocumentRevision.BumpAsync(db, companyId, cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         db.ChangeTracker.Clear();
+        // Written only after the purge committed; the system is the actor (no user), and no document content is logged.
+        if (securityAudit is not null)
+        {
+            await securityAudit.LogEventAsync("document.purged", "success", null, companyId, new
+            {
+                documentId = snapshot!.PublicId,
+                details = new
+                {
+                    kind = snapshot.Kind,
+                    byteCount = snapshot.ByteCount,
+                    trashedAt = snapshot.DeletedAt,
+                    trashedBy = snapshot.DeletedBy,
+                    purgedAt = _timeProvider.GetUtcNow().UtcDateTime,
+                    reason = "trash-retention"
+                }
+            }).ConfigureAwait(false);
+        }
         return true;
     }
 

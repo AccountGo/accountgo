@@ -206,6 +206,52 @@ public sealed class DocumentsControllerHttpTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task PurchasingMemberAttachesAndUnlinks_EvenTheLastReadPathSucceedsWithoutA404()
+    {
+        var (billA, billB) = (await SeedDraftBillAsync("MEMBER-A"), await SeedDraftBillAsync("MEMBER-B"));
+        await AssignRoleAsync(_memberToken, "Purchasing Agent");
+
+        string id;
+        using (var upload = Request(HttpMethod.Post, "/api/documents", _memberToken))
+        {
+            upload.Content = UploadForm(CreatePdf(1), "application/pdf", "receipt.pdf", ("LinkTargetType", "bill"), ("LinkTargetId", billA));
+            using var response = await _client.SendAsync(upload);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            id = body.RootElement.GetProperty("id").GetString()!;
+        }
+        using (var link = Request(HttpMethod.Post, $"/api/documents/{id}/links", _memberToken))
+        {
+            link.Content = JsonContent.Create(new { targetType = "bill", targetId = billB });
+            using var response = await _client.SendAsync(link);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        // Unlinking one of two readable links, then the last one: both succeed with 204.
+        using (var unlink = Request(HttpMethod.Delete, $"/api/documents/{id}/links/bill/{billA}", _memberToken))
+        using (var response = await _client.SendAsync(unlink))
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        using (var get = Request(HttpMethod.Get, $"/api/documents/{id}", _memberToken))
+        using (var response = await _client.SendAsync(get))
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using (var unlink = Request(HttpMethod.Delete, $"/api/documents/{id}/links/bill/{billB}", _memberToken))
+        using (var response = await _client.SendAsync(unlink))
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        // The member has no read path left (no documents.view); the owner still sees the file.
+        using (var get = Request(HttpMethod.Get, $"/api/documents/{id}", _memberToken))
+        using (var response = await _client.SendAsync(get))
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        using (var get = Request(HttpMethod.Get, $"/api/documents/{id}", _ownerToken))
+        using (var response = await _client.SendAsync(get))
+        {
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal(0, body.RootElement.GetProperty("links").GetArrayLength());
+        }
+    }
+
+    [Fact]
     public async Task OversizedUploadIsRefusedWith413AndTheLimit()
     {
         using var upload = Request(HttpMethod.Post, "/api/documents", _ownerToken);
@@ -214,6 +260,35 @@ public sealed class DocumentsControllerHttpTests : IAsyncLifetime
         upload.Content = UploadForm(tooBig, "application/pdf", "big.pdf");
         using var response = await _client.SendAsync(upload);
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+    }
+
+    private async Task<string> SeedDraftBillAsync(string number)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        db.SuppressTenantSecurityCheck = true;
+        var companyId = await db.Companies.IgnoreQueryFilters().Where(c => c.Slug == _companySlug).Select(c => c.Id).SingleAsync();
+        var bill = new Core.Domain.Purchases.PurchaseInvoiceHeader
+        {
+            CompanyId = companyId, PublicId = Core.Domain.PublicIdGenerator.New("bill"), Date = DateTime.UtcNow.Date,
+            VendorInvoiceNo = number, Status = Core.Domain.PurchaseInvoiceStatus.Draft
+        };
+        db.PurchaseInvoiceHeaders.Add(bill);
+        await db.SaveChangesAsync();
+        return bill.PublicId;
+    }
+
+    private async Task AssignRoleAsync(string token, string roleName)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+        db.SuppressTenantSecurityCheck = true;
+        var companyId = await db.Companies.IgnoreQueryFilters().Where(c => c.Slug == _companySlug).Select(c => c.Id).SingleAsync();
+        var member = await db.CompanyMembers.SingleAsync(m => m.CompanyId == companyId && m.Role == CompanyMemberRole.Member);
+        var role = await db.SecurityRoles.SingleAsync(r => r.Name == roleName);
+        db.CompanyMemberSecurityRoles.Add(new CompanyMemberSecurityRole { CompanyMemberId = member.Id, SecurityRoleId = role.Id });
+        await db.SaveChangesAsync();
+        _ = token;
     }
 
     private HttpRequestMessage Request(HttpMethod method, string path, string token)
