@@ -47,15 +47,21 @@ export const RecordAttachments: React.FC<Props> = ({ targetType, targetId, canAt
 
   const load = useCallback(async () => {
     try {
-      const res = await authFetch(`${base}?pageSize=100`);
-      if (!res.ok) {
-        const problem = await readProblem(res);
-        if (problem?.code === 'DOCUMENTS_DISABLED') setAvailable(false);
-        else setLoadFailed(true);
-        return;
+      // The linked list is paginated and includes the scanned source; read every page so no attachment is hidden.
+      const all: LibraryDocument[] = [];
+      for (let pageNumber = 1; pageNumber <= 50; pageNumber++) {
+        const res = await authFetch(`${base}?page=${pageNumber}&pageSize=100`);
+        if (!res.ok) {
+          const problem = await readProblem(res);
+          if (problem?.code === 'DOCUMENTS_DISABLED') setAvailable(false);
+          else setLoadFailed(true);
+          return;
+        }
+        const page = (await res.json()) as DocumentPage;
+        all.push(...page.items);
+        if (page.items.length === 0 || all.length >= page.total) break;
       }
-      const page = (await res.json()) as DocumentPage;
-      setAttachments(page.items.filter((d) => d.links.some((l) => l.targetType === targetType && l.targetId === targetId && l.role === 'attachment')));
+      setAttachments(all.filter((d) => d.links.some((l) => l.targetType === targetType && l.targetId === targetId && l.role === 'attachment')));
       setLoadFailed(false);
     } catch {
       setLoadFailed(true);
