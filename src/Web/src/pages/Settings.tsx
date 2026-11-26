@@ -32,6 +32,7 @@ import { useTheme } from '../themes/ThemeContext';
 import { useAuth } from '../auth/AuthContext';
 import { setPersistedOrgSlug } from '../lib/storage';
 import { useDeleteCurrentWorkspace } from '../lib/useDeleteCurrentWorkspace';
+import { DocumentsDeleteChoice, WorkspaceDeleteDocumentsStep } from '../components/documents/WorkspaceDeleteDocumentsStep';
 import { StepUpPrompt } from '../components/StepUpPrompt';
 import { SubscriptionSettingsTab } from '../components/SubscriptionSettingsTab';
 import { RolesSettingsTab } from '../components/RolesSettingsTab';
@@ -164,6 +165,8 @@ export const Settings: React.FC = () => {
   const [companySaveError, setCompanySaveError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteSlug, setDeleteSlug] = useState('');
+  const [documentsChoice, setDocumentsChoice] = useState<DocumentsDeleteChoice>(null);
+  const [documentsReady, setDocumentsReady] = useState(false);
   const workspaceDelete = useDeleteCurrentWorkspace();
   const { deleting: deletingWorkspace, error: deleteError, needsStepUp: deleteNeedsStepUp } = workspaceDelete;
   const deleteTriggerRef = useRef<HTMLButtonElement>(null);
@@ -321,8 +324,11 @@ export const Settings: React.FC = () => {
 
   const handleDeleteWorkspace = (event: React.FormEvent) => {
     event.preventDefault();
-    if (deleteSlug !== currentOrg.slug || deletingWorkspace || deleteNeedsStepUp) return;
-    void workspaceDelete.remove(deleteSlug);
+    if (deleteSlug !== currentOrg.slug || deletingWorkspace || deleteNeedsStepUp || !documentsReady) return;
+    void workspaceDelete.remove(deleteSlug, {
+      documentsExportConfirmed: documentsChoice === 'exported',
+      skipDocumentsExport: documentsChoice === 'skip',
+    });
   };
 
   // Save Whitelabel Config
@@ -707,6 +713,8 @@ export const Settings: React.FC = () => {
                     ref={deleteTriggerRef}
                     onClick={() => {
                       setDeleteSlug('');
+                      setDocumentsChoice(null);
+                      setDocumentsReady(false);
                       workspaceDelete.reset();
                       setDeleteDialogOpen(true);
                     }}
@@ -754,6 +762,14 @@ export const Settings: React.FC = () => {
                   onChange={(event) => setDeleteSlug(event.target.value)}
                   className="w-full h-11 px-3 rounded-xl bg-[var(--bg-subtle)] text-sm font-mono text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-rose-500"
                 />
+                {deleteDialogOpen && (
+                  <WorkspaceDeleteDocumentsStep
+                    orgSlug={currentOrg.slug}
+                    choice={documentsChoice}
+                    onChoice={setDocumentsChoice}
+                    onReady={setDocumentsReady}
+                  />
+                )}
                 {deleteError && <p role="alert" className="text-sm text-rose-400">{deleteError}</p>}
                 {deleteNeedsStepUp && <StepUpPrompt actionLabel="deleting this workspace" onVerified={workspaceDelete.retry} />}
                 <div className="flex justify-end gap-2">
@@ -767,7 +783,7 @@ export const Settings: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    disabled={deleteSlug !== currentOrg.slug || deletingWorkspace || deleteNeedsStepUp}
+                    disabled={deleteSlug !== currentOrg.slug || deletingWorkspace || deleteNeedsStepUp || !documentsReady}
                     className="h-10 px-4 rounded-xl bg-rose-600 text-white text-xs font-semibold disabled:opacity-50"
                   >
                     {deletingWorkspace ? 'Deleting…' : 'Delete workspace'}

@@ -471,6 +471,7 @@ const OrgWorkspaceShell: React.FC<OrgWorkspaceShellProps> = ({
   toggleSidebarCollapse,
 }) => {
   useActionDenialRefresh(refreshPermissions);
+  const { authFetch } = useAuth();
 
   const caps = useCapabilities();
   const hasModule = caps.canModule;
@@ -500,6 +501,29 @@ const OrgWorkspaceShell: React.FC<OrgWorkspaceShellProps> = ({
       },
     });
   }, [livePlan, liveModules, currentOrg.plan, currentOrg.subscription, updateCurrentOrg]);
+  // The documents library may be switched off on a host; ask the server once per workspace before showing its link.
+  const [documentsEnabled, setDocumentsEnabled] = useState(false);
+  const canViewDocuments = hasPermission('documents.view');
+  useEffect(() => {
+    if (!canViewDocuments) {
+      setDocumentsEnabled(false);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await authFetch('/api/documents/capabilities');
+        const body = res.ok ? ((await res.json()) as { enabled?: boolean }) : null;
+        if (!cancelled) setDocumentsEnabled(body?.enabled === true);
+      } catch {
+        if (!cancelled) setDocumentsEnabled(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch, canViewDocuments, currentOrg.id]);
+
   const canAccess = useCallback(
     (moduleKey: ModuleKey, permission?: string): boolean => {
       if (!hasModule(moduleKey)) return false;
@@ -559,6 +583,7 @@ const OrgWorkspaceShell: React.FC<OrgWorkspaceShellProps> = ({
             hasModule={hasModule}
             hasPermission={hasPermission}
             showLedgerUpsell={showLedgerUpsell}
+            showDocuments={documentsEnabled}
           />
 
           <AssistantMount
