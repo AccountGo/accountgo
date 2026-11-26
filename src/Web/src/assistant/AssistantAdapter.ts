@@ -122,9 +122,10 @@ export class AssistantAdapter implements ChatAdapter {
     const fieldLabel = fieldCount === 1 ? '1 field' : `${fieldCount} fields`;
 
     // Workaround for #98 G2: the SDK chip has no click/preview callback, so surface the extracted field count in fileName.
+    // A general attachment (a web page, a guide) has no fields; its text is still sent, so don't label it "0 fields".
     return {
       id: view.id,
-      fileName: `${file.name} · ${fieldLabel}`,
+      fileName: fieldCount > 0 ? `${file.name} · ${fieldLabel}` : file.name,
       mimeType: file.type || view.contentType || 'application/octet-stream',
       size: file.size,
       status: view.status === 'ready' || view.status === 'accepted' ? 'processed' : 'error',

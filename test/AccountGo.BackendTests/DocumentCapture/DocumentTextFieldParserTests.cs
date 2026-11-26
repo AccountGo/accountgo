@@ -312,8 +312,11 @@ public sealed class DocumentTextFieldParserTests(ITestOutputHelper output)
     [Trait("Rule", "A-01")]
     public void Parse_AssistantAttachment_ExtractsCappedLabelValuePairs()
     {
+        // Financial evidence (A-02) at the end, so the 70 labelled lines come first.
         var lines = Enumerable.Range(1, 70)
             .Select(i => Line($"Field {i}: Value {i}"))
+            .Append(Line("INVOICE"))
+            .Append(Line("Total: $10.00"))
             .ToList();
 
         var root = ParseAndValidate("assistant-attachment", lines, out _);
@@ -767,13 +770,17 @@ public sealed class DocumentTextFieldParserTests(ITestOutputHelper output)
             Line("http://example.com/receipt"),
             Line("mailto:billing@example.com"),
             Line("Reference: INV-42"),
+            Line("INVOICE"),
+            Line("Total $12.00"),
         };
 
         var root = ParseAndValidate("assistant-attachment", lines, out _);
         var fields = root.GetProperty("fields").EnumerateArray().ToList();
-        Assert.Single(fields);
-        Assert.Equal("Reference", fields[0].GetProperty("label").GetString());
+        var labels = fields.Select(field => field.GetProperty("label").GetString()).ToList();
+        Assert.Equal("Reference", labels[0]);
         Assert.Equal("INV-42", fields[0].GetProperty("value").GetString());
+        Assert.DoesNotContain("12", labels);
+        Assert.DoesNotContain(labels, label => label is "https" or "http" or "mailto");
     }
 
     [Fact]

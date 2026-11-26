@@ -38,6 +38,7 @@ public sealed class DocumentCaptureOcrWorkerOptions
 
 public sealed class LocalOcrDocumentFieldExtractor : IDocumentFieldExtractor, IDisposable
 {
+    private const string AssistantAttachmentKind = "assistant-attachment";
     internal const string CurrentProviderVersion = CaptureWorkerModels.Version + "+" + DocumentTextFieldParser.RulesVersion;
     internal static readonly TimeSpan GateWait = TimeSpan.FromSeconds(15);
     private readonly DocumentCaptureOcrWorkerOptions _options;
@@ -140,11 +141,16 @@ public sealed class LocalOcrDocumentFieldExtractor : IDocumentFieldExtractor, ID
                 throw new DocumentCaptureServiceException(503, "DOCUMENT_PROVIDER_UNAVAILABLE");
             }
 
-            var header = new CaptureWorkerHeader(request.ContentType, request.PageCount, MaxOcrPages: 3);
+            // Assistant attachments can be any document (a web page, a guide), so the worker keeps a row's pieces apart
+            // and the stored text follows columns. Financial kinds keep the row text their field rules were built on.
+            var segments = request.Kind == AssistantAttachmentKind;
+            var header = new CaptureWorkerHeader(request.ContentType, request.PageCount, MaxOcrPages: 3, segments);
             var payload = await CaptureWorkerRunner.RunAsync(worker, header, request.DocumentBytes,
                 _options.MaxWorkerMemoryMb, _clock, cancellationToken, metrics).ConfigureAwait(false);
             result = ParseWorkerResponse(payload, request.PageCount);
-            var (lines, rawText) = BoundLines(result.Lines);
+            var (lines, rawText) = BoundLines(segments ? TextLayout.Rows(result.Lines) : result.Lines);
+            if (segments)
+                rawText = BoundLines(TextLayout.ReadingLines(result.Lines)).RawText;
             var parsed = DocumentTextFieldParser.Parse(request.Kind, lines);
             // Rule fields are returned as soon as the rules have read the document. An optional field mapper never runs here: a later
             // background job calls CaptureFieldMappingRunner, so a slow mapper can't delay a scan or hold the OCR admission slot.

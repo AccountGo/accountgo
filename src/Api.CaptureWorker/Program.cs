@@ -26,7 +26,7 @@ internal static class Program
             using var engine = new OcrEngine(models, threads, arena);
             var result = header.ContentType == "application/pdf"
                 ? ExtractPdf(header, bytes, engine)
-                : ExtractImage(header.ContentType, bytes, engine);
+                : ExtractImage(header.ContentType, bytes, engine, header.Segments);
             await using var stdout = Console.OpenStandardOutput();
             await JsonSerializer.SerializeAsync(stdout, result, CaptureWorkerProtocol.Json);
             return 0;
@@ -58,7 +58,7 @@ internal static class Program
         }
     }
 
-    private static CaptureWorkerResult ExtractImage(string contentType, byte[] bytes, OcrEngine engine)
+    private static CaptureWorkerResult ExtractImage(string contentType, byte[] bytes, OcrEngine engine, bool segments)
     {
         using var data = SKData.CreateCopy(bytes);
         using var codec = SKCodec.Create(data) ?? throw new InvalidDataException();
@@ -71,7 +71,7 @@ internal static class Program
         if (codec.GetPixels(bitmap.Info, bitmap.GetPixels()) != SKCodecResult.Success)
             throw new InvalidDataException();
 
-        return new CaptureWorkerResult(engine.Read(bitmap, 1).ToArray(), [1], [], []);
+        return new CaptureWorkerResult(engine.Read(bitmap, 1, segments).ToArray(), [1], [], []);
     }
 
     private static CaptureWorkerResult ExtractPdf(CaptureWorkerHeader header, byte[] bytes, OcrEngine engine)
@@ -84,7 +84,7 @@ internal static class Program
         var scanned = new List<int>();
         for (var page = 1; page <= pages.Length; page++)
         {
-            var text = pdf.ReadText(page);
+            var text = pdf.ReadText(page, header.Segments);
             if (HasTextLayer(text))
                 pages[page - 1] = text;
             else
@@ -99,7 +99,7 @@ internal static class Program
         foreach (var page in selected)
         {
             using var image = pdf.Render(page);
-            pages[page - 1] = engine.Read(image, page);
+            pages[page - 1] = engine.Read(image, page, header.Segments);
         }
 
         var skipped = scanned.Except(selected).ToArray();

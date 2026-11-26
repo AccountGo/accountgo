@@ -113,7 +113,7 @@ public sealed class LocalOcrSyntheticTests(ITestOutputHelper output)
         var result = await extractor.ExtractAsync(new DocumentExtractionRequest("purchase-invoice", 1, contentType, bytes, 1),
             CancellationToken.None);
         Assert.Equal("local-ocr", result.ProviderName);
-        Assert.StartsWith("ocr-1+", result.ProviderVersion, StringComparison.Ordinal);
+        Assert.StartsWith("ocr-2+", result.ProviderVersion, StringComparison.Ordinal);
         using var json = JsonDocument.Parse(result.FieldsJson);
         var root = json.RootElement;
         if (NormalizeName(ReadString(root, "vendorName")) != NormalizeName(fixture.Vendor))

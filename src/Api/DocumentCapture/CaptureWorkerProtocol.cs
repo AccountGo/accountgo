@@ -7,7 +7,10 @@ using Api.DocumentCaptures.Parsing;
 
 namespace Api.DocumentCaptures;
 
-internal sealed record CaptureWorkerHeader(string ContentType, int PageCount, int MaxOcrPages);
+/// <param name="Segments">When true, the worker does not join a row's text pieces into one line: each piece separated by a
+/// wide horizontal gap (PDF) or each detected text box (OCR) is its own <see cref="TextLine"/>, so the API can rebuild
+/// columns. Only general-purpose assistant attachments ask for this.</param>
+internal sealed record CaptureWorkerHeader(string ContentType, int PageCount, int MaxOcrPages, bool Segments = false);
 internal sealed record CaptureWorkerResult(TextLine[] Lines, int[] OcrPages, int[] SkippedPages, string[] Warnings);
 
 internal static class CaptureWorkerProtocol
@@ -70,7 +73,7 @@ internal static class CaptureWorkerModels
     internal const string Detection = "PP-OCRv5_mobile_det.onnx";
     internal const string Recognition = "en_PP-OCRv5_mobile_rec.onnx";
     internal const string Dictionary = "en_dict.json";
-    internal const string Version = "ocr-1+d5de5df3+20b69451";
+    internal const string Version = "ocr-2+d5de5df3+20b69451";
     internal static readonly (string File, string Sha256)[] Files =
     [
         (Detection, "d5de5df358366210d16419b9636a2fc1efa5d7a20688f38a7869ec7b1a4f4f7d"),

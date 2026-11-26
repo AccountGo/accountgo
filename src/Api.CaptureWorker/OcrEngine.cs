@@ -43,12 +43,16 @@ internal sealed class OcrEngine(string modelDirectory, int threads, bool memoryA
         return ["", .. alphabet, " "];
     }
 
-    internal IReadOnlyList<TextLine> Read(SKBitmap source, int page)
+    // Boxes tilted further than this from horizontal are stamps or watermarks, not skewed body text (scans skew by a few degrees).
+    private const float RotatedBoxRadians = 15f * MathF.PI / 180f;
+
+    internal IReadOnlyList<TextLine> Read(SKBitmap source, int page, bool segments = false)
     {
         using var bitmap = source.Copy(SKColorType.Rgba8888) ?? throw new InvalidOperationException();
         var boxes = Detect(bitmap);
         var texts = Recognize(bitmap, boxes);
         var entries = new List<TextLine>(boxes.Count);
+        var rotated = new List<TextLine>();
         for (var index = 0; index < boxes.Count; index++)
         {
             var text = texts[index];
@@ -56,11 +60,34 @@ internal sealed class OcrEngine(string modelDirectory, int threads, bool memoryA
                 continue;
             var box = boxes[index];
             var halfWidth = (Math.Abs(box.Cos) * box.W + Math.Abs(box.Sin) * box.H) / 2;
+            if (IsRotated(box, text))
+            {
+                // A tilted stamp's box overlaps several rows. Keep its text, but outside row grouping.
+                var halfHeight = (Math.Abs(box.Sin) * box.W + Math.Abs(box.Cos) * box.H) / 2;
+                rotated.Add(new TextLine(page, text, Math.Max(0, box.Cx - halfWidth), Math.Max(0, box.Cy - halfHeight),
+                    Math.Min(bitmap.Width, box.Cx + halfWidth), Math.Min(bitmap.Height, box.Cy + halfHeight),
+                    TextLineSource.Ocr, Rotated: true));
+                continue;
+            }
             entries.Add(new TextLine(page, text, Math.Max(0, box.Cx - halfWidth),
                 Math.Max(0, box.Cy - box.H / 2), Math.Min(bitmap.Width, box.Cx + halfWidth),
                 Math.Min(bitmap.Height, box.Cy + box.H / 2), TextLineSource.Ocr));
         }
-        return GroupLines(entries);
+        var body = segments
+            ? entries.OrderBy(CenterY).ThenBy(entry => entry.X0).ToList()
+            : GroupLines(entries);
+        body.AddRange(rotated.OrderBy(CenterY).ThenBy(entry => entry.X0));
+        return body;
+    }
+
+    // A box's angle comes from its pixel spread, so a single tall glyph such as "1" looks vertical. Only a run of at least
+    // three characters that is clearly longer than it is high counts as tilted text.
+    private static bool IsRotated(RBox box, string text)
+    {
+        if (!float.IsFinite(box.Angle) || text.EnumerateRunes().Count() < 3 || box.W < 1.5f * box.H)
+            return false;
+        var tilt = MathF.Abs(box.Angle) % MathF.PI;
+        return MathF.Min(tilt, MathF.PI - tilt) > RotatedBoxRadians;
     }
 
     private List<RBox> Detect(SKBitmap img)

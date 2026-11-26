@@ -25,6 +25,7 @@ using Core.Tenancy;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -149,7 +150,8 @@ public sealed class AssistantDocumentCaptureTests : IAsyncLifetime
         string kind = "assistant-attachment",
         string status = "accepted",
         string? acceptedFieldsJson = "{\"fields\":[{\"label\":\"Memo\",\"value\":\"Quarterly summary\"}]}",
-        byte[]? bytes = null)
+        byte[]? bytes = null,
+        string? rawText = null)
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
@@ -181,6 +183,7 @@ public sealed class AssistantDocumentCaptureTests : IAsyncLifetime
             AcceptedBy = status == "accepted" ? createdBy : null,
             AcceptedAt = status == "accepted" ? now : null,
             ExpiresAt = now.AddDays(7),
+            RawText = rawText,
             Blob = new DocumentCaptureBlob
             {
                 CompanyId = companyId,
@@ -410,7 +413,8 @@ public sealed class AssistantDocumentCaptureTests : IAsyncLifetime
         Assert.True(_anterHandler.Requests.TryDequeue(out var upstream));
         using var bodyDoc = JsonDocument.Parse(upstream!.Body);
         var sentMessage = bodyDoc.RootElement.GetProperty("message").GetString()!;
-        Assert.Contains("looksLike: vendor-bill-or-receipt", sentMessage, StringComparison.Ordinal);
+        // A vendor and an account number without any invoice, total or receipt label is not financial evidence.
+        Assert.Contains("looksLike: other", sentMessage, StringComparison.Ordinal);
         Assert.Contains("••••", sentMessage, StringComparison.Ordinal);
         Assert.DoesNotContain("123456789012", sentMessage, StringComparison.Ordinal);
 
@@ -436,7 +440,8 @@ public sealed class AssistantDocumentCaptureTests : IAsyncLifetime
     }
 
     [Fact]
-    public void LooksLikeHint_DetectsBankDetailsSalesInvoiceAndVendorBillOrReceipt()
+    [Trait("Rule", "A-02")]
+    public void LooksLikeHint_DetectsBankDetailsSalesInvoiceVendorBillOrReceiptAndOther()
     {
         var bankBlock = AssistantAttachmentMessageBuilder.BuildDelimitedUntrustedBlock(
             "cap_test01",
@@ -463,12 +468,13 @@ public sealed class AssistantDocumentCaptureTests : IAsyncLifetime
             companyName: "Northwind Trading Ltd.");
         Assert.Contains("looksLike: vendor-bill-or-receipt", invoiceWithBankBlock, StringComparison.Ordinal);
 
-        // B2: Whole-word bank regexes must not match substrings like Database / Public / Cubic / Abandon.
+        // B2: Whole-word bank regexes must not match substrings like Database / Public / Cubic / Abandon. Without any
+        // invoice, total or receipt label the attachment is a general one.
         var nonBankSubstrings = AssistantAttachmentMessageBuilder.BuildDelimitedUntrustedBlock(
             "cap_test05",
             "{\"fields\":[{\"label\":\"Database Ref\",\"value\":\"DB-1\"},{\"label\":\"Public Note\",\"value\":\"OK\"},{\"label\":\"Cubic Volume\",\"value\":\"12\"},{\"label\":\"Abandon Code\",\"value\":\"N/A\"}]}",
             companyName: "Northwind Trading Ltd.");
-        Assert.Contains("looksLike: vendor-bill-or-receipt", nonBankSubstrings, StringComparison.Ordinal);
+        Assert.Contains("looksLike: other", nonBankSubstrings, StringComparison.Ordinal);
 
         // B3: Unlabelled workspace company name at top of masked RawText -> sales-invoice.
         var unlabelledHeaderSales = AssistantAttachmentMessageBuilder.BuildDelimitedUntrustedBlock(
@@ -485,28 +491,46 @@ public sealed class AssistantDocumentCaptureTests : IAsyncLifetime
             companyName: "Northwind Trading Ltd.",
             maskedRawText: "Blue Harbor Retail LLC\nTAX INVOICE\nBill To:\nNorthwind Trading Ltd.\nTotal: 120.00");
         Assert.Contains("looksLike: vendor-bill-or-receipt", billToWorkspace, StringComparison.Ordinal);
+
+        // A workspace name at the top of a document without financial fields is not enough for sales-invoice.
+        var workspaceNameOnly = AssistantAttachmentMessageBuilder.BuildDelimitedUntrustedBlock(
+            "cap_test08",
+            "{\"fields\":[]}",
+            companyName: "Northwind Trading Ltd.",
+            maskedRawText: "Northwind Trading Ltd.\nTeam offsite agenda\nDay 1: planning");
+        Assert.Contains("looksLike: other", workspaceNameOnly, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void AttachmentBlock_FallsBackToMaskedRawTextWhenFieldsEmpty()
+    [Trait("Rule", "A-03")]
+    public void AttachmentBlock_SendsMaskedRawTextWithOrWithoutFields()
     {
         var withRaw = AssistantAttachmentMessageBuilder.BuildDelimitedUntrustedBlock(
             "cap_raw01",
             "{\"fields\":[]}",
             companyName: "Northwind Trading Ltd.",
             maskedRawText: "Invoice Number INV-3337\nTotal Due $93.50\nTest Business");
-        Assert.Contains(AssistantAttachmentMessageBuilder.RawTextFallbackHeader, withRaw, StringComparison.Ordinal);
-        Assert.Contains("Invoice Number INV-3337", withRaw, StringComparison.Ordinal);
-        Assert.Contains("Total Due $93.50", withRaw, StringComparison.Ordinal);
-        Assert.DoesNotContain("(no extracted fields)", withRaw, StringComparison.Ordinal);
+        Assert.Contains(AssistantAttachmentMessageBuilder.RawTextHeader, withRaw, StringComparison.Ordinal);
+        Assert.Contains("| Invoice Number INV-3337", withRaw, StringComparison.Ordinal);
+        Assert.Contains("| Total Due $93.50", withRaw, StringComparison.Ordinal);
+        Assert.DoesNotContain(AssistantAttachmentMessageBuilder.NoTextMarker, withRaw, StringComparison.Ordinal);
+
+        // Raw text is no longer dropped when fields exist.
+        var withFields = AssistantAttachmentMessageBuilder.BuildDelimitedUntrustedBlock(
+            "cap_raw03",
+            "{\"fields\":[{\"label\":\"Invoice Number\",\"value\":\"INV-3337\"}]}",
+            companyName: "Northwind Trading Ltd.",
+            maskedRawText: "Invoice Number INV-3337\nPayment terms: 30 days");
+        Assert.Contains("- Invoice Number: INV-3337", withFields, StringComparison.Ordinal);
+        Assert.Contains("| Payment terms: 30 days", withFields, StringComparison.Ordinal);
 
         var empty = AssistantAttachmentMessageBuilder.BuildDelimitedUntrustedBlock(
             "cap_raw02",
             "{\"fields\":[]}",
             companyName: "Northwind Trading Ltd.",
             maskedRawText: null);
-        Assert.Contains("(no extracted fields)", empty, StringComparison.Ordinal);
-        Assert.DoesNotContain(AssistantAttachmentMessageBuilder.RawTextFallbackHeader, empty, StringComparison.Ordinal);
+        Assert.Contains(AssistantAttachmentMessageBuilder.NoTextMarker, empty, StringComparison.Ordinal);
+        Assert.DoesNotContain(AssistantAttachmentMessageBuilder.RawTextHeader, empty, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -812,6 +836,138 @@ public sealed class AssistantDocumentCaptureTests : IAsyncLifetime
         var mcpRes = await _client.SendAsync(mcpReq);
         var mcpText = await mcpRes.Content.ReadAsStringAsync();
         Assert.Contains("AccessDenied", mcpText);
+    }
+
+    [Fact]
+    [Trait("Rule", "A-03")]
+    public async Task RunStream_MessageBudget_FitsExactlyTruncatesThenRefusesWhenTheMinimalBlockCannotFit()
+    {
+        var raw = string.Join('\n', Enumerable.Range(1, 150).Select(n => $"Step {n:D3}: send the request again."));
+        const string fields = "{\"fields\":[]}";
+        var (_, pubId) = SeedCapture(_companyIdA, _ownerId, acceptedFieldsJson: fields, rawText: raw);
+        var full = AssistantAttachmentMessageBuilder.BuildDelimitedUntrustedBlock(pubId, fields, "Chat Cap A", null, raw);
+        var minimal = AssistantAttachmentRawTextTests.MinimalLength(full, raw);
+        Assert.True(full.Length < 8_000 - 100);
+
+        // Exactly at the limit: the whole text, no notice.
+        var exact = await SendAsync(new string('q', 8_000 - 2 - full.Length));
+        Assert.Equal(8_000, exact.Length);
+        Assert.DoesNotContain("(truncated:", exact, StringComparison.Ordinal);
+
+        // One character more: still sent, cut at a line boundary with a notice.
+        var cut = await SendAsync(new string('q', 8_000 - 2 - full.Length + 1));
+        Assert.True(cut.Length <= 8_000);
+        Assert.Matches(@"\(truncated: showing \d+ of \d+ characters of document text\)", cut);
+        Assert.EndsWith(AssistantAttachmentMessageBuilder.EndDelimiter, cut, StringComparison.Ordinal);
+
+        // A 7,900-character message leaves 98 characters; the measured minimal block is larger, so it is refused.
+        Assert.True(minimal > 98, $"minimal block {minimal}");
+        var refused = await PostRunStreamRawAsync(JsonSerializer.Serialize(new { message = new string('q', 7_900), captureId = pubId }));
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Contains("DOCUMENT_ATTACHMENT_TOO_LARGE", await refused.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.False(_anterHandler.Requests.TryDequeue(out _));
+
+        // The smallest message budget that still fits is the minimal block.
+        var smallest = await SendAsync(new string('q', 8_000 - 2 - minimal));
+        Assert.Contains("(truncated: showing 0 of", smallest, StringComparison.Ordinal);
+
+        async Task<string> SendAsync(string message)
+        {
+            while (_anterHandler.Requests.TryDequeue(out _))
+            {
+            }
+            var res = await PostRunStreamRawAsync(JsonSerializer.Serialize(new { message, captureId = pubId }));
+            Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+            Assert.True(_anterHandler.Requests.TryDequeue(out var upstream));
+            using var body = JsonDocument.Parse(upstream!.Body);
+            return body.RootElement.GetProperty("message").GetString()!;
+        }
+    }
+
+    // End to end with the real capture worker: upload through the capture API, send through the chat API, and read the
+    // exact message the assistant receives. Opt-in: set ACCOUNTGO_TEST_OCR_WORKER.
+    [AccountGo.BackendTests.DocumentCapture.LocalOcrLayoutTests.LocalOcrTheory]
+    [Trait("Rule", "A-03")]
+    [InlineData("api-guide.png", "image/png")]
+    [InlineData("api-guide.pdf", "application/pdf")]
+    public async Task RunStream_RealWorkerWebPageScreenshot_SendsReadingOrderTextAsOther(string file, string contentType)
+    {
+        var message = await UploadWithRealWorkerAndSendAsync(file, contentType, "What does this page say about requests?");
+
+        Assert.Contains("looksLike: other", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("vendor-bill", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("- Vendor:", message, StringComparison.Ordinal);
+        var normalized = message.Replace("\r\n", "\n");
+        Assert.Contains("| Navigation\n| Overview\n| Authentication\n| Settings\n| Webhooks\n| Errors\n| API Guide\n| Send a request to create a note.\n", normalized, StringComparison.Ordinal);
+        Assert.Contains("| \"items\": [1, 2]\n", normalized, StringComparison.Ordinal);
+        Assert.Contains("| total: integer\n| tax_rate: number\n| invoice_id: string\n", normalized, StringComparison.Ordinal);
+        Assert.EndsWith(AssistantAttachmentMessageBuilder.EndDelimiter, message, StringComparison.Ordinal);
+    }
+
+    [AccountGo.BackendTests.DocumentCapture.LocalOcrLayoutTests.LocalOcrTheory]
+    [Trait("Rule", "A-03")]
+    [InlineData("two-column-invoice.png", "image/png")]
+    [InlineData("two-column-invoice.pdf", "application/pdf")]
+    public async Task RunStream_RealWorkerInvoice_SendsFieldsAndTextWithThePartyPseudonymizedInBoth(string file, string contentType)
+    {
+        var message = await UploadWithRealWorkerAndSendAsync(file, contentType, "Summarize this invoice");
+
+        Assert.Contains("looksLike: vendor-bill-or-receipt", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Orchard Lane Studio", message, StringComparison.OrdinalIgnoreCase);
+        var token = System.Text.RegularExpressions.Regex.Match(message, @"- Bill To: (C-[0-9A-F]{8,12})");
+        Assert.True(token.Success, message);
+        Assert.Contains("| " + token.Groups[1].Value, message, StringComparison.Ordinal);
+        var normalized = message.Replace("\r\n", "\n");
+        Assert.Contains("| Letterpress cards 3 $20.00 $60.00\n", normalized, StringComparison.Ordinal);
+        Assert.Contains("| Tax $8.50\n| Total $93.50\n", normalized, StringComparison.Ordinal);
+        Assert.Contains("| PAID\n", normalized, StringComparison.Ordinal);
+    }
+
+    private async Task<string> UploadWithRealWorkerAndSendAsync(string file, string contentType, string userMessage)
+    {
+        var options = new Api.DocumentCaptures.DocumentCaptureOptions { Extractor = "local-ocr" };
+        options.OcrWorker.WorkerPath = Environment.GetEnvironmentVariable("ACCOUNTGO_TEST_OCR_WORKER");
+        options.OcrWorker.ValidateFiles();
+        using var extractor = new Api.DocumentCaptures.LocalOcrDocumentFieldExtractor(Options.Create(options));
+        using var factory = _factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<Api.DocumentCaptures.IDocumentFieldExtractor>();
+            services.AddSingleton<Api.DocumentCaptures.IDocumentFieldExtractor>(extractor);
+        }));
+        using var client = factory.CreateClient();
+
+        var bytes = await File.ReadAllBytesAsync(Path.Combine(AccountGo.BackendTests.DocumentCapture.LocalOcrLayoutTests.FixtureDirectory, file));
+        using var upload = new HttpRequestMessage(HttpMethod.Post, "/api/document-captures");
+        upload.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _ownerToken);
+        upload.Headers.Add("X-AccountGo-Org", _slugA);
+        upload.Headers.Add("Idempotency-Key", "layout-" + Guid.NewGuid().ToString("N"));
+        var form = new MultipartFormDataContent();
+        form.Add(new StringContent("assistant-attachment"), "Kind");
+        form.Add(new StringContent("1"), "SchemaVersion");
+        var content = new ByteArrayContent(bytes);
+        content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        form.Add(content, "File", file);
+        upload.Content = form;
+        using var uploaded = await client.SendAsync(upload);
+        var uploadBody = await uploaded.Content.ReadAsStringAsync();
+        Assert.True(uploaded.StatusCode == HttpStatusCode.OK, uploadBody);
+        var captureId = JsonDocument.Parse(uploadBody).RootElement.GetProperty("id").GetString();
+
+        while (_anterHandler.Requests.TryDequeue(out _))
+        {
+        }
+        using var run = new HttpRequestMessage(HttpMethod.Post, "/api/ai/chat/run-stream");
+        run.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _ownerToken);
+        run.Headers.Add("X-AccountGo-Org", _slugA);
+        run.Content = new StringContent(JsonSerializer.Serialize(new { message = userMessage, captureId, sessionId = "sess-layout-1" }),
+            Encoding.UTF8, "application/json");
+        using var sent = await client.SendAsync(run);
+        Assert.Equal(HttpStatusCode.OK, sent.StatusCode);
+        Assert.True(_anterHandler.Requests.TryDequeue(out var upstream));
+        using var body = JsonDocument.Parse(upstream!.Body);
+        var message = body.RootElement.GetProperty("message").GetString()!;
+        Assert.StartsWith(userMessage + "\n\n" + AssistantAttachmentMessageBuilder.BeginDelimiter, message, StringComparison.Ordinal);
+        return message;
     }
 
     private sealed class StubAnterHandler : HttpMessageHandler

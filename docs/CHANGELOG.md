@@ -25,7 +25,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 - The GitHub README links to a walkthrough showing an invoice and payment in the ledger and trial balance.
 - The GitHub README now introduces the accounting workspace and offers a concise local setup prompt.
-- Attach a document to the assistant from the message box; the file is read on our servers and only masked fields reach the AI.
+- Attach a document to the assistant from the message box; the file is read on our servers and only masked text reaches the AI, never the file itself.
 - Scanned bills and invoices now suggest existing vendors and customers even when the name is written differently, and remember your choices.
 - Rejected document scans and scans left unused for 24 hours are now deleted, including the extracted details.
 - Pages you can't open now explain why and how to get access, instead of showing an error code.
@@ -36,6 +36,10 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 - The dashboard's access setup prompt for new workspace owners can be dismissed and offers a way into access setup.
 
 ### Fixed
+
+- The assistant now reads attached screenshots and PDFs in column order, keeps code and JSON intact, and answers questions about any document instead of treating every attachment as a bill.
+
+- Diagonal stamps and watermarks such as "PAID" no longer mix into amounts when scanning bills and invoices.
 
 - Invoice payment history now shows the payment reference (or receipt number), payment method, and notes from the recorded receipt, and invoice PDFs include the payment method and reference or receipt number under Payments Received.
 

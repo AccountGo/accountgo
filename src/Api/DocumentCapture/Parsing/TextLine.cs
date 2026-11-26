@@ -3,8 +3,12 @@
 
 namespace Api.DocumentCaptures.Parsing;
 
-/// <summary>A line in reading order with page-pixel bounds measured from the top-left origin.</summary>
-public sealed record TextLine(int Page, string Text, float X0, float Y0, float X1, float Y1, TextLineSource Source);
+/// <summary>
+/// A line in reading order with page-pixel bounds measured from the top-left origin. <see cref="Rotated"/> marks text drawn
+/// at an angle to the page's main text (a diagonal stamp or watermark); the worker emits it after that page's body text.
+/// </summary>
+public sealed record TextLine(int Page, string Text, float X0, float Y0, float X1, float Y1, TextLineSource Source,
+    bool Rotated = false);
 
 public enum TextLineSource
 {

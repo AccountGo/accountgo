@@ -18,7 +18,7 @@ public sealed record ParsedFields(string FieldsJson, IReadOnlyList<string> Warni
 /// </summary>
 public static class DocumentTextFieldParser
 {
-    public const string RulesVersion = "rules-5";
+    public const string RulesVersion = "rules-6";
 
     private const int MaxTotalInputChars = 8_000;
     private static readonly TimeSpan DefaultParseDeadline = TimeSpan.FromMilliseconds(500);
@@ -1049,6 +1049,12 @@ public static class DocumentTextFieldParser
     private static Dictionary<string, object?> ParseAssistantAttachment(List<NormalizedLine> lines, Func<bool> isTimedOut)
     {
         var items = new List<Dictionary<string, object?>>();
+        // A-02: an attachment without financial or bank evidence (a web page, a guide, code) gets no fields; its text
+        // reaches the assistant as raw text instead.
+        var evidence = AssistantFinancialEvidence.Assess(lines.Select(line => line.Text).ToList());
+        if (!evidence.Any)
+            return new Dictionary<string, object?>(StringComparer.Ordinal) { ["fields"] = items };
+
         var seenLabels = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         void TryAdd(string? label, string? value)
@@ -1131,8 +1137,9 @@ public static class DocumentTextFieldParser
             }
         }
 
-        // Pass 3: fill gaps from purchase-invoice heuristics (always; skips labels already present).
-        if (!isTimedOut())
+        // Pass 3: fill gaps from purchase-invoice heuristics (skips labels already present). Only with financial evidence:
+        // on a bank statement they would invent a "Total" from balance lines.
+        if (evidence.Financial && !isTimedOut())
         {
             var financialWarnings = new List<string>();
             var financial = ParseFinancial(lines, isSales: false, financialWarnings, isTimedOut);

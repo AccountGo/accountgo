@@ -35,7 +35,7 @@ internal sealed class PdfiumDocument : IDisposable
 
     public int PageCount => Native.FPDF_GetPageCount(_document);
 
-    public IReadOnlyList<TextLine> ReadText(int pageNumber)
+    public IReadOnlyList<TextLine> ReadText(int pageNumber, bool segments = false)
     {
         var page = LoadPage(pageNumber);
         try
@@ -46,7 +46,7 @@ internal sealed class PdfiumDocument : IDisposable
                 throw new InvalidDataException();
             try
             {
-                return GroupText(textPage, pageNumber, size);
+                return GroupText(textPage, pageNumber, size, segments);
             }
             finally
             {
@@ -59,7 +59,7 @@ internal sealed class PdfiumDocument : IDisposable
         }
     }
 
-    private static List<TextLine> GroupText(IntPtr textPage, int pageNumber, PageSize size)
+    private static List<TextLine> GroupText(IntPtr textPage, int pageNumber, PageSize size, bool segments)
     {
         var count = Native.FPDFText_CountChars(textPage);
         if (count is < 0 or > MaxCharactersPerPage)
@@ -74,13 +74,19 @@ internal sealed class PdfiumDocument : IDisposable
                 || !rect.IsFinite)
                 continue;
 
-            glyphs.Add(new Glyph(index, rune, rect));
+            glyphs.Add(new Glyph(index, rune, rect, AngleBucket(Native.FPDFText_GetCharAngle(textPage, index))));
         }
+
+        // Text drawn at another angle than the page's main text (a diagonal "PAID" stamp, a watermark) has loose boxes that
+        // overlap several rows, so row grouping would splice its letters into amounts. Keep it as separate lines instead.
+        var mainAngle = MainAngle(glyphs);
+        var body = glyphs.Where(glyph => !IsRotated(glyph, mainAngle)).ToList();
+        var rotated = glyphs.Where(glyph => IsRotated(glyph, mainAngle)).ToList();
 
         // Fallback fonts and combining clusters can shift the loose baseline within one row.
         // Keep the original PDFium character order inside each overlapping row.
         var rows = new List<List<Glyph>>();
-        foreach (var glyph in glyphs.OrderByDescending(glyph => glyph.Rect.Bottom))
+        foreach (var glyph in body.OrderByDescending(glyph => glyph.Rect.Bottom))
         {
             if (rows.Count == 0 || !SameRow(rows[^1][0].Rect, glyph.Rect))
                 rows.Add([]);
@@ -89,29 +95,110 @@ internal sealed class PdfiumDocument : IDisposable
         var lines = new List<TextLine>(rows.Count);
         foreach (var row in rows)
         {
-            var text = new StringBuilder();
-            float previousRight = float.NegativeInfinity;
-            var previousWasWhitespace = true;
-            foreach (var glyph in row.OrderBy(glyph => glyph.Index))
+            var ordered = row.OrderBy(glyph => glyph.Index).ToList();
+            if (segments)
             {
-                var whitespace = Rune.IsWhiteSpace(glyph.Rune);
-                if (!previousWasWhitespace && !whitespace && glyph.Rect.Left - previousRight > 6)
-                    text.Append(' ');
-                text.Append(glyph.Rune.ToString());
-                previousRight = Math.Max(previousRight, glyph.Rect.Right);
-                previousWasWhitespace = whitespace;
+                // A piece's box comes from its visible characters: an indent's spaces can sit across a column gutter.
+                foreach (var piece in SplitAtGaps(ordered).OrderBy(piece => Visible(piece).Min(glyph => glyph.Rect.Left)))
+                    AddLine(lines, piece, pageNumber, size, rotated: false, Visible(piece));
             }
-            var value = text.ToString().Trim();
-            if (value.Length == 0)
-                continue;
-            var minX = Math.Max(0, row.Min(glyph => glyph.Rect.Left));
-            var maxX = Math.Max(minX, row.Max(glyph => glyph.Rect.Right));
-            var minY = Math.Max(0, size.PointHeight - row.Max(glyph => glyph.Rect.Top));
-            var maxY = Math.Max(minY, size.PointHeight - row.Min(glyph => glyph.Rect.Bottom));
-            lines.Add(new TextLine(pageNumber, value, minX * size.Scale, minY * size.Scale,
-                maxX * size.Scale, maxY * size.Scale, TextLineSource.PdfTextLayer));
+            else
+                AddLine(lines, ordered, pageNumber, size, rotated: false);
         }
+
+        // Each run of consecutive characters at one angle becomes one line, after the page's body text.
+        var run = new List<Glyph>();
+        foreach (var glyph in rotated.OrderBy(glyph => glyph.Index))
+        {
+            if (run.Count > 0 && (glyph.Angle != run[^1].Angle || glyph.Index - run[^1].Index > 2))
+            {
+                AddLine(lines, run, pageNumber, size, rotated: true);
+                run = [];
+            }
+            run.Add(glyph);
+        }
+        if (run.Count > 0)
+            AddLine(lines, run, pageNumber, size, rotated: true);
         return lines;
+    }
+
+    private static List<Glyph> Visible(List<Glyph> glyphs) => glyphs.Where(glyph => !Rune.IsWhiteSpace(glyph.Rune)).ToList();
+
+    private static void AddLine(List<TextLine> lines, List<Glyph> glyphs, int pageNumber, PageSize size, bool rotated,
+        List<Glyph>? boundsFrom = null)
+    {
+        var text = new StringBuilder();
+        float previousRight = float.NegativeInfinity;
+        var previousWasWhitespace = true;
+        foreach (var glyph in glyphs)
+        {
+            var whitespace = Rune.IsWhiteSpace(glyph.Rune);
+            if (!rotated && !previousWasWhitespace && !whitespace && glyph.Rect.Left - previousRight > 6)
+                text.Append(' ');
+            text.Append(glyph.Rune.ToString());
+            previousRight = Math.Max(previousRight, glyph.Rect.Right);
+            previousWasWhitespace = whitespace;
+        }
+        var value = text.ToString().Trim();
+        if (value.Length == 0)
+            return;
+        var box = boundsFrom is { Count: > 0 } ? boundsFrom : glyphs;
+        var minX = Math.Max(0, box.Min(glyph => glyph.Rect.Left));
+        var maxX = Math.Max(minX, box.Max(glyph => glyph.Rect.Right));
+        var minY = Math.Max(0, size.PointHeight - box.Max(glyph => glyph.Rect.Top));
+        var maxY = Math.Max(minY, size.PointHeight - box.Min(glyph => glyph.Rect.Bottom));
+        lines.Add(new TextLine(pageNumber, value, minX * size.Scale, minY * size.Scale,
+            maxX * size.Scale, maxY * size.Scale, TextLineSource.PdfTextLayer, rotated));
+    }
+
+    /// <summary>
+    /// Splits one row (in PDFium index order) where the next visible glyph jumps more than about 1.5 line heights
+    /// forward, or back, from the previous one: a column gutter or a separately drawn text block.
+    /// Word spaces in justified text stay well under that.
+    /// </summary>
+    private static List<List<Glyph>> SplitAtGaps(List<Glyph> row)
+    {
+        var heights = row.Select(glyph => glyph.Rect.Top - glyph.Rect.Bottom).Where(height => height > 0).Order().ToList();
+        var lineHeight = heights.Count == 0 ? 10f : heights[heights.Count / 2];
+        var threshold = Math.Max(12f, 1.5f * lineHeight);
+
+        var pieces = new List<List<Glyph>> { new() };
+        Glyph? previous = null;
+        foreach (var glyph in row)
+        {
+            if (Rune.IsWhiteSpace(glyph.Rune))
+            {
+                pieces[^1].Add(glyph);
+                continue;
+            }
+            if (previous is { } last
+                && (glyph.Rect.Left - last.Rect.Right > threshold || last.Rect.Left - glyph.Rect.Right > threshold))
+                pieces.Add([]);
+            pieces[^1].Add(glyph);
+            previous = glyph;
+        }
+        return pieces.Where(piece => piece.Any(glyph => !Rune.IsWhiteSpace(glyph.Rune))).ToList();
+    }
+
+    // Whole degrees; -1 when PDFium can't report an angle, which then counts as the page's main angle.
+    private static int AngleBucket(float radians) =>
+        radians >= 0 && float.IsFinite(radians) ? (int)MathF.Round(radians * 180f / MathF.PI) % 360 : -1;
+
+    private static int MainAngle(List<Glyph> glyphs) =>
+        glyphs.Where(glyph => glyph.Angle >= 0 && !Rune.IsWhiteSpace(glyph.Rune))
+            .GroupBy(glyph => glyph.Angle)
+            .OrderByDescending(group => group.Count())
+            .ThenBy(group => group.Key)
+            .Select(group => group.Key)
+            .DefaultIfEmpty(0)
+            .First();
+
+    private static bool IsRotated(Glyph glyph, int mainAngle)
+    {
+        if (glyph.Angle < 0)
+            return false;
+        var difference = Math.Abs(glyph.Angle - mainAngle) % 360;
+        return Math.Min(difference, 360 - difference) > 2;
     }
 
     private static bool SameRow(PdfRect anchor, PdfRect candidate)
@@ -184,7 +271,7 @@ internal sealed class PdfiumDocument : IDisposable
         Native.FPDF_DestroyLibrary();
     }
 
-    private readonly record struct Glyph(int Index, Rune Rune, PdfRect Rect);
+    private readonly record struct Glyph(int Index, Rune Rune, PdfRect Rect, int Angle);
     private readonly record struct PageSize(int Width, int Height, float PointHeight, float Scale);
 
     [StructLayout(LayoutKind.Sequential)]
@@ -215,6 +302,7 @@ internal sealed class PdfiumDocument : IDisposable
         [DllImport(Library)] public static extern int FPDFText_CountChars(IntPtr textPage);
         [DllImport(Library)] public static extern uint FPDFText_GetUnicode(IntPtr textPage, int index);
         [DllImport(Library)] public static extern int FPDFText_GetLooseCharBox(IntPtr textPage, int index, out PdfRect rect);
+        [DllImport(Library)] public static extern float FPDFText_GetCharAngle(IntPtr textPage, int index);
         [DllImport(Library)] public static extern IntPtr FPDFBitmap_CreateEx(int width, int height, int format, IntPtr firstScan, int stride);
         [DllImport(Library)] public static extern void FPDFBitmap_Destroy(IntPtr bitmap);
         [DllImport(Library)]

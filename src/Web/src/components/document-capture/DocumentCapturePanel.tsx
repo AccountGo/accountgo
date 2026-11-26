@@ -714,7 +714,7 @@ export const DocumentCapturePanel: React.FC<DocumentCapturePanelProps> = ({
           {schemaSupported && isAssistantKind(capture.kind) && (
             <div className="space-y-3">
               <div className="rounded-xl border border-sky-500/25 bg-sky-500/10 p-3 text-xs text-sky-900 dark:text-sky-200">
-                Sensitive numbers are masked automatically, though masking is not complete PII detection. Review, edit, or remove any field before attaching. Only masked text fields are shared with the assistant (never the original image or PDF).
+                Sensitive numbers are masked automatically, though masking is not complete PII detection. Only masked text is shared with the assistant: these fields and the text read from the document, never the original image or PDF. Removing a field here does not remove it from the document text.
               </div>
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">

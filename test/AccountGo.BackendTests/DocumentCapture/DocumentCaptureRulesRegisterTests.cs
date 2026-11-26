@@ -18,11 +18,11 @@ public sealed class DocumentCaptureRulesRegisterTests
     [Fact]
     public void ProviderVersion_MatchesExpectedFormatAndStaysWithinLengthLimit()
     {
-        Assert.Equal("rules-5", DocumentTextFieldParser.RulesVersion);
+        Assert.Equal("rules-6", DocumentTextFieldParser.RulesVersion);
         Assert.Equal(
             CaptureWorkerModels.Version + "+" + DocumentTextFieldParser.RulesVersion,
             LocalOcrDocumentFieldExtractor.CurrentProviderVersion);
-        Assert.Equal("ocr-1+d5de5df3+20b69451+rules-5", LocalOcrDocumentFieldExtractor.CurrentProviderVersion);
+        Assert.Equal("ocr-2+d5de5df3+20b69451+rules-6", LocalOcrDocumentFieldExtractor.CurrentProviderVersion);
         Assert.True(
             LocalOcrDocumentFieldExtractor.CurrentProviderVersion.Length <= 100,
             $"ProviderVersion '{LocalOcrDocumentFieldExtractor.CurrentProviderVersion}' exceeds 100 characters.");
