@@ -1255,7 +1255,7 @@ public sealed class DocumentCaptureService(
         string NormalizationVersion);
 }
 
-public sealed class DocumentCaptureServiceException(int statusCode, string errorCode, string? captureId = null,
+public class DocumentCaptureServiceException(int statusCode, string errorCode, string? captureId = null,
     EntitlementDecision? entitlementDecision = null, IReadOnlyList<string>? requiredModules = null) : Exception(errorCode)
 {
     public int StatusCode { get; } = statusCode;

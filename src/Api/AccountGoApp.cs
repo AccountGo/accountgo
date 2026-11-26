@@ -272,6 +272,7 @@ public static class AccountGoApp
             serviceProvider.GetRequiredService<Api.DocumentCaptures.DocumentCaptureAdmissionLock>());
         builder.Services.AddScoped<Api.DocumentCaptures.DocumentCaptureService>();
         builder.Services.AddScoped<Api.DocumentCaptures.DocumentCaptureRetentionService>();
+        builder.Services.AddScoped<Api.DocumentCaptures.DocumentLibraryService>();
         builder.Services.AddOptions<Api.DocumentCaptures.DocumentsOptions>()
             .Bind(builder.Configuration.GetSection(Api.DocumentCaptures.DocumentsOptions.SectionName))
             .Validate(options =>
