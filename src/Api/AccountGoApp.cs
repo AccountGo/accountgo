@@ -910,7 +910,7 @@ public static class AccountGoApp
         }
 
         // Apply SQLite schema upgrader (multi-tenancy columns, tables, indexes, security tables)
-        Api.Data.Schema.SqliteSchemaUpgrader.Upgrade(apiDbContext.Database.GetDbConnection());
+        Api.Data.Schema.SqliteSchemaUpgrader.Upgrade(apiDbContext.Database.GetDbConnection(), logger);
         schemaSw.Stop();
 
         var seedStatus = "skipped";

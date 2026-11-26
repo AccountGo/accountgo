@@ -838,11 +838,22 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .HasMaxLength(65536)
                         .HasColumnType("character varying(65536)");
 
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ArchivedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
                     b.Property<long>("ByteCount")
                         .HasColumnType("bigint");
 
                     b.Property<DateTime?>("BytesDeletedAt")
                         .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
 
                     b.Property<int>("CompanyId")
                         .HasColumnType("integer");
@@ -865,12 +876,22 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
                     b.Property<int?>("DetectedDocumentCount")
                         .HasColumnType("integer");
 
                     b.Property<string>("DetectedKind")
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
+
+                    b.Property<DateTime?>("DocumentDate")
+                        .HasColumnType("date");
 
                     b.Property<string>("ErrorCode")
                         .HasMaxLength(80)
@@ -892,6 +913,17 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Property<DateTime?>("FieldsWipedAt")
                         .HasColumnType("timestamp without time zone");
 
+                    b.Property<string>("FileName")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<DateTime?>("FiledAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("FiledBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
                     b.Property<int?>("Height")
                         .HasColumnType("integer");
 
@@ -911,6 +943,10 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .IsRequired()
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
                     b.Property<int>("PageCount")
                         .HasColumnType("integer");
@@ -962,6 +998,10 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Property<int>("TextPageCount")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Title")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<string>("WarningsJson")
                         .HasMaxLength(16384)
                         .HasColumnType("character varying(16384)");
@@ -978,6 +1018,10 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasFilter("\"PublicId\" <> ''");
+
+                    b.HasIndex("CompanyId", "FiledAt")
+                        .HasDatabaseName("IX_DocumentCaptures_Filed")
+                        .HasFilter("\"FiledAt\" IS NOT NULL AND \"DeletedAt\" IS NULL");
 
                     b.HasIndex("CompanyId", "IdempotencyKey")
                         .IsUnique()
@@ -1156,6 +1200,13 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("source");
+
                     b.Property<int>("TargetId")
                         .HasColumnType("integer");
 
@@ -1171,11 +1222,32 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.HasKey("Id");
 
                     b.HasIndex("CompanyId", "CaptureId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("IX_DocumentCaptureLinks_SourceRole")
+                        .HasFilter("\"Role\" = 'source'");
 
                     b.HasIndex("CompanyId", "TargetType", "TargetId");
 
+                    b.HasIndex("CompanyId", "CaptureId", "TargetType", "TargetId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_DocumentCaptureLinks_Company_Capture_Target");
+
                     b.ToTable("DocumentCaptureLinks", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Domain.DocumentLibraryRevision", b =>
+                {
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Revision")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
+
+                    b.HasKey("CompanyId");
+
+                    b.ToTable("DocumentLibraryRevisions", (string)null);
                 });
 
             modelBuilder.Entity("Core.Domain.DocumentNumberSeries", b =>
@@ -7779,6 +7851,15 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .IsRequired();
 
                     b.Navigation("Capture");
+                });
+
+            modelBuilder.Entity("Core.Domain.DocumentLibraryRevision", b =>
+                {
+                    b.HasOne("Core.Domain.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Core.Domain.DocumentNumberSeries", b =>

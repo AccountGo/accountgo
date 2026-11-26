@@ -666,6 +666,8 @@ namespace AccountGo.BackendTests
                 "PublicIdResolver.cs",
                 // Document capture admission and lifecycle paths bypass tenant filters only while holding the company lock and add explicit company/live-workspace predicates.
                 "DocumentCaptureService.cs",
+                // Document library revision and filing helpers operate strictly by explicit companyId inside the caller's company-locked transaction.
+                "DocumentRevision.cs",
                 // Retention and purge enumerate workspaces and capture rows with explicit company and lifecycle predicates.
                 "DocumentCaptureRetentionService.cs",
                 // AI field-mapping worker claims and applies jobs across workspaces by job id, with explicit company and generation predicates; it has no request tenant.

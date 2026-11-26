@@ -48,6 +48,17 @@ public sealed class DocumentCapture : BaseEntity, ICompanyOwned, IHasPublicId
     public DateTime ExpiresAt { get; set; }
     public DateTime? BytesDeletedAt { get; set; }
     public DateTime? FieldsWipedAt { get; set; }
+    public string? FileName { get; set; }
+    public string? Title { get; set; }
+    public string? Category { get; set; }
+    public DateTime? DocumentDate { get; set; }
+    public string? Notes { get; set; }
+    public DateTime? FiledAt { get; set; }
+    public string? FiledBy { get; set; }
+    public DateTime? ArchivedAt { get; set; }
+    public string? ArchivedBy { get; set; }
+    public DateTime? DeletedAt { get; set; }
+    public string? DeletedBy { get; set; }
 
     public DocumentCaptureBlob? Blob { get; set; }
     public ICollection<DocumentCaptureAttempt> Attempts { get; set; } = new List<DocumentCaptureAttempt>();
@@ -119,15 +130,28 @@ public sealed class CaptureAiMappingConsent : BaseEntity, ICompanyOwned
     public string? RevokedByUserId { get; set; }
 }
 
+public static class DocumentCaptureLinkRoles
+{
+    public const string Source = "source";
+    public const string Attachment = "attachment";
+}
+
 public sealed class DocumentCaptureLink : BaseEntity, ICompanyOwned
 {
     public int CompanyId { get; set; }
     public int CaptureId { get; set; }
     public string TargetType { get; set; } = string.Empty;
     public int TargetId { get; set; }
+    public string Role { get; set; } = DocumentCaptureLinkRoles.Source;
     public string LinkedBy { get; set; } = string.Empty;
     public DateTime LinkedAt { get; set; }
     /// <summary>How the document's tax was treated on the linked bill or invoice. Derived by the server, never client-supplied. Null when not derived.</summary>
     public string? TaxTreatment { get; set; }
     public DocumentCapture Capture { get; set; } = null!;
+}
+
+public sealed class DocumentLibraryRevision : ICompanyOwned
+{
+    public int CompanyId { get; set; }
+    public long Revision { get; set; }
 }
