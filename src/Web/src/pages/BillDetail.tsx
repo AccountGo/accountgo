@@ -711,7 +711,7 @@ export const BillDetail: React.FC = () => {
       })()}
 
       <BillCaptureEvidence billId={bill.id} onCapturesLoaded={handleCapturesLoaded} />
-      <RecordAttachments targetType="bill" targetId={bill.id} canAttach={canEdit} canRemove={isDraft} recordLabel="bill" />
+      <RecordAttachments targetType="bill" targetId={bill.id} canAttach={canEdit} canRemove={isDraft} recordLabel="bill" recordStatus={bill.status} />
 
       {isPaying && (
         <PayBillDialog

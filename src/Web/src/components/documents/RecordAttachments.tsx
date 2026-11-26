@@ -26,13 +26,15 @@ interface Props {
   /** Attachments may be removed: drafts and parties. Posted, issued and void bills/invoices keep theirs. */
   canRemove: boolean;
   recordLabel: string;
+  /** The record's current status; a change (draft approved, voided) reloads the links' lock state. */
+  recordStatus?: string;
 }
 
 /**
  * Files attached to one record (receipts, purchase orders, contracts). The scanned source keeps its own evidence panel;
  * this lists attachments, uploads new ones and links existing library files. Hidden when the library is off.
  */
-export const RecordAttachments: React.FC<Props> = ({ targetType, targetId, canAttach, canRemove, recordLabel }) => {
+export const RecordAttachments: React.FC<Props> = ({ targetType, targetId, canAttach, canRemove, recordLabel, recordStatus }) => {
   const { authFetch } = useAuth();
   const { hasPermission } = usePermissions();
   const canBrowseLibrary = hasPermission('documents.view');
@@ -68,7 +70,7 @@ export const RecordAttachments: React.FC<Props> = ({ targetType, targetId, canAt
     }
   }, [authFetch, base, targetId, targetType]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); }, [load, recordStatus]);
 
   const run = async (work: () => Promise<Response>, fallback: string) => {
     setBusy(true);
@@ -176,7 +178,8 @@ export const RecordAttachments: React.FC<Props> = ({ targetType, targetId, canAt
         <ul className="divide-y divide-[var(--border-subtle)]">
           {attachments.map((doc) => {
             const link = doc.links.find((l) => l.targetType === targetType && l.targetId === targetId);
-            const locked = !!link?.locked;
+            // A bill or invoice that is no longer a draft keeps its attachments, even before the reload confirms it.
+            const locked = !!link?.locked || (!canRemove && (targetType === 'bill' || targetType === 'invoice'));
             return (
               <li key={doc.id} className="py-2 flex items-center gap-3">
                 {doc.contentType.startsWith('image/') ? <ImageIcon className="w-4 h-4 shrink-0" /> : <FileText className="w-4 h-4 shrink-0" />}

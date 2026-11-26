@@ -1300,7 +1300,7 @@ export const InvoiceDetail: React.FC = () => {
       <div className="no-print mt-6">
         <InvoiceCaptureEvidence invoiceId={invoice.id} onCapturesLoaded={handleCapturesLoaded} />
         <RecordAttachments targetType="invoice" targetId={invoice.id}
-          canAttach={hasPermission('sales.invoices.create') && salesWritable} canRemove={invoice.status === 'Draft'} recordLabel="invoice" />
+          canAttach={hasPermission('sales.invoices.create') && salesWritable} canRemove={invoice.status === 'Draft'} recordLabel="invoice" recordStatus={invoice.status} />
       </div>
 
       {/* Record Payment Modal */}

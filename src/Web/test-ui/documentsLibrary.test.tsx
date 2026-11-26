@@ -307,6 +307,20 @@ describe('Record attachments', () => {
     expect(authFetch.mock.calls.filter(([u]) => String(u).startsWith('/api/documents/linked/'))).toHaveLength(2);
   });
 
+  it('shows the evidence lock as soon as the bill is approved on the page, and reloads the links', async () => {
+    let calls = 0;
+    authFetch.mockImplementation(async () => {
+      calls += 1;
+      return json({ items: [attached()], total: 1, page: 1, pageSize: 100 });
+    });
+    const { rerender } = render(<RecordAttachments targetType="bill" targetId="bill_1" canAttach canRemove recordLabel="bill" recordStatus="Draft" />);
+    expect(await screen.findByRole('button', { name: 'Remove Taxi receipt' })).toBeTruthy();
+    rerender(<RecordAttachments targetType="bill" targetId="bill_1" canAttach canRemove={false} recordLabel="bill" recordStatus="Open" />);
+    expect(screen.getByText('Kept as evidence for this posted bill')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Remove/ })).toBeNull();
+    await waitFor(() => expect(calls).toBe(2));
+  });
+
   it('keeps attachments of a posted record and offers no removal', async () => {
     authFetch.mockResolvedValue(json({ items: [attached({ links: [{ targetType: 'bill', targetId: 'bill_1', role: 'attachment', linkedAt: '', locked: true }] })], total: 1, page: 1, pageSize: 100 }));
     render(<RecordAttachments targetType="bill" targetId="bill_1" canAttach canRemove={false} recordLabel="bill" />);
