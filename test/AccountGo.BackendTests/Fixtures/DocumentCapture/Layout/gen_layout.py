@@ -107,7 +107,49 @@ td.n, th.n { text-align: right; }
 <div class="stamp">PAID</div>
 """
 
-FIXTURES = {"api-guide": API_GUIDE, "two-column-invoice": INVOICE}
+# A bank statement: account identifier, dated transactions with an invented counterparty, and a total line.
+STATEMENT = """
+<style>
+.box { position: absolute; left: 64px; top: 56px; width: 1150px; font-size: 18px; line-height: 34px; }
+h1 { font-size: 36px; margin: 0 0 18px 0; }
+.row { display: flex; justify-content: space-between; width: 700px; }
+</style>
+<div class="box">
+  <h1>Statement</h1>
+  <span class="line">Riverbank Savings</span>
+  <span class="line">Account Number: 40213377</span>
+  <span class="line">Date: March 31, 2026</span>
+  <br>
+  <div class="row"><span>2026-03-02 Transfer to Casey Sample</span><span>-$40.00</span></div>
+  <div class="row"><span>2026-03-09 Card payment Harbor Cafe</span><span>-$80.00</span></div>
+  <br>
+  <div class="row"><span>Total: $120.00</span><span></span></div>
+</div>
+"""
+
+# Two text flows whose lines happen to align exactly: small navigation items beside larger section headings.
+ALIGNED_FLOWS = """
+<style>
+.nav { position: absolute; left: 40px; top: 80px; font-size: 16px; }
+.main { position: absolute; left: 420px; top: 66px; font-size: 30px; font-weight: bold; }
+.nav .line, .main .line { height: 64px; line-height: 64px; }
+</style>
+<div class="nav"><span class="line">Navigation</span><span class="line">Overview</span><span class="line">Settings</span></div>
+<div class="main"><span class="line">API Guide</span><span class="line">Request body</span><span class="line">Errors</span></div>
+"""
+
+# The same shape in one type size: indistinguishable from a two-column table, so rows keep their cells apart.
+ALIGNED_GRID = """
+<style>
+.col { position: absolute; top: 80px; font-size: 18px; }
+.col .line { height: 40px; line-height: 40px; }
+</style>
+<div class="col" style="left: 40px"><span class="line">Navigation</span><span class="line">Overview</span><span class="line">Settings</span></div>
+<div class="col" style="left: 420px"><span class="line">API Guide</span><span class="line">Request body</span><span class="line">Errors</span></div>
+"""
+
+FIXTURES = {"api-guide": API_GUIDE, "two-column-invoice": INVOICE, "bank-statement": STATEMENT,
+            "aligned-flows": ALIGNED_FLOWS, "aligned-grid": ALIGNED_GRID}
 
 
 def render(name: str, body: str) -> None:

@@ -127,6 +127,42 @@ public sealed class AssistantAttachmentRawTextTests
         Assert.DoesNotContain("12345678", block, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [Trait("Rule", "A-03")]
+    // Review x-092: an account identifier and a total.
+    [InlineData("{\"fields\":[{\"label\":\"Account Number\",\"value\":\"40213377\"},{\"label\":\"Total\",\"value\":\"$120.00\"}]}",
+        "Statement\nAccount Number: 40213377\n2026-03-02 Transfer to Casey Sample -$40.00\nTotal: $120.00")]
+    // Dates and totals are what statements have; without an invoice title or number they don't outweigh bank details.
+    [InlineData("{\"fields\":[{\"label\":\"Account Number\",\"value\":\"40213377\"},{\"label\":\"Date\",\"value\":\"March 31, 2026\"},{\"label\":\"Total\",\"value\":\"$120.00\"}]}",
+        "Statement\nAccount Number: 40213377\nDate: March 31, 2026\n2026-03-02 Transfer to Casey Sample -$40.00\nTotal: $120.00")]
+    public async Task StatementsWithTotalsAreBankDetails(string fieldsJson, string rawText)
+    {
+        var block = await BuildAsync(fieldsJson, Api.DocumentCaptures.DocumentCaptureMasking.MaskRawText(rawText));
+
+        Assert.Contains("looksLike: bank-details", block, StringComparison.Ordinal);
+        Assert.DoesNotContain("Casey Sample", block, StringComparison.Ordinal);
+        Assert.DoesNotContain(AssistantAttachmentMessageBuilder.RawTextHeader, block, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Rule", "A-02")]
+    public async Task UnlabelledIbanStaysBankDetailsAcrossMasking()
+    {
+        // Review x-093 (1): extraction sees the IBAN, storage masks it to ••••, the message must still know.
+        string[] lines = ["Riverbank Savings", "DE89 3704 0044 0532 0130 00", "2026-03-02 Transfer to Casey Sample 40.00"];
+        var parsed = Api.DocumentCaptures.Parsing.DocumentTextFieldParser.Parse("assistant-attachment",
+            lines.Select((text, index) => new Api.DocumentCaptures.Parsing.TextLine(1, text, 0, index * 20, 400, index * 20 + 16,
+                Api.DocumentCaptures.Parsing.TextLineSource.PdfTextLayer)).ToList());
+        Assert.Contains("\"IBAN\"", parsed.FieldsJson, StringComparison.Ordinal);
+
+        var block = await BuildAsync(parsed.FieldsJson, Api.DocumentCaptures.DocumentCaptureMasking.MaskRawText(string.Join('\n', lines)));
+
+        Assert.Contains("looksLike: bank-details", block, StringComparison.Ordinal);
+        Assert.Contains("- IBAN: ••••", block, StringComparison.Ordinal);
+        Assert.DoesNotContain("Casey Sample", block, StringComparison.Ordinal);
+        Assert.DoesNotContain("0532", block, StringComparison.Ordinal);
+    }
+
     [Fact]
     [Trait("Rule", "A-03")]
     public async Task UnlabelledBankDetailsInTheTextStillSendNoText()

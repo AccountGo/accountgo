@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Api.Data;
 using Api.DocumentCaptures;
+using Api.DocumentCaptures.Parsing;
 using Api.PublicIds;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -497,15 +498,18 @@ public static partial class AssistantAttachmentMessageBuilder
             }
         }
 
-        if (hasBankLabel && !hasInvoiceOrTotalLabel)
-            return LooksLikeBankDetails;
-        if (!hasInvoiceOrTotalLabel)
+        // Bank details win unless the document is independently an invoice or receipt (A-02: two financial signals, one
+        // of them a document title or number). A statement's dates, totals and balances alone never outweigh them.
+        var hasBank = hasBankLabel
+            || (!string.IsNullOrWhiteSpace(maskedRawText) && MaskedBankIdentifierRegex().IsMatch(maskedRawText));
+        if (hasBank)
         {
-            // Bank details the field rules did not label (e.g. "Routing number 021000021") still keep their text out.
-            return !string.IsNullOrWhiteSpace(maskedRawText) && MaskedBankIdentifierRegex().IsMatch(maskedRawText)
-                ? LooksLikeBankDetails
-                : LooksLikeOther;
+            var evidence = AssistantFinancialEvidence.Assess(EvidenceLines(maskedRoot, maskedRawText));
+            if (!(evidence.Financial && evidence.DocumentSignal))
+                return LooksLikeBankDetails;
         }
+        else if (!hasInvoiceOrTotalLabel)
+            return LooksLikeOther;
 
         if (!matchesWorkspaceIssuer && !string.IsNullOrWhiteSpace(maskedRawText))
         {
@@ -513,6 +517,27 @@ public static partial class AssistantAttachmentMessageBuilder
         }
 
         return matchesWorkspaceIssuer ? LooksLikeSalesInvoice : LooksLikeVendorBillOrReceipt;
+    }
+
+    private static List<string> EvidenceLines(JsonElement maskedRoot, string? maskedRawText)
+    {
+        var lines = new List<string>();
+        if (maskedRoot.ValueKind == JsonValueKind.Object
+            && maskedRoot.TryGetProperty("fields", out var fields)
+            && fields.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in fields.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object)
+                    continue;
+                var label = item.TryGetProperty("label", out var l) && l.ValueKind == JsonValueKind.String ? l.GetString() : null;
+                var value = item.TryGetProperty("value", out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+                lines.Add($"{label} {value}".Trim());
+            }
+        }
+        if (!string.IsNullOrWhiteSpace(maskedRawText))
+            lines.AddRange(maskedRawText.Split('\n'));
+        return lines;
     }
 
     private static bool MatchesWorkspaceName(string normalizedCandidate, string normalizedCompany, string normalizedShort)

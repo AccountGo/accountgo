@@ -48,8 +48,7 @@ function AssistantEmptyState() {
         }}
       >
         Get help with double-entry bookkeeping, journals, invoices, and reports for this
-        workspace. Workspace names and personal details are hidden from the AI and restored on
-        your screen; text you type in the chat is sent as written.
+        workspace. {ASSISTANT_PRIVACY_DETAIL}
       </p>
 
       <div
@@ -84,6 +83,14 @@ function AssistantEmptyState() {
   );
 }
 
+// Tool results are pseudonymized; attachment text only has account-like numbers masked. Keep both claims accurate.
+const ASSISTANT_PRIVACY_SUMMARY =
+  'Names from your books are hidden from the AI. Attachment text is sent with only account numbers masked.';
+const ASSISTANT_PRIVACY_DETAIL =
+  'Names and personal details from your books are replaced with tokens before reaching the AI and restored on your screen. ' +
+  'Text read from an attached file is sent with account-like numbers masked, but masking is limited: other names, email ' +
+  'addresses and phone numbers in it are sent as they appear. Text you type is sent as written.';
+
 /**
  * Chat panel content for AccountGo Assistant.
  */
@@ -94,9 +101,9 @@ export function AssistantSidepanel({ orgSlug: _orgSlug = '' }: { orgSlug?: strin
     <div className="accountgo-assistant-sidepanel flex flex-col h-full min-h-0">
       <div
         className="shrink-0 px-3 py-1.5 border-b border-[var(--border-subtle)] bg-[var(--bg-subtle)] text-[11px] text-[var(--text-secondary)]"
-        title="Workspace names and personal details returned by tools are replaced with session tokens before reaching the AI and restored on your screen. Text you type yourself is sent as written."
+        title={ASSISTANT_PRIVACY_DETAIL}
       >
-        Names and personal details are hidden from the AI.
+        {ASSISTANT_PRIVACY_SUMMARY}
       </div>
 
       <div className="flex-1 min-h-0">

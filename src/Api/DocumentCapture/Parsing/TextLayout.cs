@@ -96,9 +96,18 @@ public static class TextLayout
                 continue;
             }
 
-            foreach (var column in region.Value.Columns)
-                foreach (var row in column)
-                    yield return Join(row);
+            if (region.Value.Grid is { } grid)
+            {
+                // Ambiguous aligned grid: keep rows, but show the cell boundaries instead of merging the text.
+                foreach (var cells in grid)
+                    yield return JoinCells(cells);
+            }
+            else
+            {
+                foreach (var column in region.Value.Columns)
+                    foreach (var row in column)
+                        yield return Join(row);
+            }
             index = region.Value.End;
         }
     }
@@ -106,12 +115,13 @@ public static class TextLayout
     /// <summary>
     /// Looks for side-by-side columns starting at <paramref name="start"/>: consecutive rows that leave one vertical band
     /// of at least <paramref name="minGutter"/> empty. Rejected when fewer than <see cref="MinColumnRows"/> rows share the
-    /// band, when the band has no text on one side, when every row fills every column (an aligned grid such as a table
-    /// or a label/value list keeps its rows), or when a column is mostly numbers. A row with two or more numeric
+    /// band, when the band has no text on one side, or when a column is mostly numbers. A row with two or more numeric
     /// pieces (a table row), the header row directly above one, or a row that crosses the band (a full-width heading) ends
-    /// the region.
+    /// the region. When every row fills every column, the region is read as columns only if the columns' text heights
+    /// differ (a heading beside navigation items); otherwise it is an aligned grid that could be a table, so it keeps its
+    /// rows with the cells separated (<see cref="Grid"/>).
     /// </summary>
-    private static (int End, List<List<List<TextLine>>> Columns)? FindColumnRegion(
+    private static (int End, List<List<List<TextLine>>> Columns, List<List<List<TextLine>>>? Grid)? FindColumnRegion(
         List<List<TextLine>> rows, int start, float left, float right, float minGutter)
     {
         if (IsTablePart(rows, start))
@@ -142,6 +152,7 @@ public static class TextLayout
         for (var column = 0; column <= gutters.Count; column++)
             columns.Add([]);
         var filledEverywhere = 0;
+        var grid = new List<List<List<TextLine>>>();
         foreach (var row in regionRows)
         {
             var cells = new List<TextLine>[gutters.Count + 1];
@@ -154,10 +165,9 @@ public static class TextLayout
                     columns[i].Add(cells[i]);
             if (cells.All(cell => cell.Count > 0))
                 filledEverywhere++;
+            grid.Add([.. cells]);
         }
 
-        if (filledEverywhere == regionRows.Count)
-            return null;
         foreach (var column in columns)
         {
             var pieces = column.SelectMany(row => row).ToList();
@@ -165,7 +175,28 @@ public static class TextLayout
                 return null;
         }
 
-        return (end, columns);
+        if (filledEverywhere == regionRows.Count && !ColumnHeightsDiffer(columns))
+            return (end, columns, grid);
+        return (end, columns, null);
+    }
+
+    // Separate text flows set side by side usually differ in type size; table columns share one.
+    internal const float ColumnHeightRatio = 1.4f;
+
+    private static bool ColumnHeightsDiffer(List<List<List<TextLine>>> columns)
+    {
+        var heights = columns.Select(column => Median(column.SelectMany(row => row).Select(piece => piece.Y1 - piece.Y0))).ToList();
+        return heights.Max() >= ColumnHeightRatio * heights.Min();
+    }
+
+    private static TextLine JoinCells(List<List<TextLine>> cells)
+    {
+        var pieces = cells.Where(cell => cell.Count > 0).Select(Join).ToList();
+        return pieces.Count == 1
+            ? pieces[0]
+            : new TextLine(pieces[0].Page, string.Join(" | ", pieces.Select(piece => piece.Text)),
+                pieces.Min(piece => piece.X0), pieces.Min(piece => piece.Y0), pieces.Max(piece => piece.X1),
+                pieces.Max(piece => piece.Y1), pieces[0].Source);
     }
 
     private static int ColumnOf(TextLine piece, List<Band> gutters)

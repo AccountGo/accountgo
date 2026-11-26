@@ -102,6 +102,44 @@ public sealed class LocalOcrLayoutTests(ITestOutputHelper output)
         Assert.True(Array.IndexOf(lines, "Invoice Number LPW-2048") > start + address.Length);
     }
 
+    [LocalOcrTheory]
+    [Trait("Rule", "G-04")]
+    [InlineData("aligned-flows.png")]
+    [InlineData("aligned-flows.pdf")]
+    public async Task AlignedNavigationBesideHeadingsIsReadAsColumns(string file)
+    {
+        var lines = (await ExtractAsync(file, "assistant-attachment")).RawText!.Split('\n');
+        output.WriteLine(string.Join('\n', lines));
+
+        Assert.Equal(["Navigation", "Overview", "Settings", "API Guide", "Request body", "Errors"], lines);
+    }
+
+    [LocalOcrTheory]
+    [Trait("Rule", "G-04")]
+    [InlineData("aligned-grid.png")]
+    [InlineData("aligned-grid.pdf")]
+    public async Task AlignedGridInOneTypeSizeKeepsRowsWithCellsSeparated(string file)
+    {
+        var lines = (await ExtractAsync(file, "assistant-attachment")).RawText!.Split('\n');
+        output.WriteLine(string.Join('\n', lines));
+
+        Assert.Equal(["Navigation | API Guide", "Overview | Request body", "Settings | Errors"], lines);
+    }
+
+    [LocalOcrTheory]
+    [Trait("Rule", "A-02")]
+    [InlineData("bank-statement.png")]
+    [InlineData("bank-statement.pdf")]
+    public async Task StatementWithATotalHasABankFieldThatSurvivesMasking(string file)
+    {
+        var result = await ExtractAsync(file, "assistant-attachment");
+        using var fields = JsonDocument.Parse(result.FieldsJson);
+        var labels = fields.RootElement.GetProperty("fields").EnumerateArray().Select(f => f.GetProperty("label").GetString()).ToList();
+        output.WriteLine(result.FieldsJson);
+
+        Assert.Contains(labels, label => label is not null && Api.DocumentCaptures.Parsing.AssistantFinancialEvidence.IsBankLabel(label));
+    }
+
     private static async Task<DocumentExtractionResult> ExtractAsync(string file, string kind)
     {
         var options = new DocumentCaptureOptions { Extractor = "local-ocr" };

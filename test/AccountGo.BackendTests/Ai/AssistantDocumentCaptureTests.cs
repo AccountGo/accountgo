@@ -923,6 +923,22 @@ public sealed class AssistantDocumentCaptureTests : IAsyncLifetime
         Assert.Contains("| PAID\n", normalized, StringComparison.Ordinal);
     }
 
+    [AccountGo.BackendTests.DocumentCapture.LocalOcrLayoutTests.LocalOcrTheory]
+    [Trait("Rule", "A-03")]
+    [InlineData("bank-statement.png", "image/png")]
+    [InlineData("bank-statement.pdf", "application/pdf")]
+    public async Task RunStream_RealWorkerBankStatementWithATotal_SendsMaskedFieldsOnly(string file, string contentType)
+    {
+        var message = await UploadWithRealWorkerAndSendAsync(file, contentType, "What did I spend this month?");
+
+        Assert.Contains("looksLike: bank-details", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Casey Sample", message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Harbor Cafe", message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("40213377", message, StringComparison.Ordinal);
+        Assert.DoesNotContain(AssistantAttachmentMessageBuilder.RawTextHeader, message, StringComparison.Ordinal);
+        Assert.Contains(AssistantAttachmentMessageBuilder.BankTextWithheldMarker, message, StringComparison.Ordinal);
+    }
+
     private async Task<string> UploadWithRealWorkerAndSendAsync(string file, string contentType, string userMessage)
     {
         var options = new Api.DocumentCaptures.DocumentCaptureOptions { Extractor = "local-ocr" };

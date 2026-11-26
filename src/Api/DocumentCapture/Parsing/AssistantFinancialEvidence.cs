@@ -39,7 +39,12 @@ public static class AssistantFinancialEvidence
         Options);
 
     private static readonly Regex BankLabelValueRegex = new(
-        @"(?:^|[^\p{L}\p{N}_])(?:iban|swift|bic|routing(?:\s+(?:no\.?|number))?|aba|bsb|sort\s+code|acct\.?\s*(?:no\.?|#)?|account\s*(?:number|no\.?|#))(?:[^\p{L}\p{N}_]|$)\s*[:#]?\s*[A-Z0-9\- ]*?\d(?:[\s\-]?\d){5,}",
+        @"(?:^|[^\p{L}\p{N}_])(?<label>iban|swift|bic|routing(?:\s+(?:no\.?|number))?|aba|bsb|sort\s+code|acct\.?\s*(?:no\.?|#)?|account\s*(?:number|no\.?|#))(?:[^\p{L}\p{N}_]|$)\s*[:#]?\s*(?<value>[A-Z0-9\- ]*?\d(?:[\s\-]?\d){5,})",
+        Options);
+
+    // A field label that names a bank identifier (same words as BankLabelValueRegex).
+    private static readonly Regex BankLabelRegex = new(
+        @"(?:^|[^\p{L}\p{N}_])(?:iban|swift|bic|routing|aba|bsb|sort\s+code|acct|account\s*(?:number|no\.?|#))(?:[^\p{L}\p{N}_]|$)",
         Options);
 
     private static readonly Regex IbanValueRegex = new(
@@ -48,21 +53,40 @@ public static class AssistantFinancialEvidence
 
     public static Evidence Assess(IReadOnlyList<string> lines)
     {
-        bool title = false, amount = false, number = false, date = false, bank = false;
+        bool title = false, amount = false, number = false, date = false;
+        (string Label, string Value)? bank = null;
         foreach (var line in lines)
         {
             title |= TitleLineRegex.IsMatch(line);
             amount |= TotalAmountRegex.IsMatch(line);
             number |= DocumentNumberRegex.IsMatch(line);
             date |= DateRegex.IsMatch(line);
-            bank |= BankLabelValueRegex.IsMatch(line) || IbanValueRegex.IsMatch(line);
+            if (bank is null)
+            {
+                var labelled = BankLabelValueRegex.Match(line);
+                if (labelled.Success)
+                    bank = (labelled.Groups["label"].Value.Trim(), labelled.Groups["value"].Value.Trim());
+                else if (IbanValueRegex.Match(line) is { Success: true } iban)
+                    bank = ("IBAN", iban.Value.Trim());
+            }
         }
         var signals = (title ? 1 : 0) + (amount ? 1 : 0) + (number ? 1 : 0) + (date ? 1 : 0);
-        return new Evidence(signals >= 2, bank, signals);
+        return new Evidence(signals >= 2, bank is not null, signals, title || number, bank);
     }
 
-    public readonly record struct Evidence(bool Financial, bool Bank, int FinancialSignals)
+    public static bool IsBankLabel(string label) => BankLabelRegex.IsMatch(label);
+
+    /// <param name="Financial">At least two different financial signals.</param>
+    /// <param name="Bank">A bank identifier with a number.</param>
+    /// <param name="DocumentSignal">A document title line or a document-number label: what an invoice with remittance
+    /// details has and a bank statement (dates, totals and balances) does not.</param>
+    /// <param name="BankDetail">The first bank identifier found, as label and value (unlabelled IBANs get "IBAN").</param>
+    public readonly record struct Evidence(
+        bool Financial, bool Bank, int FinancialSignals, bool DocumentSignal = false, (string Label, string Value)? BankDetail = null)
     {
         public bool Any => Financial || Bank;
+
+        /// <summary>Bank details win unless the document is also clearly an invoice or receipt.</summary>
+        public bool IsBankDocument => Bank && !(Financial && DocumentSignal);
     }
 }

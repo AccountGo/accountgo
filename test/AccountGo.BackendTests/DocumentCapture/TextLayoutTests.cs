@@ -74,9 +74,9 @@ public sealed class TextLayoutTests
 
     [Fact]
     [Trait("Rule", "G-04")]
-    public void AnAlignedGridOfLabelsAndValuesStaysInRows()
+    public void AnAlignedGridInOneTypeSizeKeepsRowsWithCellsSeparated()
     {
-        // Every row filled in both columns reads as a table, not as two columns.
+        // Could be a parameter table: reading it by column would split each name from its type.
         TextLine[] page =
         [
             P("Name", 30, 100, 90), P("Type", 400, 100, 450),
@@ -84,7 +84,26 @@ public sealed class TextLayoutTests
             P("items", 30, 160, 90), P("array", 400, 160, 460),
         ];
 
-        Assert.Equal(["Name Type", "note string", "items array"], Texts(TextLayout.ReadingLines(page)));
+        Assert.Equal(["Name | Type", "note | string", "items | array"], Texts(TextLayout.ReadingLines(page)));
+        Assert.Equal(["Name Type", "note string", "items array"], Texts(TextLayout.Rows(page)));
+    }
+
+    [Fact]
+    [Trait("Rule", "G-04")]
+    public void AlignedNavigationBesideLargerHeadingsIsReadAsColumns()
+    {
+        // The review's case: three rows that line up exactly, small navigation items beside larger headings.
+        static TextLine H(string text, float x0, float y0, float x1, float height) =>
+            new(1, text, x0, y0, x1, y0 + height, TextLineSource.PdfTextLayer);
+        TextLine[] page =
+        [
+            H("Navigation", 30, 100, 150, 18), H("API Guide", 400, 92, 600, 34),
+            H("Overview", 30, 160, 130, 18), H("Request body", 400, 152, 640, 34),
+            H("Settings", 30, 220, 120, 18), H("Errors", 400, 212, 520, 34),
+        ];
+
+        Assert.Equal(["Navigation", "Overview", "Settings", "API Guide", "Request body", "Errors"],
+            Texts(TextLayout.ReadingLines(page)));
     }
 
     [Fact]

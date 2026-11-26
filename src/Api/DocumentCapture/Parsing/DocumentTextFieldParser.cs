@@ -1146,6 +1146,20 @@ public static class DocumentTextFieldParser
             AppendFinancialHintsAsAssistantFields(items, seenLabels, financial, isTimedOut);
         }
 
+        // Bank evidence must survive masking: the stored text masks account numbers and IBANs to "••••", so the message
+        // builder can only see that it was a bank document from a bank-labelled field. Add one when the passes found none.
+        if (evidence.BankDetail is { } detail
+            && !items.Any(item => item["label"] is string label && AssistantFinancialEvidence.IsBankLabel(label)))
+        {
+            if (items.Count >= DocumentCaptureFieldSchemas.MaxAssistantFields)
+                items.RemoveAt(items.Count - 1);
+            items.Insert(0, new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["label"] = Truncate(detail.Label, 200),
+                ["value"] = Truncate(detail.Value, DocumentCaptureFieldSchemas.MaxTextLength),
+            });
+        }
+
         return new Dictionary<string, object?>(StringComparer.Ordinal)
         {
             ["fields"] = items,
