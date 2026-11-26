@@ -373,4 +373,11 @@ namespace Core.Domain
         CustomerPayout = 1,
         SupplierInflow = 2
     }
+
+    /// <summary>Primary source document classification recorded on a vendor bill (<see cref="Purchases.PurchaseInvoiceHeader"/>).</summary>
+    public enum BillSourceDocumentType
+    {
+        SupplierInvoice = 1,
+        ExpenseReceipt = 2
+    }
 }

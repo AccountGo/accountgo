@@ -30,6 +30,11 @@ namespace Dto.Purchasing
         public int? PaymentTermId { get; set; }
         public string? ReferenceNo { get; set; }
         public string? Notes { get; set; }
+        /// <summary>
+        /// Primary source document classification: <c>unspecified</c>, <c>supplier-invoice</c>, or <c>expense-receipt</c>.
+        /// On creation, null/omitted defaults to <c>unspecified</c>; on draft update, null/omitted preserves the saved classification while <c>unspecified</c> clears it.
+        /// </summary>
+        public string? SourceDocumentType { get; set; }
         public List<BillLine> Lines { get; set; } = new();
 
         public decimal Subtotal { get; set; }

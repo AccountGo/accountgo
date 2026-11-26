@@ -57,6 +57,8 @@ namespace Core.Domain.Purchases
         public DateTime? DueDate { get; set; }
         public string? ReferenceNo { get; set; }
         public string? Notes { get; set; }
+        /// <summary>Primary source document classification chosen during draft entry; null means unspecified.</summary>
+        public BillSourceDocumentType? SourceDocumentType { get; set; }
         /// <summary>The vendor as it was when the bill was approved; drafts follow the vendor.</summary>
         public string? BillFromJson { get; set; }
         public PurchaseInvoiceStatus? Status { get; set; }

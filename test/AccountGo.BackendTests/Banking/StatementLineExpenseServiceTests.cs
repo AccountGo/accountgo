@@ -52,6 +52,7 @@ public class StatementLineExpenseServiceTests
         Assert.Null(first.Payment);
         Assert.False(first.Line.IsMatched);
         Assert.True(harness.Repos.PurchaseInvoices.Table.Single().IsDraft);
+        Assert.Null(harness.Repos.PurchaseInvoices.Table.Single().SourceDocumentType);
         Assert.Empty(harness.Repos.VendorPayments.Table);
         Assert.Empty(harness.Repos.GlHeaders.Table);
         purchasing.Verify(p => p.SaveBill(It.IsAny<PurchaseInvoiceHeader>(), It.IsAny<bool>()), Times.Once);
@@ -227,6 +228,7 @@ public class StatementLineExpenseServiceTests
             VendorId = 1,
             Date = BankingTestHarness.Utc(2026, 3, 20),
             No = "B-12",
+            SourceDocumentType = BillSourceDocumentType.ExpenseReceipt,
             Status = PurchaseInvoiceStatus.Open
         });
 

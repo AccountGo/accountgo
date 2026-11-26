@@ -31,8 +31,14 @@ import {
   resolveAutoPreselectCandidate,
   VendorCaptureFields,
 } from '../components/document-capture/fields';
-import { Bill, BillAccount, CatalogItem, CustomerOption, ItemOption, PaymentTermOption, TenantContextType, Vendor } from '../types';
+import { Bill, BillAccount, BillSourceDocumentType, CatalogItem, CustomerOption, ItemOption, PaymentTermOption, TenantContextType, Vendor } from '../types';
 import { useAuth } from '../auth/AuthContext';
+import {
+  BILL_SOURCE_DOCUMENT_OPTIONS,
+  billSourceDocumentLabel,
+  mapCaptureKindToBillSourceDocument,
+  normalizeBillSourceDocumentType,
+} from '../lib/billSourceDocument';
 import { currencySymbol as getCurrencySymbol } from '../lib/currency';
 import { addBusinessDays, businessDaysBetween, isValidDate, localToday as today } from '../lib/businessDays';
 import { archivedTaxMessage, firstArchivedTax, isSelectableTax, lineTaxChoices, taxChoiceLabel, WorkspaceTax } from '../lib/invoiceTax';
@@ -102,6 +108,8 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
   const [vendorId, setVendorId] = useState<string | null>(presetVendor);
   const [vendorInvoiceNo, setVendorInvoiceNo] = useState('');
   const [referenceNo, setReferenceNo] = useState('');
+  const [sourceDocumentType, setSourceDocumentType] = useState<BillSourceDocumentType>('unspecified');
+  const [sourceDocumentTouched, setSourceDocumentTouched] = useState(false);
   const [date, setDate] = useState(today());
   const [paymentTermId, setPaymentTermId] = useState<string>('');
   const [dueDate, setDueDate] = useState('');
@@ -129,6 +137,11 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
   const [vendorMatchDismissed, setVendorMatchDismissed] = useState(false);
   const [newVendorInitialName, setNewVendorInitialName] = useState<string | undefined>(undefined);
   const [pendingDueDate, setPendingDueDate] = useState<string | null>(null);
+  const [pendingSourceDocument, setPendingSourceDocument] = useState<{
+    captureId: string;
+    suggested: BillSourceDocumentType;
+  } | null>(null);
+  const [dismissedSourceDocCaptureIds, setDismissedSourceDocCaptureIds] = useState<Record<string, true>>({});
   const [pendingLineMerge, setPendingLineMerge] = useState<LineDraft[] | null>(null);
   // How the scanned tax was applied, per capture, and the bill note that goes with lines held for the merge choice.
   const [taxRegime, setTaxRegime] = useState<CaptureTaxRegime | null>(null);
@@ -247,6 +260,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
           }
           setVendorId(bill.vendorId);
           setReferenceNo(bill.referenceNo ?? '');
+          setSourceDocumentType(normalizeBillSourceDocumentType(bill.sourceDocumentType));
           setNotes(bill.notes ?? '');
           setPaymentTermId(bill.paymentTermId ?? '');
           setLines(bill.lines.map((l) => toLine(l, isEdit)));
@@ -520,6 +534,18 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
         return;
       }
 
+      const suggestedSourceDoc = mapCaptureKindToBillSourceDocument(canonical.kind);
+      if (suggestedSourceDoc && !dismissedSourceDocCaptureIds[canonical.id]) {
+        if (sourceDocumentType === suggestedSourceDoc) {
+          setPendingSourceDocument(null);
+        } else if (sourceDocumentType === 'unspecified' && !sourceDocumentTouched) {
+          setSourceDocumentType(suggestedSourceDoc);
+          setPendingSourceDocument(null);
+        } else {
+          setPendingSourceDocument({ captureId: canonical.id, suggested: suggestedSourceDoc });
+        }
+      }
+
       if (fields.vendorInvoiceNo?.trim()) {
         setVendorInvoiceNo(fields.vendorInvoiceNo.trim().slice(0, MAX_VENDOR_INVOICE_NO_LENGTH));
       }
@@ -545,7 +571,17 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
         applyCapturedMonetaryLines(fields, canonical.id);
       }
     },
-    [applyCapturedMonetaryLines, currentOrg.currency, paymentTermId, vendorId, vendors]
+    [
+      applyCapturedMonetaryLines,
+      authFetch,
+      currentOrg.currency,
+      dismissedSourceDocCaptureIds,
+      paymentTermId,
+      sourceDocumentTouched,
+      sourceDocumentType,
+      vendorId,
+      vendors,
+    ]
   );
 
   const linkCaptureToBill = useCallback(
@@ -649,6 +685,7 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
           vendorId,
           vendorInvoiceNo: vendorInvoiceNo.trim() || null,
           referenceNo: referenceNo.trim() || null,
+          sourceDocumentType,
           date,
           dueDate: dueDate || null,
           paymentTermId: paymentTermId || null,
@@ -832,6 +869,39 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
         </div>
       )}
 
+      {/* Explicit source-document choice when an accepted scan differs from an existing or manually chosen classification */}
+      {pendingSourceDocument && (
+        <div role="status" className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-800 dark:text-amber-300">
+          <span>
+            Scanned document is <strong>{billSourceDocumentLabel(pendingSourceDocument.suggested)}</strong>, while this bill&apos;s source document is set to{' '}
+            <strong>{billSourceDocumentLabel(sourceDocumentType)}</strong>. Each attached file still keeps its own label.
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setSourceDocumentType(pendingSourceDocument.suggested);
+                setSourceDocumentTouched(true);
+                setPendingSourceDocument(null);
+              }}
+              className="px-3 py-1.5 font-semibold rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-main)]"
+            >
+              Use {billSourceDocumentLabel(pendingSourceDocument.suggested)}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDismissedSourceDocCaptureIds((prev) => ({ ...prev, [pendingSourceDocument.captureId]: true }));
+                setPendingSourceDocument(null);
+              }}
+              className="px-2.5 py-1.5 font-semibold rounded-lg text-[var(--text-secondary)]"
+            >
+              Keep {billSourceDocumentLabel(sourceDocumentType)}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Explicit due-date / payment-term choice when a payment term was already selected */}
       {pendingDueDate && (
         <div role="status" className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-800 dark:text-amber-300">
@@ -1011,26 +1081,6 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
               </div>
             )}
 
-            {(reviewCap.kind === 'expense-receipt' ||
-              capFields.paymentHints?.paymentStatus === 'paid' ||
-              capFields.paymentHints?.paymentStatus === 'partial') && (
-              <div className="rounded-xl border border-sky-500/25 bg-sky-500/10 p-3 text-sky-900 dark:text-sky-200 space-y-1">
-                <div className="font-semibold">
-                  Receipt settlement notice
-                  {capFields.paymentHints?.paymentStatus
-                    ? ` (hint: ${capFields.paymentHints.paymentStatus}${capFields.paymentHints.amountPaid ? `, ${capFields.paymentHints.amountPaid}` : ''})`
-                    : ''}
-                </div>
-                <p>
-                  Approving this bill records what you owe and does not record a payment or settle it. If this receipt was already paid, record the payment via <strong>Pay bill</strong> after approving, or match the existing bank transaction in{' '}
-                  <Link to={`/org/${orgSlug}/banking`} className="underline font-semibold">
-                    Banking
-                  </Link>{' '}
-                  to avoid recording a duplicate expense.
-                </p>
-              </div>
-            )}
-
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3">
               <div>
                 <div className="text-[var(--text-muted)]">Source totals</div>
@@ -1112,6 +1162,38 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
           </section>
         );
       })}
+
+      {(() => {
+        const paymentHintBadge = reviewedCaptures
+          .map((c) => ((c.acceptedFields ?? c.fields) as VendorCaptureFields | null)?.paymentHints)
+          .find((h) => h?.paymentStatus === 'paid' || h?.paymentStatus === 'partial');
+        const showReceiptNotice =
+          sourceDocumentType === 'expense-receipt' ||
+          reviewedCaptures.some((c) => c.kind === 'expense-receipt') ||
+          Boolean(paymentHintBadge);
+        if (!showReceiptNotice) return null;
+        return (
+          <div
+            role="note"
+            aria-label="Receipt settlement notice"
+            className="mb-6 rounded-xl border border-sky-500/25 bg-sky-500/10 p-4 text-xs text-sky-900 dark:text-sky-200 space-y-1.5"
+          >
+            <div className="font-semibold">
+              Receipt settlement notice
+              {paymentHintBadge?.paymentStatus
+                ? ` (hint: ${paymentHintBadge.paymentStatus}${paymentHintBadge.amountPaid ? `, ${paymentHintBadge.amountPaid}` : ''}${paymentHintBadge.paymentMethod ? ` · ${paymentHintBadge.paymentMethod}` : ''})`
+                : ''}
+            </div>
+            <p>
+              Approving this bill records what you owe and does not record a payment or settle it. If it was already paid, choose one path after approving—do not do both for the same payment: record the payment with <strong>Pay bill</strong> (and match that payment entry on your statement in{' '}
+              <Link to={`/org/${orgSlug}/banking`} className="underline font-semibold">
+                Banking
+              </Link>{' '}
+              where supported), or leave the bill unpaid and use <strong>Pay open bill</strong> from an eligible unmatched withdrawal line in <strong>Banking</strong> (which records the payment and matches the line together).
+            </p>
+          </div>
+        );
+      })()}
 
       {error && (
         <div role="alert" className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-xl flex items-start gap-3">
@@ -1204,6 +1286,31 @@ export const BillEdit: React.FC<{ isEdit?: boolean }> = ({ isEdit = false }) => 
           </div>
 
           <div className="lg:col-span-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="bill-source-document" className={labelClass}>
+                Source document
+              </label>
+              <select
+                id="bill-source-document"
+                aria-describedby="bill-source-document-hint"
+                value={sourceDocumentType}
+                onChange={(e) => {
+                  setSourceDocumentType(normalizeBillSourceDocumentType(e.target.value));
+                  setSourceDocumentTouched(true);
+                  setPendingSourceDocument(null);
+                }}
+                className={fieldClass}
+              >
+                {BILL_SOURCE_DOCUMENT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <p id="bill-source-document-hint" className="mt-1.5 text-xs text-[var(--text-muted)]">
+                Evidence classification only; line accounts and payments stay separate.
+              </p>
+            </div>
             <div>
               <label htmlFor="vendor-invoice-no" className={labelClass}>
                 Vendor's bill #

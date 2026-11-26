@@ -366,6 +366,7 @@ namespace Api.Data.Schema
                     new[] { "InventoryControlJournal", "Memo", "TEXT NULL" },
                     new[] { "PurchaseInvoiceHeader", "DueDate", "TEXT NULL" },
                     new[] { "PurchaseInvoiceHeader", "Notes", "TEXT NULL" },
+                    new[] { "PurchaseInvoiceHeader", "SourceDocumentType", "INTEGER NULL" },
                     new[] { "PurchaseInvoiceHeader", "BillFromJson", "TEXT NULL" },
                     new[] { "PurchaseInvoiceHeader", "VoidGeneralLedgerHeaderId", "INTEGER NULL" },
                     new[] { "PurchaseInvoiceLine", "Description", "TEXT NULL" },

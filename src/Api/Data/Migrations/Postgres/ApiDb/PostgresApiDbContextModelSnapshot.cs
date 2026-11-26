@@ -4016,6 +4016,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                     b.Property<string>("ReferenceNo")
                         .HasColumnType("text");
 
+                    b.Property<int?>("SourceDocumentType")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("Status")
                         .HasColumnType("integer");
 

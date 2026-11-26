@@ -244,6 +244,7 @@ public sealed class McpDeidentificationTests : IAsyncLifetime
             Status = PurchaseInvoiceStatus.Open,
             VendorInvoiceNo = "VINV-9001",
             ReferenceNo = "BREF-9001",
+            SourceDocumentType = BillSourceDocumentType.ExpenseReceipt,
             Description = SentinelFreeText,
             PurchaseInvoiceLines = new List<PurchaseInvoiceLine>
             {
@@ -478,6 +479,7 @@ public sealed class McpDeidentificationTests : IAsyncLifetime
                 Assert.True(billData is not null, $"get_bill returned null data: {rawJson}");
                 var lineDesc = billData!["lines"]?[0]?["description"]?.GetValue<string>();
                 Assert.True(lineDesc == McpFieldClassificationRegistry.HiddenTextPlaceholder, $"Unexpected get_bill payload: {rawJson}");
+                Assert.Equal("expense-receipt", billData["sourceDocumentType"]?.GetValue<string>());
                 Assert.Equal(McpFieldClassificationRegistry.MaskedPlaceholder, billData["vendorEmail"]?.GetValue<string>());
             }
         }

@@ -13,6 +13,8 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ### Added
 
+- Bills now let you record whether the primary source document is a supplier invoice or an expense receipt even without scanning, with guidance on recording or matching already-paid receipts without duplicating the expense.
+
 - Eligible sole workspace owners can set up missing financial access directly from the dashboard.
 
 - Self-hosted installations can opt in to reading uploaded documents locally and review the extracted details before saving.

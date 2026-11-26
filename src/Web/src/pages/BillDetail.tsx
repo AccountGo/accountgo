@@ -25,6 +25,7 @@ import {
   VendorCaptureFields,
 } from '../components/document-capture/fields';
 import { RecordHistoryButton, RecordHistoryPanel, useRecordHistory } from '../components/RecordHistoryPanel';
+import { billSourceDocumentLabel, normalizeBillSourceDocumentType } from '../lib/billSourceDocument';
 
 /** One bill: who it is from, its lines and the accounts they are booked to, what is still owed, and its payments. */
 export const BillDetail: React.FC = () => {
@@ -298,6 +299,7 @@ export const BillDetail: React.FC = () => {
   const isDraft = bill.status === 'Draft';
   const isVoid = bill.status === 'Void';
   const hasActivePayments = bill.payments.some((p) => !p.isVoid);
+  const sourceDocType = normalizeBillSourceDocumentType(bill.sourceDocumentType);
   const canVoid = canApprove && bill.approved && !isVoid;
   const term = paymentTerms.find((t) => t.id === bill.paymentTermId);
   const hasTax = bill.totalTax > 0 || bill.lines.some((l) => l.taxAmount > 0);
@@ -422,21 +424,34 @@ export const BillDetail: React.FC = () => {
 
         <section aria-label="Bill details" className="lg:col-span-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 shadow-sm">
           <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 text-sm">
-            {[
-              ["Vendor's bill #", bill.vendorInvoiceNo || '—'],
-              ['Our bill #', bill.no ? `#${bill.no}` : 'Given when approved'],
-              ['Reference', bill.referenceNo || '—'],
-              ['Bill date', formatDate(bill.date)],
-              ['Due date', formatDate(bill.dueDate)],
-              ['Terms', term?.description ?? 'Custom'],
-              ...(bill.approvedBy
-                ? [['Approved by', `${bill.approvedBy}${bill.approvedAt ? ` on ${formatDate(bill.approvedAt)}` : ''}`]]
-                : []),
-              ...(isVoid && bill.voidedBy
-                ? [['Voided by', `${bill.voidedBy}${bill.voidedAt ? ` on ${formatDate(bill.voidedAt)}` : ''}`]]
-                : []),
-              ...(isVoid && bill.voidReason ? [['Void reason', bill.voidReason]] : []),
-            ].map(([label, value]) => (
+            {(
+              [
+                [
+                  'Source document',
+                  <>
+                    <span>{billSourceDocumentLabel(bill.sourceDocumentType)}</span>
+                    {!isDraft && (
+                      <span className="block text-xs text-[var(--text-muted)]">
+                        Set during draft entry
+                      </span>
+                    )}
+                  </>,
+                ],
+                ["Vendor's bill #", bill.vendorInvoiceNo || '—'],
+                ['Our bill #', bill.no ? `#${bill.no}` : 'Given when approved'],
+                ['Reference', bill.referenceNo || '—'],
+                ['Bill date', formatDate(bill.date)],
+                ['Due date', formatDate(bill.dueDate)],
+                ['Terms', term?.description ?? 'Custom'],
+                ...(bill.approvedBy
+                  ? ([['Approved by', `${bill.approvedBy}${bill.approvedAt ? ` on ${formatDate(bill.approvedAt)}` : ''}`]] as Array<[string, React.ReactNode]>)
+                  : []),
+                ...(isVoid && bill.voidedBy
+                  ? ([['Voided by', `${bill.voidedBy}${bill.voidedAt ? ` on ${formatDate(bill.voidedAt)}` : ''}`]] as Array<[string, React.ReactNode]>)
+                  : []),
+                ...(isVoid && bill.voidReason ? ([['Void reason', bill.voidReason]] as Array<[string, React.ReactNode]>) : []),
+              ] as Array<[string, React.ReactNode]>
+            ).map(([label, value]) => (
               <div key={label}>
                 <dt className="text-xs text-[var(--text-muted)]">{label}</dt>
                 <dd className="mt-0.5 text-[var(--text-main)]">{value}</dd>
@@ -445,6 +460,49 @@ export const BillDetail: React.FC = () => {
           </dl>
         </section>
       </div>
+
+      {sourceDocType === 'expense-receipt' && !isVoid && (isDraft || hasActivePayments || bill.balanceDue > 0) && (
+        <div
+          role="note"
+          aria-label="Receipt settlement guidance"
+          className="rounded-xl border border-sky-500/25 bg-sky-500/10 p-4 text-xs text-sky-900 dark:text-sky-200 space-y-1"
+        >
+          {isDraft ? (
+            <>
+              <div className="font-semibold">Expense receipt — settlement guidance</div>
+              <p>
+                Approving this draft records what you owe and does not record a payment. After approval, if this receipt was already paid, either record the payment with <strong>Pay bill</strong> or use <strong>Pay open bill</strong> from an eligible unmatched withdrawal line in{' '}
+                <Link to={`/org/${orgSlug}/banking`} className="underline font-semibold">
+                  Banking
+                </Link>
+                —do not do both for the same payment.
+              </p>
+            </>
+          ) : hasActivePayments ? (
+            <>
+              <div className="font-semibold">Expense receipt — payment recorded</div>
+              <p>
+                To reconcile an imported bank statement for a payment already recorded on this bill, use <strong>Match</strong> on the statement line in{' '}
+                <Link to={`/org/${orgSlug}/banking`} className="underline font-semibold">
+                  Banking
+                </Link>{' '}
+                where supported rather than creating another payment with <strong>Pay open bill</strong> or <strong>Record expense</strong>.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="font-semibold">Expense receipt — unpaid in AccountGo</div>
+              <p>
+                If this receipt was already paid, choose one settlement path—do not do both for the same payment: use <strong>Pay bill</strong> above (and match that payment entry on your statement in{' '}
+                <Link to={`/org/${orgSlug}/banking`} className="underline font-semibold">
+                  Banking
+                </Link>{' '}
+                where supported), or use <strong>Pay open bill</strong> from an eligible unmatched withdrawal line in <strong>Banking</strong> (which creates the payment and matches the line together).
+              </p>
+            </>
+          )}
+        </div>
+      )}
 
       <section aria-label="Lines" className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] overflow-hidden shadow-sm">
         <div className="overflow-x-auto">

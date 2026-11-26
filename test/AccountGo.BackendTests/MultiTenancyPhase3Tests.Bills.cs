@@ -586,5 +586,178 @@ namespace AccountGo.BackendTests
             Assert.True((await Send(HttpMethod.Post, $"/api/Sales/VoidSalesInvoice?id={idPub}&date={IsoDate(DateTime.UtcNow)}")).IsSuccessStatusCode);
             WithDb(db => Assert.Equal(reversal, db.SalesInvoiceHeaders.Single(i => i.Id == id).VoidGeneralLedgerHeaderId));
         }
+
+        [Fact]
+        public async Task Bill_SourceDocumentType_PersistsAcrossDraftEditApproval_AndPreservesWhenOlderClientOmitsField()
+        {
+            var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Receipt Café" });
+            var vendorPub = PubId<Core.Domain.Purchases.Vendor>(vendor.Id);
+
+            // 1. Omitted on create defaults to unspecified (DB null).
+            var unspecifiedCreate = await SaveBillOk(NewBill(vendor.Id, ("Coffee beans", 1, 45m, null)));
+            Assert.Equal("unspecified", unspecifiedCreate.SourceDocumentType);
+            WithDb(db => Assert.Null(db.PurchaseInvoiceHeaders.AsNoTracking().Single(b => b.Id == unspecifiedCreate.Id).SourceDocumentType));
+
+            // 2. Manual Expense receipt creation persists across fresh GET /Bill and GET /Bills.
+            var createReq = NewBill(vendor.Id, ("Team lunch", 1, 80m, null));
+            createReq.VendorInvoiceNo = "RCPT-201";
+            createReq.SourceDocumentType = "expense-receipt";
+            var draft = await SaveBillOk(createReq);
+            Assert.Equal("expense-receipt", draft.SourceDocumentType);
+
+            var draftPub = PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(draft.Id);
+            var linePub = PubId<Core.Domain.Purchases.PurchaseInvoiceLine>(draft.Lines[0].Id);
+            var fetched = await BillOk(await Send(HttpMethod.Get, $"/api/Purchasing/Bill?id={draftPub}"));
+            Assert.Equal("expense-receipt", fetched.SourceDocumentType);
+            Assert.Equal("expense-receipt", (await Bills(vendor.Id)).Single(b => b.Id == draft.Id).SourceDocumentType);
+
+            // 3. Older API client updating the draft without sourceDocumentType (or with null) preserves the saved classification.
+            var legacyPayloadUpdate = await BillOk(await Send(HttpMethod.Post, "/api/Purchasing/SaveBill", new
+            {
+                id = draftPub,
+                vendorId = vendorPub,
+                vendorInvoiceNo = "RCPT-201",
+                date = IsoDate(draft.Date),
+                status = "Draft",
+                lines = new[]
+                {
+                    new { id = linePub, description = "Team lunch (updated)", quantity = 1m, amount = 85m }
+                }
+            }));
+            Assert.Equal("expense-receipt", legacyPayloadUpdate.SourceDocumentType);
+            Assert.Equal(85m, legacyPayloadUpdate.Total);
+
+            var nullDtoUpdate = await BillOk(await Send(HttpMethod.Get, $"/api/Purchasing/Bill?id={draftPub}"));
+            nullDtoUpdate.SourceDocumentType = null;
+            nullDtoUpdate.ReferenceNo = "REF-KEEP";
+            var afterNullUpdate = await SaveBillOk(nullDtoUpdate);
+            Assert.Equal("expense-receipt", afterNullUpdate.SourceDocumentType);
+            Assert.Equal("REF-KEEP", afterNullUpdate.ReferenceNo);
+
+            // 4. Explicit "unspecified" clears the classification back to DB null.
+            afterNullUpdate.SourceDocumentType = "unspecified";
+            var cleared = await SaveBillOk(afterNullUpdate);
+            Assert.Equal("unspecified", cleared.SourceDocumentType);
+            WithDb(db => Assert.Null(db.PurchaseInvoiceHeaders.AsNoTracking().Single(b => b.Id == draft.Id).SourceDocumentType));
+
+            // 5. Switch to supplier-invoice, then expense-receipt, then approve; post-approval edit is refused.
+            cleared.SourceDocumentType = "supplier-invoice";
+            Assert.Equal("supplier-invoice", (await SaveBillOk(cleared)).SourceDocumentType);
+            cleared.SourceDocumentType = "expense-receipt";
+            Assert.Equal("expense-receipt", (await SaveBillOk(cleared)).SourceDocumentType);
+
+            var approved = await BillOk(await Send(HttpMethod.Post, $"/api/Purchasing/ApproveBill?id={draftPub}"));
+            Assert.Equal("Open", approved.Status);
+            Assert.True(approved.Approved);
+            Assert.Equal(0m, approved.AmountPaid);
+            Assert.Equal(85m, approved.BalanceDue);
+            Assert.Empty(approved.Payments);
+            Assert.Equal("expense-receipt", approved.SourceDocumentType);
+
+            var reloadedApproved = await BillOk(await Send(HttpMethod.Get, $"/api/Purchasing/Bill?id={draftPub}"));
+            Assert.Equal("expense-receipt", reloadedApproved.SourceDocumentType);
+
+            reloadedApproved.SourceDocumentType = "supplier-invoice";
+            Assert.Equal(HttpStatusCode.BadRequest, (await SaveBill(reloadedApproved)).StatusCode);
+            Assert.Equal("expense-receipt", (await BillOk(await Send(HttpMethod.Get, $"/api/Purchasing/Bill?id={draftPub}"))).SourceDocumentType);
+        }
+
+        [Fact]
+        public async Task Bill_SourceDocumentType_RejectsInvalidValues_AndLeavesAccountingAndDuplicateInvariantsUnchanged()
+        {
+            int inputTaxId = 0;
+            WithDb(db =>
+            {
+                var tax = new Core.Domain.TaxSystem.Tax
+                {
+                    TaxCode = "INP10",
+                    TaxName = "Input VAT 10%",
+                    Rate = 10,
+                    IsActive = true,
+                    PurchasingAccountId = AccountIdIn(db, "20300"),
+                };
+                db.Taxes.Add(tax);
+                db.SaveChanges();
+                inputTaxId = tax.Id;
+            });
+
+            var vendor = await SaveVendor(new Dto.Purchasing.Supplier { Name = "Invariant Supply" });
+            var equipment = AccountId("13302");
+
+            // Invalid values are rejected with 400 BadRequest on create and update (including internal capture kind "purchase-invoice" and blank string).
+            foreach (var invalid in new[] { "purchase-invoice", "bogus", "", "   " })
+            {
+                var bad = NewBill(vendor.Id, ("Item", 1, 20m, null));
+                bad.SourceDocumentType = invalid;
+                Assert.Equal(HttpStatusCode.BadRequest, (await SaveBill(bad)).StatusCode);
+            }
+
+            var validDraft = NewBill(vendor.Id, ("Item", 1, 20m, null));
+            validDraft.VendorInvoiceNo = "VAL-1";
+            validDraft.SourceDocumentType = "supplier-invoice";
+            var savedDraft = await SaveBillOk(validDraft);
+            savedDraft.SourceDocumentType = "purchase-invoice";
+            Assert.Equal(HttpStatusCode.BadRequest, (await SaveBill(savedDraft)).StatusCode);
+            Assert.Equal("supplier-invoice", (await BillOk(await Send(HttpMethod.Get, $"/api/Purchasing/Bill?id={PubId<Core.Domain.Purchases.PurchaseInvoiceHeader>(savedDraft.Id)}"))).SourceDocumentType);
+
+            // Accounting invariants: Supplier invoice and Expense receipt produce identical GL lines, tax, and unpaid Open status.
+            async Task<Dto.Purchasing.Bill> CreateApproved(string docType, string invNo, DateTime billDate)
+            {
+                var b = NewBill(vendor.Id, ("Supplies", 1, 100m, null), ("Monitor", 1, 300m, equipment));
+                b.VendorInvoiceNo = invNo;
+                b.Date = billDate;
+                b.SourceDocumentType = docType;
+                b.Lines[0].TaxId = inputTaxId;
+                b.Status = "Open";
+                return await SaveBillOk(b);
+            }
+
+            var today = DateTime.UtcNow.Date;
+            var invBill = await CreateApproved("supplier-invoice", "INV-A1", today);
+            var rcptBill = await CreateApproved("expense-receipt", "RCPT-A2", today.AddDays(-1));
+
+            foreach (var b in new[] { invBill, rcptBill })
+            {
+                Assert.Equal("Open", b.Status);
+                Assert.Equal(0m, b.AmountPaid);
+                Assert.Equal(410m, b.BalanceDue);
+                Assert.Empty(b.Payments);
+
+                var gl = Ledger(BillLedgerId(b.Id));
+                Assert.Contains(gl, l => l.DrCr == DrOrCrSide.Dr && l.AccountId == AccountId("50200") && l.Amount == 100m);
+                Assert.Contains(gl, l => l.DrCr == DrOrCrSide.Dr && l.AccountId == equipment && l.Amount == 300m);
+                Assert.Contains(gl, l => l.DrCr == DrOrCrSide.Dr && l.AccountId == AccountId("20300") && l.Amount == 10m);
+                Assert.Contains(gl, l => l.DrCr == DrOrCrSide.Cr && l.AccountId == AccountId("20110") && l.Amount == 410m);
+            }
+
+            // Duplicate prevention is unaffected by differing sourceDocumentType values.
+            var dupByNo = NewBill(vendor.Id, ("Different line", 1, 50m, null));
+            dupByNo.VendorInvoiceNo = "INV-A1";
+            dupByNo.SourceDocumentType = "expense-receipt";
+            var dupNoRes = await SaveBill(dupByNo);
+            Assert.Equal(HttpStatusCode.Conflict, dupNoRes.StatusCode);
+            Assert.Equal("duplicate_bill", (await Json(dupNoRes)).GetProperty("code").GetString());
+
+            var noNumberFirst = NewBill(vendor.Id, ("Taxi", 1, 33m, null));
+            noNumberFirst.Date = today.AddDays(-2);
+            noNumberFirst.SourceDocumentType = "supplier-invoice";
+            await SaveBillOk(noNumberFirst);
+
+            var dupByDateTotal = NewBill(vendor.Id, ("Taxi", 1, 33m, null));
+            dupByDateTotal.Date = today.AddDays(-2);
+            dupByDateTotal.SourceDocumentType = "expense-receipt";
+            var dupTotalRes = await SaveBill(dupByDateTotal);
+            Assert.Equal(HttpStatusCode.Conflict, dupTotalRes.StatusCode);
+            Assert.Equal("possible_duplicate", (await Json(dupTotalRes)).GetProperty("code").GetString());
+
+            // Audit trail captures SourceDocumentType on PurchaseInvoiceHeader without noise on unspecified rows.
+            WithDb(db =>
+            {
+                var rcptAudit = db.RecordChanges.AsNoTracking()
+                    .FirstOrDefault(r => r.EntityType == "PurchaseInvoiceHeader" && r.EntityId == rcptBill.Id && r.Action == "Added");
+                Assert.NotNull(rcptAudit);
+                Assert.Contains("\"SourceDocumentType\":2", rcptAudit.ChangesJson);
+            });
+        }
     }
 }

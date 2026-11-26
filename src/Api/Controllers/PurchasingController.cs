@@ -904,6 +904,9 @@ namespace Api.Controllers
             if (paymentTermId.HasValue)
                 _tenantGuard.EnsureOwned<PaymentTerm>(paymentTermId.Value, nameof(billDto.PaymentTermId));
 
+            if (!TryParseSourceDocumentType(billDto.SourceDocumentType, out var parsedSourceDocumentType, out var sourceDocumentTypeSpecified))
+                return BadRequest(new { message = "Source document must be 'unspecified', 'supplier-invoice', or 'expense-receipt'." });
+
             if (!approving && Api.Service.BillCaptureReviewValidator.ValidateForDraft(_db, _tenantContext, billDto.Id > 0 ? billDto.Id : null, billDto.CaptureReviews) is { } draftReviewFailure)
                 return draftReviewFailure;
 
@@ -966,6 +969,10 @@ namespace Api.Controllers
                 bill.DueDate = DueDateForSave(bill.Date, billDto.DueDate, bill.PaymentTermId);
                 bill.ReferenceNo = Blank(billDto.ReferenceNo);
                 bill.Notes = notes;
+                if (billDto.Id == 0)
+                    bill.SourceDocumentType = parsedSourceDocumentType;
+                else if (sourceDocumentTypeSpecified)
+                    bill.SourceDocumentType = parsedSourceDocumentType;
                 bill.Description = string.IsNullOrEmpty(bill.VendorInvoiceNo) ? null : $"Bill {bill.VendorInvoiceNo}";
                 bill.Status = PurchaseInvoiceStatus.Draft;
                 bill.ModifiedBy = GetUserNameFromRequestHeader();
@@ -1315,6 +1322,7 @@ namespace Api.Controllers
                 PaymentTermId = bill.PaymentTermId,
                 ReferenceNo = bill.ReferenceNo,
                 Notes = bill.Notes,
+                SourceDocumentType = FormatSourceDocumentType(bill.SourceDocumentType),
                 Lines = bill.PurchaseInvoiceLines.OrderBy(l => l.Id).Select(l => new Dto.Purchasing.BillLine
                 {
                     Id = l.Id,
@@ -1364,6 +1372,47 @@ namespace Api.Controllers
                     VoidReason = p.VoidReason,
                 }).ToList(),
             };
+        }
+
+        private static string FormatSourceDocumentType(BillSourceDocumentType? sourceDocumentType) =>
+            sourceDocumentType switch
+            {
+                BillSourceDocumentType.SupplierInvoice => "supplier-invoice",
+                BillSourceDocumentType.ExpenseReceipt => "expense-receipt",
+                _ => "unspecified",
+            };
+
+        private static bool TryParseSourceDocumentType(
+            string? raw,
+            out BillSourceDocumentType? parsed,
+            out bool wasSpecified)
+        {
+            if (raw is null)
+            {
+                parsed = null;
+                wasSpecified = false;
+                return true;
+            }
+
+            switch (raw.Trim())
+            {
+                case "unspecified":
+                    parsed = null;
+                    wasSpecified = true;
+                    return true;
+                case "supplier-invoice":
+                    parsed = BillSourceDocumentType.SupplierInvoice;
+                    wasSpecified = true;
+                    return true;
+                case "expense-receipt":
+                    parsed = BillSourceDocumentType.ExpenseReceipt;
+                    wasSpecified = true;
+                    return true;
+                default:
+                    parsed = null;
+                    wasSpecified = true;
+                    return false;
+            }
         }
 
         /// <summary>

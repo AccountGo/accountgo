@@ -1,5 +1,8 @@
 import type { InvoiceStatus } from './invoicing';
 import type { PartyBase } from './parties';
+import type { BillSourceDocumentType } from '../lib/billSourceDocument';
+
+export type { BillSourceDocumentType };
 
 /** A vendor: the party a bill is from (api/Purchasing/Vendor). */
 export interface Vendor extends PartyBase {
@@ -62,6 +65,8 @@ export interface Bill {
   paymentTermId?: string | null;
   referenceNo?: string | null;
   notes?: string | null;
+  /** Primary source document classification chosen during draft entry (`unspecified`, `supplier-invoice`, `expense-receipt`). */
+  sourceDocumentType?: BillSourceDocumentType | null;
   lines: BillLine[];
   subtotal: number;
   totalTax: number;

@@ -4018,6 +4018,9 @@ namespace Api.Data.Migrations.ApiDb
                     b.Property<string>("ReferenceNo")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("SourceDocumentType")
+                        .HasColumnType("int");
+
                     b.Property<int?>("Status")
                         .HasColumnType("int");
 

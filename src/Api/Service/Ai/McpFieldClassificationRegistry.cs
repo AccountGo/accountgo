@@ -86,6 +86,7 @@ public static partial class McpFieldClassificationRegistry
         ["lineType"] = McpFieldDisposition.KeepUnmasked,
         ["documentType"] = McpFieldDisposition.KeepUnmasked,
         ["documentTypeLabel"] = McpFieldDisposition.KeepUnmasked,
+        ["sourceDocumentType"] = McpFieldDisposition.KeepUnmasked,
         ["entityType"] = McpFieldDisposition.KeepUnmasked,
         ["parentEntityType"] = McpFieldDisposition.KeepUnmasked,
         ["action"] = McpFieldDisposition.KeepUnmasked,

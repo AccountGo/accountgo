@@ -865,4 +865,205 @@ describe('BillEdit & BillDetail document capture integration', () => {
       await waitFor(() => expect(screen.getByLabelText(/Acknowledge difference/i)).toBeTruthy());
     });
   });
+
+  describe('source document classification & settlement guidance', () => {
+    it('lets a manual user select Expense receipt without scanning, shows two-path settlement guidance, and persists sourceDocumentType', async () => {
+      const counters = setupBillEditMocks(() => makeCapture());
+      renderWithRouter('/org/acme/purchases/new?vendor=ven_01acme000000000000000001');
+
+      const sourceSelect = (await screen.findByLabelText('Source document')) as HTMLSelectElement;
+      expect(sourceSelect.value).toBe('unspecified');
+      expect(screen.queryByLabelText('Receipt settlement notice')).toBeNull();
+
+      fireEvent.change(sourceSelect, { target: { value: 'expense-receipt' } });
+      expect(sourceSelect.value).toBe('expense-receipt');
+
+      const notice = screen.getByLabelText('Receipt settlement notice');
+      expect(notice.textContent).toMatch(/does not record a payment or settle it/i);
+      expect(notice.textContent).toMatch(/Pay bill/);
+      expect(notice.textContent).toMatch(/Pay open bill/);
+      expect(notice.textContent).toMatch(/do not do both for the same payment/i);
+
+      fireEvent.change(screen.getByLabelText('Line 1 description'), { target: { value: 'Taxi fare' } });
+      fireEvent.change(screen.getByLabelText('Line 1 unit cost'), { target: { value: '42' } });
+      fireEvent.click(screen.getByRole('button', { name: /Save draft/i }));
+
+      await waitFor(() => expect(counters.getSaveBillCalls()).toBe(1));
+      expect(counters.getLastSaveBody().sourceDocumentType).toBe('expense-receipt');
+    });
+
+    it('maps accepted purchase-invoice scans to supplier-invoice when unspecified and renders at most one settlement notice on receipt scans', async () => {
+      const invoiceCounters = setupBillEditMocks(() =>
+        makeCapture({
+          kind: 'purchase-invoice',
+          fields: {
+            vendorName: 'Acme Supply',
+            vendorInvoiceNo: 'INV-300',
+            date: '2026-11-10',
+            currency: 'USD',
+            lines: [{ description: 'Paper', quantity: '1', unitAmount: '80.00' }],
+            sourceTotals: { subtotal: '80.00', grandTotal: '80.00', priceBasis: 'exclusive' },
+            paymentHints: { paymentStatus: 'unpaid' },
+          },
+        })
+      );
+
+      renderWithRouter('/org/acme/purchases/new');
+      await scanAndAccept();
+
+      await waitFor(() => expect((screen.getByLabelText('Source document') as HTMLSelectElement).value).toBe('supplier-invoice'));
+      expect(screen.queryByLabelText('Receipt settlement notice')).toBeNull();
+      expect(invoiceCounters.getSaveBillCalls()).toBe(0);
+
+      cleanup();
+
+      const receiptCounters = setupBillEditMocks(() => makeCapture(), { linkFailStatus: 504 });
+      renderWithRouter('/org/acme/purchases/new');
+      await scanAndAccept();
+
+      await waitFor(() => expect((screen.getByLabelText('Source document') as HTMLSelectElement).value).toBe('expense-receipt'));
+      expect(screen.getAllByLabelText('Receipt settlement notice')).toHaveLength(1);
+
+      fireEvent.click(await screen.findByRole('button', { name: /Use vendor/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Save draft/i }));
+      await waitFor(() => expect(screen.getByText(/attaching the source document failed/i)).toBeTruthy());
+      expect(receiptCounters.getLastSaveBody().sourceDocumentType).toBe('expense-receipt');
+
+      fireEvent.click(screen.getByRole('button', { name: /Retry attach evidence/i }));
+      await waitFor(() => expect(receiptCounters.getLinkCalls()).toBe(2));
+      expect(receiptCounters.getSaveBillCalls()).toBe(1);
+    });
+
+    it('never silently overwrites an explicit or cleared classification, and Keep does not re-prompt for the same capture', async () => {
+      let uploadCount = 0;
+      setupBillEditMocks(() => {
+        uploadCount++;
+        const base = makeCapture({ id: 'cap_01conflict0000000000001', kind: 'expense-receipt' });
+        return uploadCount > 1
+          ? { ...base, status: 'accepted', fields: null, acceptedFields: base.fields, canAccept: false, canApply: true }
+          : base;
+      });
+      renderWithRouter('/org/acme/purchases/new');
+
+      const sourceSelect = (await screen.findByLabelText('Source document')) as HTMLSelectElement;
+      // User explicitly picks Supplier invoice before scanning an Expense receipt
+      fireEvent.change(sourceSelect, { target: { value: 'supplier-invoice' } });
+      await scanAndAccept();
+
+      await waitFor(() => expect(screen.getByRole('button', { name: /Keep Supplier invoice/i })).toBeTruthy());
+      expect(sourceSelect.value).toBe('supplier-invoice');
+
+      // Dismissing via Keep will not re-prompt when re-applying the same accepted capture
+      fireEvent.click(screen.getByRole('button', { name: /Keep Supplier invoice/i }));
+      expect(screen.queryByRole('button', { name: /Keep Supplier invoice/i })).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: /Scan receipt \/ bill/i }));
+      fireEvent.change(await screen.findByLabelText('Upload image or PDF'), {
+        target: { files: [new File(['bytes'], 'receipt.png', { type: 'image/png' })] },
+      });
+      fireEvent.click(await screen.findByRole('button', { name: /Apply accepted fields/i }));
+      expect(sourceSelect.value).toBe('supplier-invoice');
+      expect(screen.queryByRole('button', { name: /Keep Supplier invoice/i })).toBeNull();
+
+      cleanup();
+
+      // Deliberately clearing back to Not specified also prevents silent overwrite on subsequent scan
+      setupBillEditMocks(() => makeCapture({ id: 'cap_01cleared00000000000001', kind: 'expense-receipt' }));
+      renderWithRouter('/org/acme/purchases/new');
+      const clearedSelect = (await screen.findByLabelText('Source document')) as HTMLSelectElement;
+      fireEvent.change(clearedSelect, { target: { value: 'supplier-invoice' } });
+      fireEvent.change(clearedSelect, { target: { value: 'unspecified' } });
+
+      await scanAndAccept();
+      await waitFor(() => expect(screen.getByRole('button', { name: /Keep Not specified/i })).toBeTruthy());
+      expect(clearedSelect.value).toBe('unspecified');
+
+      fireEvent.click(screen.getByRole('button', { name: /Use Expense receipt/i }));
+      expect(clearedSelect.value).toBe('expense-receipt');
+    });
+
+    it('copies sourceDocumentType when duplicating a bill via ?from=', async () => {
+      setupBillEditMocks(() => makeCapture(), {
+        existingDraft: {
+          id: 'bill_01src0000000000000000001',
+          no: 'B-50',
+          vendorId: 'ven_01acme000000000000000001',
+          vendorName: 'Acme Supply',
+          vendorInvoiceNo: 'OLD-50',
+          sourceDocumentType: 'expense-receipt',
+          date: '2026-11-01',
+          dueDate: '2026-11-15',
+          lines: [{ id: 'bl_1', description: 'Monthly subscription', quantity: 1, amount: 29, taxAmount: 0, subtotal: 29 }],
+          subtotal: 29,
+          totalTax: 0,
+          total: 29,
+          amountPaid: 29,
+          balanceDue: 0,
+          status: 'Paid',
+          approved: true,
+          payments: [],
+        },
+      });
+
+      renderWithRouter('/org/acme/purchases/new?from=bill_01src0000000000000000001');
+      const sourceSelect = (await screen.findByLabelText('Source document')) as HTMLSelectElement;
+      expect(sourceSelect.value).toBe('expense-receipt');
+    });
+
+    it('renders source document, draft-entry lock note, and payment-state-specific guidance on BillDetail', async () => {
+      let billPayload: any = {
+        id: 'bill_01det0000000000000000001',
+        no: 'B-200',
+        vendorId: 'ven_1',
+        vendorName: 'Acme Supply',
+        vendorInvoiceNo: 'R-200',
+        sourceDocumentType: 'expense-receipt',
+        date: '2026-11-10',
+        dueDate: '2026-11-10',
+        lines: [{ id: 'bl_1', description: 'Fuel', quantity: 1, amount: 65, taxAmount: 0, subtotal: 65 }],
+        subtotal: 65,
+        totalTax: 0,
+        total: 65,
+        amountPaid: 0,
+        balanceDue: 65,
+        status: 'Open',
+        approved: true,
+        approvedBy: 'Owner',
+        approvedAt: '2026-11-10T10:00:00Z',
+        payments: [],
+      };
+
+      authFetch.mockImplementation(async (url: string) => {
+        if (url.startsWith('/api/Purchasing/Bill?id=')) return jsonRes(billPayload);
+        if (url === '/api/Common/PaymentTerms') return jsonRes([]);
+        if (url.startsWith('/api/document-captures/linked/bill/')) return jsonRes([]);
+        return jsonRes({}, 404);
+      });
+
+      renderWithRouter('/org/acme/purchases/bill_01det0000000000000000001');
+      await waitFor(() => expect(screen.getByText('Expense receipt')).toBeTruthy());
+      expect(screen.getByText('Set during draft entry')).toBeTruthy();
+
+      const unpaidGuidance = screen.getByLabelText('Receipt settlement guidance');
+      expect(unpaidGuidance.textContent).toMatch(/unpaid in AccountGo/i);
+      expect(unpaidGuidance.textContent).toMatch(/Pay bill/);
+      expect(unpaidGuidance.textContent).toMatch(/Pay open bill/);
+
+      cleanup();
+
+      // Once a payment is recorded, guidance directs the user to Match the existing payment in Banking
+      billPayload = {
+        ...billPayload,
+        amountPaid: 65,
+        balanceDue: 0,
+        status: 'Paid',
+        payments: [{ id: 'vp_1', date: '2026-11-11', amount: 65, paymentMethod: 'Card', isVoid: false }],
+      };
+      renderWithRouter('/org/acme/purchases/bill_01det0000000000000000001');
+      const paidGuidance = await screen.findByLabelText('Receipt settlement guidance');
+      expect(paidGuidance.textContent).toMatch(/payment recorded/i);
+      expect(paidGuidance.textContent).toMatch(/Match/);
+      expect(paidGuidance.textContent).toMatch(/rather than creating another payment/i);
+    });
+  });
 });

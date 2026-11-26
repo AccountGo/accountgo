@@ -132,6 +132,7 @@ export const AUDIT_FIELD_LABELS: Readonly<Record<string, string>> = {
   No: 'number',
   VendorInvoiceNo: 'vendor invoice number',
   ReferenceNo: 'reference number',
+  SourceDocumentType: 'source document',
   Date: 'date',
   DueDate: 'due date',
   Status: 'status',
@@ -183,6 +184,7 @@ const PURCHASE_INVOICE_STATUS = ['Draft', 'Open', 'Paid', 'Overdue', 'Void'];
 const ENUM_VALUE_NAMES: Readonly<Record<string, Readonly<Record<number, string>>>> = {
   'SalesInvoiceHeader.Status': Object.fromEntries(SALES_INVOICE_STATUS.map((name, index) => [index, name])),
   'PurchaseInvoiceHeader.Status': Object.fromEntries(PURCHASE_INVOICE_STATUS.map((name, index) => [index, name])),
+  'PurchaseInvoiceHeader.SourceDocumentType': { 1: 'Supplier invoice', 2: 'Expense receipt' },
   'CompanyMember.Role': { 1: 'Owner', 2: 'Admin', 3: 'Member' },
   'CompanyMember.Status': { 1: 'Active', 2: 'Suspended' },
   'RecurringSchedule.Status': { 1: 'Active', 2: 'Paused', 3: 'Ended' },

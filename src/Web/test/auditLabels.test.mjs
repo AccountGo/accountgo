@@ -6,6 +6,7 @@ const server = await createServer({ server: { middlewareMode: true, hmr: false, 
 after(() => server.close());
 
 const labels = await server.ssrLoadModule('/src/lib/auditLabels.ts');
+const billSourceDoc = await server.ssrLoadModule('/src/lib/billSourceDocument.ts');
 const {
   describeChange,
   formatAuditDate,
@@ -288,4 +289,31 @@ test('created bank transaction activity identifies its bank', () => {
   const sentences = describeChange({ entityType: 'BankTransaction', entityId: 'bt_42', action: 'Added', changes: { BankId: 'ba_7', No: 'BT-42', Amount: 25 } }, false);
   assert.ok(sentences.includes('Bank account ba_7'));
   assert.ok(sentences.some((sentence) => sentence.includes('BT-42')));
+});
+
+test('bill source document audit labels and centralized capture kind mapping', () => {
+  assert.deepEqual(
+    describeChange({ entityType: 'PurchaseInvoiceHeader', entityId: 10, action: 'Added', changes: { Id: 10, CompanyId: 1, SourceDocumentType: null } }, false),
+    ['Created a bill'],
+  );
+  assert.deepEqual(
+    describeChange({ entityType: 'PurchaseInvoiceHeader', entityId: 11, action: 'Added', changes: { Id: 11, CompanyId: 1, SourceDocumentType: 2 } }, false),
+    ['Created a bill', 'Set the source document to Expense receipt'],
+  );
+  assert.deepEqual(
+    describeChange(modified('PurchaseInvoiceHeader', { SourceDocumentType: [1, 2] }), false),
+    ['Changed the source document from Supplier invoice to Expense receipt'],
+  );
+  assert.deepEqual(
+    describeChange(modified('PurchaseInvoiceHeader', { SourceDocumentType: [2, null] }), false),
+    ['Cleared the source document (was Expense receipt)'],
+  );
+
+  assert.equal(billSourceDoc.mapCaptureKindToBillSourceDocument('purchase-invoice'), 'supplier-invoice');
+  assert.equal(billSourceDoc.mapCaptureKindToBillSourceDocument('expense-receipt'), 'expense-receipt');
+  assert.equal(billSourceDoc.mapCaptureKindToBillSourceDocument('sales-invoice'), null);
+  assert.equal(billSourceDoc.normalizeBillSourceDocumentType(undefined), 'unspecified');
+  assert.equal(billSourceDoc.normalizeBillSourceDocumentType('supplier-invoice'), 'supplier-invoice');
+  assert.equal(billSourceDoc.billSourceDocumentLabel('expense-receipt'), 'Expense receipt');
+  assert.equal(billSourceDoc.billSourceDocumentLabel(null), 'Not specified');
 });
