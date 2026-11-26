@@ -252,6 +252,38 @@ public sealed class DocumentsControllerHttpTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ManageWithoutView_LibraryUploadIsRefusedBeforeAnythingIsStored()
+    {
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            db.SuppressTenantSecurityCheck = true;
+            var companyId = await db.Companies.IgnoreQueryFilters().Where(c => c.Slug == _companySlug).Select(c => c.Id).SingleAsync();
+            var manage = await db.SecurityPermissions.SingleAsync(p => p.Name == SystemPermissions.DocumentsManage);
+            var role = new SecurityRole { Name = $"docs-manage-only-{Guid.NewGuid():N}", DisplayName = "Docs manage only" };
+            role.Permissions.Add(new SecurityRolePermission { SecurityPermissionId = manage.Id });
+            db.SecurityRoles.Add(role);
+            await db.SaveChangesAsync();
+            var member = await db.CompanyMembers.SingleAsync(m => m.CompanyId == companyId && m.Role == CompanyMemberRole.Member);
+            db.CompanyMemberSecurityRoles.Add(new CompanyMemberSecurityRole { CompanyMemberId = member.Id, SecurityRoleId = role.Id });
+            await db.SaveChangesAsync();
+        }
+        int before;
+        using (var scope = _factory.Services.CreateScope())
+            before = await scope.ServiceProvider.GetRequiredService<ApiDbContext>().DocumentCaptures.IgnoreQueryFilters().CountAsync();
+
+        using (var upload = Request(HttpMethod.Post, "/api/documents", _memberToken))
+        {
+            upload.Content = UploadForm(CreatePdf(1), "application/pdf", "a.pdf");
+            using var response = await _client.SendAsync(upload);
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+            Assert.Equal("DOCUMENT_PERMISSION_REQUIRED", await CodeOf(response));
+        }
+        using (var scope = _factory.Services.CreateScope())
+            Assert.Equal(before, await scope.ServiceProvider.GetRequiredService<ApiDbContext>().DocumentCaptures.IgnoreQueryFilters().CountAsync());
+    }
+
+    [Fact]
     public async Task OversizedUploadIsRefusedWith413AndTheLimit()
     {
         using var upload = Request(HttpMethod.Post, "/api/documents", _ownerToken);

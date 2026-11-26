@@ -99,6 +99,36 @@ public sealed class DocumentLibraryPostgresLockTests
         Assert.Equal(billA.PublicId, Assert.Single(trashed.Links).TargetId);
     }
 
+    [PostgresOnlyFact]
+    public async Task ConcurrentUploadsAtTheRateLimit_OnlyOneIsStored()
+    {
+        await using var fx = await Fixture.CreateAsync();
+        var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var attempts = Enumerable.Range(0, 3).Select(async i =>
+        {
+            await using var db = fx.NewDb();
+            var builder = new PdfDocumentBuilder();
+            builder.DocumentInformation.Title = $"race-{i}";
+            builder.AddPage(100, 100);
+            var pdf = builder.Build();
+            await start.Task;
+            try
+            {
+                await fx.Service(db, maxUploadsPerHour: 1).UploadAsync(pdf, "application/pdf", "a.pdf",
+                    new DocumentMetadataInput(null, null, null, null), null, null, null, false, CancellationToken.None);
+                return "stored";
+            }
+            catch (DocumentCaptureServiceException ex) { return ex.ErrorCode; }
+            catch (DocumentCaptureAdmissionBusyException) { return "busy"; }
+        }).ToArray();
+        start.SetResult();
+        var results = await Task.WhenAll(attempts);
+        Assert.Equal(1, results.Count(r => r == "stored"));
+        Assert.All(results.Where(r => r != "stored"), r => Assert.Contains(r, new[] { "DOCUMENT_RATE_LIMITED", "busy" }));
+        await using var verify = fx.NewDb();
+        Assert.Equal(1, await verify.DocumentCaptures.CountAsync(c => c.Kind == "document"));
+    }
+
     private sealed class Fixture : IAsyncDisposable
     {
         private readonly PostgresTestDatabase _database;
@@ -128,7 +158,7 @@ public sealed class DocumentLibraryPostgresLockTests
 
         public PostgresApiDbContext NewDb() => new(_options, TenantContext);
 
-        public DocumentLibraryService Service(ApiDbContext db)
+        public DocumentLibraryService Service(ApiDbContext db, int maxUploadsPerHour = 120)
         {
             var entitlements = new Mock<IEntitlementService>();
             entitlements.Setup(e => e.GetDocumentStoragePolicy(It.IsAny<int>())).Returns(DocumentStoragePolicy.Community);
@@ -143,7 +173,7 @@ public sealed class DocumentLibraryPostgresLockTests
                     return id is > 0 ? PublicIdLookupResult.Success(id.Value) : PublicIdLookupResult.Fail(PublicIdLookupError.NotFound, "bill");
                 });
             return new DocumentLibraryService(db, new DocumentCaptureAdmissionLock(db), entitlements.Object, publicIds.Object, TenantContext,
-                Options.Create(new DocumentsOptions()), Options.Create(new DocumentCaptureOptions()));
+                Options.Create(new DocumentsOptions { MaxUploadsPerHour = maxUploadsPerHour }), Options.Create(new DocumentCaptureOptions()));
         }
 
         public async Task<(int DocumentId, PurchaseInvoiceHeader BillA, PurchaseInvoiceHeader BillB)> SeedLinkedDocumentAsync()

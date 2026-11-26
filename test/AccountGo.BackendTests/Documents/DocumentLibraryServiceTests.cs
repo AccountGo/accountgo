@@ -286,7 +286,8 @@ public sealed class DocumentLibraryServiceTests
         await h.Library.TrashAsync(id, default);
         await h.Library.DeletePermanentlyAsync(id, default);
         Assert.Equal(revision + 4, await DocumentRevision.GetCurrentAsync(h.Db, h.CompanyId));
-        Assert.False(await h.Db.DocumentCaptures.AnyAsync(c => c.Id == id));
+        Assert.NotNull((await h.Db.DocumentCaptures.AsNoTracking().SingleAsync(c => c.Id == id)).BytesDeletedAt);
+        await Assert.ThrowsAsync<DocumentCaptureServiceException>(() => h.Library.GetAsync(id, default));
         Assert.False(await h.Db.DocumentCaptureBlobs.AnyAsync(b => b.CaptureId == id));
         h.Audit.Verify(a => a.LogEventAsync("document.deleted", "success", "actor-1", h.CompanyId, It.IsAny<object?>()), Times.Once);
     }
@@ -422,6 +423,70 @@ public sealed class DocumentLibraryServiceTests
         Assert.True((await h.Library.TrashAsync(scanId, default)).InTrash);
     }
 
+    [Fact]
+    public async Task IdempotencyKeyOfAnUnreadableFile_IsIgnored_NotReportedAsAConflict()
+    {
+        await using var h = await Harness.CreateAsync();
+        var bill = h.SeedBill("B-1");
+        var invoice = h.SeedInvoice("I-1");
+        h.Tenant.SetPermissions(SystemPermissions.PurchasesBillsView, SystemPermissions.PurchasesBillsCreate);
+        var billDoc = await h.Library.UploadAsync(CreatePdf(1, label: "bill"), "application/pdf", "a.pdf", Meta(), "bill", bill.PublicId, "shared-key", false, default);
+
+        // Another role, same key, different content: a fresh upload, nothing revealed about the existing file.
+        h.Tenant.SetPermissions(SystemPermissions.SalesInvoicesView, SystemPermissions.SalesInvoicesCreate);
+        var invoiceDoc = await h.Library.UploadAsync(CreatePdf(1, label: "invoice"), "application/pdf", "b.pdf", Meta(), "invoice", invoice.PublicId, "shared-key", false, default);
+        Assert.NotEqual(billDoc.Id, invoiceDoc.Id);
+        Assert.Equal(2, await h.Db.DocumentCaptures.CountAsync(c => c.Kind == "document"));
+        Assert.Equal("shared-key", (await h.Db.DocumentCaptures.AsNoTracking().SingleAsync(c => c.PublicId == billDoc.Id)).IdempotencyKey);
+
+        // The owner of the key still gets the conflict for different input.
+        h.Tenant.SetPermissions(SystemPermissions.PurchasesBillsView, SystemPermissions.PurchasesBillsCreate);
+        var conflict = await Assert.ThrowsAsync<DocumentCaptureServiceException>(() =>
+            h.Library.UploadAsync(CreatePdf(1, label: "other"), "application/pdf", "a.pdf", Meta(), "bill", bill.PublicId, "shared-key", false, default));
+        Assert.Equal("IDEMPOTENCY_CONFLICT", conflict.ErrorCode);
+    }
+
+    [Fact]
+    public async Task UploadRateCountsPermanentlyDeletedUploads_UntilTheWindowPasses()
+    {
+        await using var h = await Harness.CreateAsync(maxUploadsPerHour: 2);
+        for (var i = 0; i < 2; i++)
+        {
+            var view = await h.Library.UploadAsync(CreatePdf(1, label: $"n{i}"), "application/pdf", "a.pdf", Meta(), null, null, null, false, default);
+            var id = await h.IdOf(view.Id);
+            await h.Library.TrashAsync(id, default);
+            await h.Library.DeletePermanentlyAsync(id, default);
+        }
+        var limited = await Assert.ThrowsAsync<DocumentCaptureServiceException>(() =>
+            h.Library.UploadAsync(CreatePdf(1, label: "n3"), "application/pdf", "a.pdf", Meta(), null, null, null, false, default));
+        Assert.Equal((429, "DOCUMENT_RATE_LIMITED"), (limited.StatusCode, limited.ErrorCode));
+
+        // Tombstones carry no content; once the hour passes uploads are allowed again.
+        var tombstones = await h.Db.DocumentCaptures.AsNoTracking().Where(c => c.Kind == "document").ToListAsync();
+        Assert.All(tombstones, t => Assert.True(t.BytesDeletedAt is not null && t.Title is null && t.FileName is null && t.Notes is null));
+        Assert.False(await h.Db.DocumentCaptureBlobs.AnyAsync());
+        await h.Db.DocumentCaptures.ExecuteUpdateAsync(s => s.SetProperty(c => c.CreatedAt, DateTime.UtcNow.AddHours(-2)));
+        Assert.NotNull(await h.Library.UploadAsync(CreatePdf(1, label: "n4"), "application/pdf", "a.pdf", Meta(), null, null, null, false, default));
+
+        // The retention worker clears tombstones older than a day.
+        await h.Db.DocumentCaptures.Where(c => c.BytesDeletedAt != null)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.BytesDeletedAt, DateTime.UtcNow.AddDays(-2)));
+        await new DocumentCaptureRetentionService(h.Db, new DocumentCaptureAdmissionLock(h.Db)).PurgeAsync(DateTime.UtcNow, default);
+        Assert.Equal(1, await h.Db.DocumentCaptures.CountAsync(c => c.Kind == "document"));
+    }
+
+    [Fact]
+    public async Task LibraryUploadNeedsViewAsWellAsManage_AndNothingIsStoredOnDenial()
+    {
+        await using var h = await Harness.CreateAsync();
+        h.Tenant.SetPermissions(SystemPermissions.DocumentsManage);
+        var denied = await Assert.ThrowsAsync<DocumentCaptureServiceException>(() =>
+            h.Library.UploadAsync(CreatePdf(1), "application/pdf", "a.pdf", Meta(), null, null, null, false, default));
+        Assert.Equal(403, denied.StatusCode);
+        Assert.False(await h.Db.DocumentCaptures.AnyAsync());
+        Assert.Equal(0L, await DocumentRevision.GetCurrentAsync(h.Db, h.CompanyId));
+    }
+
     // ---------- helpers ----------
 
     private static DocumentMetadataInput Meta(string? title = null, string? category = null, string? notes = null) =>
@@ -475,7 +540,7 @@ public sealed class DocumentLibraryServiceTests
         private readonly int _measurementId;
 
         private Harness(string dbPath, ApiDbContext db, TestTenant tenant, Mock<ISecurityAuditService> audit, int companyId,
-            int itemId, int measurementId, DocumentStoragePolicy policy, bool enabled)
+            int itemId, int measurementId, DocumentStoragePolicy policy, bool enabled, int maxUploadsPerHour)
         {
             _dbPath = dbPath;
             Db = db;
@@ -510,12 +575,12 @@ public sealed class DocumentLibraryServiceTests
                 });
 
             Library = new DocumentLibraryService(db, new DocumentCaptureAdmissionLock(db), entitlements.Object, publicIds.Object, tenant,
-                Options.Create(new DocumentsOptions { Enabled = enabled }),
+                Options.Create(new DocumentsOptions { Enabled = enabled, MaxUploadsPerHour = maxUploadsPerHour }),
                 Options.Create(new DocumentCaptureOptions()),
                 audit.Object);
         }
 
-        public static async Task<Harness> CreateAsync(DocumentStoragePolicy? policy = null, bool enabled = true)
+        public static async Task<Harness> CreateAsync(DocumentStoragePolicy? policy = null, bool enabled = true, int maxUploadsPerHour = 120)
         {
             var dbPath = Path.Combine(Path.GetTempPath(), $"accountgo_docs_{Guid.NewGuid():N}.db");
             var tenant = new TestTenant();
@@ -542,7 +607,7 @@ public sealed class DocumentLibraryServiceTests
             db.SuppressTenantSecurityCheck = false;
             var audit = new Mock<ISecurityAuditService>();
             return new Harness(dbPath, db, tenant, audit, company.Id, item.Id, measurement.Id,
-                policy ?? DocumentStoragePolicy.Community, enabled);
+                policy ?? DocumentStoragePolicy.Community, enabled, maxUploadsPerHour);
         }
 
         public Task<int> IdOf(string publicId) =>

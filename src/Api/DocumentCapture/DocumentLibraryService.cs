@@ -146,8 +146,9 @@ public sealed class DocumentLibraryService(
                 throw new DocumentCaptureServiceException(403, "DOCUMENT_PERMISSION_REQUIRED");
             linkTargetId = await ResolveTargetIdAsync(linkTargetType, linkTargetPublicId!, cancellationToken).ConfigureAwait(false);
         }
-        else if (!Has(SystemPermissions.DocumentsManage))
+        else if (!Has(SystemPermissions.DocumentsManage) || !Has(SystemPermissions.DocumentsView))
         {
+            // Into the library needs manage AND view: the new file has no link, so view is the only way to read it back.
             throw new DocumentCaptureServiceException(403, "DOCUMENT_PERMISSION_REQUIRED");
         }
 
@@ -164,16 +165,24 @@ public sealed class DocumentLibraryService(
         var fingerprint = Hash(Encoding.UTF8.GetBytes(string.Join('\n', sourceHash, DocumentKind,
             JsonSerializer.Serialize(normalizedMetadata), linkKey, force ? "copy" : "single")));
 
-        // Replays skip media preparation; the locked transaction rechecks.
+        // Replays skip media preparation; the locked transaction rechecks. A key that belongs to a file the caller can't read
+        // is ignored (treated as no key), exactly like the scan pipeline, so a guessed key reveals nothing.
         if (idempotencyKey is not null)
         {
             var prior = await KeyedDocumentAsync(companyId, idempotencyKey, cancellationToken).ConfigureAwait(false);
             if (prior is not null)
-                return await ReplayAsync(prior, fingerprint, cancellationToken).ConfigureAwait(false);
+            {
+                if (await CanSeeKeyedAsync(companyId, prior, cancellationToken).ConfigureAwait(false))
+                    return await ReplayAsync(prior, fingerprint, cancellationToken).ConfigureAwait(false);
+                idempotencyKey = null;
+            }
         }
 
-        var media = await PrepareAsync(source, declaredContentType, limit, cancellationToken).ConfigureAwait(false);
+        // The rate limit is checked before any decode work and again under the lock. Permanently deleted uploads stay counted
+        // (their rows remain as tombstones until the retention worker clears them a day later).
         var now = _timeProvider.GetUtcNow().UtcDateTime;
+        await EnsureUploadRateAsync(companyId, now, cancellationToken).ConfigureAwait(false);
+        var media = await PrepareAsync(source, declaredContentType, limit, cancellationToken).ConfigureAwait(false);
         int captureId;
         string capturePublicId;
         await using (var transaction = await admissionLock.AcquireCompanyAsync(companyId, cancellationToken).ConfigureAwait(false))
@@ -191,8 +200,12 @@ public sealed class DocumentLibraryService(
                 var existing = await KeyedDocumentAsync(companyId, idempotencyKey, cancellationToken).ConfigureAwait(false);
                 if (existing is not null)
                 {
-                    await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
-                    return await ReplayAsync(existing, fingerprint, cancellationToken).ConfigureAwait(false);
+                    if (await CanSeeKeyedAsync(companyId, existing, cancellationToken).ConfigureAwait(false))
+                    {
+                        await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                        return await ReplayAsync(existing, fingerprint, cancellationToken).ConfigureAwait(false);
+                    }
+                    idempotencyKey = null;
                 }
             }
 
@@ -203,12 +216,7 @@ public sealed class DocumentLibraryService(
                     throw new DocumentCaptureServiceException(409, "DOCUMENT_DUPLICATE", duplicate.PublicId);
             }
 
-            var hourAgo = now.AddHours(-1);
-            var recentUploads = await db.DocumentCaptures.AsNoTracking()
-                .CountAsync(c => c.CompanyId == companyId && c.Kind == DocumentKind && c.CreatedAt > hourAgo, cancellationToken)
-                .ConfigureAwait(false);
-            if (recentUploads >= options.Value.MaxUploadsPerHour)
-                throw new DocumentCaptureServiceException(429, "DOCUMENT_RATE_LIMITED");
+            await EnsureUploadRateAsync(companyId, now, cancellationToken).ConfigureAwait(false);
 
             if (policy.StorageLimitBytes is { } storageLimit)
             {
@@ -575,7 +583,7 @@ public sealed class DocumentLibraryService(
             publicId = capture.PublicId;
             byteCount = capture.ByteCount;
             await EnsureRemovableAsync(companyId, captureId, cancellationToken).ConfigureAwait(false);
-            await PurgeRowAsync(db, companyId, captureId, cancellationToken).ConfigureAwait(false);
+            await TombstoneAsync(companyId, captureId, cancellationToken).ConfigureAwait(false);
             await DocumentRevision.BumpAsync(db, companyId, cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -583,11 +591,45 @@ public sealed class DocumentLibraryService(
         await AuditAsync("document.deleted", companyId, publicId, new { byteCount }).ConfigureAwait(false);
     }
 
-    /// <summary>Removes a document row with its blob, links and attempts (cascade). Caller holds the company lock.</summary>
-    internal static Task<int> PurgeRowAsync(ApiDbContext db, int companyId, int captureId, CancellationToken cancellationToken) =>
-        db.DocumentCaptures
-            .Where(c => c.CompanyId == companyId && c.Id == captureId)
-            .ExecuteDeleteAsync(cancellationToken);
+    /// <summary>
+    /// Permanent delete: removes the bytes and links and wipes the descriptive metadata, keeping a content-free row (kind,
+    /// created time) so upload rate limits still count it. The retention worker removes such rows after a day.
+    /// Caller holds the company lock.
+    /// </summary>
+    private async Task TombstoneAsync(int companyId, int captureId, CancellationToken cancellationToken)
+    {
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        await db.DocumentCaptureBlobs.Where(b => b.CompanyId == companyId && b.CaptureId == captureId)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        await db.DocumentCaptureLinks.Where(l => l.CompanyId == companyId && l.CaptureId == captureId)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        var updated = await db.DocumentCaptures.Where(c => c.CompanyId == companyId && c.Id == captureId && c.BytesDeletedAt == null)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(c => c.BytesDeletedAt, now)
+                .SetProperty(c => c.FieldsWipedAt, now)
+                .SetProperty(c => c.Title, (string?)null)
+                .SetProperty(c => c.FileName, (string?)null)
+                .SetProperty(c => c.Notes, (string?)null)
+                .SetProperty(c => c.Category, (string?)null)
+                .SetProperty(c => c.DocumentDate, (DateTime?)null), cancellationToken).ConfigureAwait(false);
+        if (updated != 1)
+            throw new DocumentCaptureServiceException(409, "DOCUMENT_STATE_CONFLICT");
+    }
+
+    private async Task EnsureUploadRateAsync(int companyId, DateTime now, CancellationToken cancellationToken)
+    {
+        var hourAgo = now.AddHours(-1);
+        var recentUploads = await db.DocumentCaptures.AsNoTracking()
+            .CountAsync(c => c.CompanyId == companyId && c.Kind == DocumentKind && c.CreatedAt > hourAgo, cancellationToken)
+            .ConfigureAwait(false);
+        if (recentUploads >= options.Value.MaxUploadsPerHour)
+            throw new DocumentCaptureServiceException(429, "DOCUMENT_RATE_LIMITED");
+    }
+
+    /// <summary>Whether a keyed earlier upload may be replayed to this caller: a live file the caller can read.</summary>
+    private async Task<bool> CanSeeKeyedAsync(int companyId, DocumentCapture prior, CancellationToken cancellationToken) =>
+        prior.FiledAt is not null && prior.BytesDeletedAt is null
+        && await CanReadAsync(companyId, prior, cancellationToken).ConfigureAwait(false);
 
     // ---------- record-side hook ----------
 
