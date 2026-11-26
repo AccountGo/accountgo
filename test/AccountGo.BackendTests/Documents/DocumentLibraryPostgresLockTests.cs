@@ -129,6 +129,148 @@ public sealed class DocumentLibraryPostgresLockTests
         Assert.Equal(1, await verify.DocumentCaptures.CountAsync(c => c.Kind == "document"));
     }
 
+    [PostgresOnlyFact]
+    public async Task ConcurrentExportCreatesAndDownloads_OnlyEverHaveOneStreamAndFailCleanly()
+    {
+        await using var fx = await Fixture.CreateAsync();
+        await fx.SeedLinkedDocumentAsync();
+        string firstId;
+        await using (var db = fx.NewDb())
+            firstId = (await new DocumentExportService(db, new DocumentCaptureAdmissionLock(db), fx.TenantContext).CreateAsync(CancellationToken.None)).Id;
+        int firstRunId;
+        await using (var db = fx.NewDb())
+            firstRunId = await db.DocumentExportRuns.Where(r => r.PublicId == firstId).Select(r => r.Id).SingleAsync();
+
+        var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tasks = Enumerable.Range(0, 6).Select(async i =>
+        {
+            await using var db = fx.NewDb();
+            var service = new DocumentExportService(db, new DocumentCaptureAdmissionLock(db), fx.TenantContext);
+            await start.Task;
+            try
+            {
+                if (i % 2 == 0)
+                {
+                    await service.CreateAsync(CancellationToken.None);
+                    return "created";
+                }
+                var context = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+                context.Response.Body = new MemoryStream();
+                await service.StreamAsync(firstRunId, context.Response, "docs-lock-co", CancellationToken.None);
+                return "streamed";
+            }
+            catch (DocumentCaptureServiceException ex) { return ex.ErrorCode; }
+            catch (DocumentCaptureAdmissionBusyException) { return "busy"; }
+        }).ToArray();
+        start.SetResult();
+        var results = await Task.WhenAll(tasks);
+        Assert.All(results, r => Assert.Contains(r, new[] { "created", "streamed", "DOCUMENT_EXPORT_RUNNING", "DOCUMENT_EXPORT_NOT_READY", "busy" }));
+        Assert.True(results.Count(r => r == "streamed") <= 1);
+        await using var verify = fx.NewDb();
+        Assert.False(await verify.DocumentExportRuns.AnyAsync(r => r.Status == "running"));
+    }
+
+    [PostgresOnlyFact]
+    public async Task Export_UnexpectedErrorMidStream_FailsTheRun_OnPostgres()
+    {
+        await using var fx = await Fixture.CreateAsync();
+        await fx.SeedLinkedDocumentAsync();
+        await using var db = fx.NewDb();
+        var service = new DocumentExportService(db, new DocumentCaptureAdmissionLock(db), fx.TenantContext);
+        var run = await service.CreateAsync(CancellationToken.None);
+        var runId = await db.DocumentExportRuns.Where(r => r.PublicId == run.Id).Select(r => r.Id).SingleAsync();
+        var context = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        context.Response.Body = new FailingStream();
+        await service.StreamAsync(runId, context.Response, "docs-lock-co", CancellationToken.None);
+        var after = await service.GetRunAsync(runId, CancellationToken.None);
+        Assert.Equal(("failed", "server-error"), (after.Status, after.FailureReason));
+        Assert.Equal("DOCUMENT_EXPORT_REQUIRED", await DocumentExportService.DeleteRefusalAsync(db, fx.CompanyId, true, false, CancellationToken.None));
+    }
+
+    [PostgresOnlyFact]
+    public async Task Export_WorkspaceDeleteHoldingTheLock_ThenCreateAndClaimSeeTheDeletion_OnPostgres()
+    {
+        await using var fx = await Fixture.CreateAsync();
+        await fx.SeedLinkedDocumentAsync();
+        string readyId;
+        await using (var db = fx.NewDb())
+            readyId = (await new DocumentExportService(db, new DocumentCaptureAdmissionLock(db), fx.TenantContext).CreateAsync(CancellationToken.None)).Id;
+
+        // Delete first: it holds the company lock while it commits, so a create waiting behind it sees a deleted workspace.
+        await using (var deleter = fx.NewDb())
+        {
+            deleter.SuppressTenantSecurityCheck = true;
+            await using var tx = await new DocumentCaptureAdmissionLock(deleter).AcquireCompanyAsync(fx.CompanyId, CancellationToken.None);
+            await deleter.Companies.IgnoreQueryFilters().Where(c => c.Id == fx.CompanyId)
+                .ExecuteUpdateAsync(s => s.SetProperty(c => c.DeletedAt, DateTime.UtcNow));
+            await tx.CommitAsync();
+        }
+        await using var after = fx.NewDb();
+        var service = new DocumentExportService(after, new DocumentCaptureAdmissionLock(after), fx.TenantContext);
+        Assert.Equal("DOCUMENT_NOT_FOUND", (await Assert.ThrowsAsync<DocumentCaptureServiceException>(() => service.CreateAsync(CancellationToken.None))).ErrorCode);
+        var runId = await after.DocumentExportRuns.Where(r => r.PublicId == readyId).Select(r => r.Id).SingleAsync();
+        var context = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        context.Response.Body = new MemoryStream();
+        Assert.Equal("DOCUMENT_NOT_FOUND", (await Assert.ThrowsAsync<DocumentCaptureServiceException>(() =>
+            service.StreamAsync(runId, context.Response, "docs-lock-co", CancellationToken.None))).ErrorCode);
+    }
+
+    [PostgresOnlyFact]
+    public async Task Export_LeaseExpiredDuringStream_IsFencedAndANewExportCanStart_OnPostgres()
+    {
+        await using var fx = await Fixture.CreateAsync();
+        await fx.SeedLinkedDocumentAsync();
+        await using var db = fx.NewDb();
+        var service = new DocumentExportService(db, new DocumentCaptureAdmissionLock(db), fx.TenantContext);
+        var run = await service.CreateAsync(CancellationToken.None);
+        var runId = await db.DocumentExportRuns.Where(r => r.PublicId == run.Id).Select(r => r.Id).SingleAsync();
+        var gate = new GateStream();
+        var context = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        context.Response.Body = gate;
+        var streaming = service.StreamAsync(runId, context.Response, "docs-lock-co", CancellationToken.None);
+        await gate.Entered.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        await using (var other = fx.NewDb())
+        {
+            await other.DocumentExportRuns.Where(r => r.Id == runId)
+                .ExecuteUpdateAsync(s => s.SetProperty(r => r.LastHeartbeatAt, DateTime.UtcNow.AddMinutes(-6)));
+            var next = await new DocumentExportService(other, new DocumentCaptureAdmissionLock(other), fx.TenantContext).CreateAsync(CancellationToken.None);
+            Assert.Equal("ready", next.Status);
+        }
+        gate.Release.SetResult();
+        await streaming.WaitAsync(TimeSpan.FromSeconds(30));
+        await using var verify = fx.NewDb();
+        var fenced = await verify.DocumentExportRuns.SingleAsync(r => r.Id == runId);
+        Assert.Equal(("failed", "stale"), (fenced.Status, fenced.FailureReason));
+        Assert.Equal(0, await verify.DocumentExportRuns.CountAsync(r => r.Status == "running"));
+    }
+
+    private sealed class FailingStream : MemoryStream
+    {
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) =>
+            throw new ArgumentOutOfRangeException(nameof(buffer), "Injected failure.");
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+            throw new ArgumentOutOfRangeException(nameof(buffer), "Injected failure.");
+    }
+
+    private sealed class GateStream : MemoryStream
+    {
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            Entered.TrySetResult();
+            await Release.Task.ConfigureAwait(false);
+            await base.WriteAsync(buffer, cancellationToken).ConfigureAwait(false);
+        }
+        public override async Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            Entered.TrySetResult();
+            await Release.Task.ConfigureAwait(false);
+            await base.WriteAsync(buffer, offset, count, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
     private sealed class Fixture : IAsyncDisposable
     {
         private readonly PostgresTestDatabase _database;

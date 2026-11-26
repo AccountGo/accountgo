@@ -1151,6 +1151,7 @@ WHERE ""DisabledModulesJson"" IS NULL
                 ""RequestedBy"" TEXT NOT NULL,
                 ""CreatedAt"" TEXT NOT NULL,
                 ""StreamStartedAt"" TEXT NULL,
+                ""LastHeartbeatAt"" TEXT NULL,
                 ""CompletedAt"" TEXT NULL,
                 ""SelectedRevision"" INTEGER NOT NULL,
                 ""SelectedCount"" INTEGER NOT NULL,

@@ -1,9 +1,10 @@
 ﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Api.Data.Migrations.ApiDb
+namespace Api.Data.Migrations.Postgres.ApiDb
 {
     /// <inheritdoc />
     public partial class DocumentExportRuns : Migration
@@ -15,21 +16,22 @@ namespace Api.Data.Migrations.ApiDb
                 name: "DocumentExportRuns",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    CompanyId = table.Column<int>(type: "int", nullable: false),
-                    PublicId = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false, defaultValue: ""),
-                    Status = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
-                    RequestedBy = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    StreamStartedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    CompletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    CompanyId = table.Column<int>(type: "integer", nullable: false),
+                    PublicId = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, defaultValue: ""),
+                    Status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    RequestedBy = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
+                    StreamStartedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
+                    LastHeartbeatAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
+                    CompletedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
                     SelectedRevision = table.Column<long>(type: "bigint", nullable: false),
-                    SelectedCount = table.Column<int>(type: "int", nullable: false),
+                    SelectedCount = table.Column<int>(type: "integer", nullable: false),
                     SelectedBytes = table.Column<long>(type: "bigint", nullable: false),
-                    WrittenCount = table.Column<int>(type: "int", nullable: false),
-                    FailureReason = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
-                    InventoryJson = table.Column<string>(type: "nvarchar(max)", nullable: false)
+                    WrittenCount = table.Column<int>(type: "integer", nullable: false),
+                    FailureReason = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    InventoryJson = table.Column<string>(type: "text", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -58,14 +60,14 @@ namespace Api.Data.Migrations.ApiDb
                 table: "DocumentExportRuns",
                 column: "CompanyId",
                 unique: true,
-                filter: "[Status] = 'running'");
+                filter: "\"Status\" = 'running'");
 
             migrationBuilder.CreateIndex(
                 name: "IX_DocumentExportRuns_PublicId",
                 table: "DocumentExportRuns",
                 column: "PublicId",
                 unique: true,
-                filter: "[PublicId] <> ''");
+                filter: "\"PublicId\" <> ''");
         }
 
         /// <inheritdoc />

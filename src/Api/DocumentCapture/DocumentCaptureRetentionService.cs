@@ -181,10 +181,11 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
         // Export runs: fail stale ones and drop runs older than 30 days (metadata only; no file content is ever stored).
         if (WithinPassBudget(passStarted))
         {
-            var staleBefore = utcNow - DocumentExportService.StaleAfter;
+            var readyBefore = utcNow - DocumentExportService.StaleAfter;
+            var leaseBefore = utcNow - DocumentExportService.StreamLease;
             await db.DocumentExportRuns.IgnoreQueryFilters()
-                .Where(run => (run.Status == DocumentExportService.Running && run.StreamStartedAt <= staleBefore)
-                    || (run.Status == DocumentExportService.Ready && run.CreatedAt <= staleBefore))
+                .Where(run => (run.Status == DocumentExportService.Running && run.LastHeartbeatAt <= leaseBefore)
+                    || (run.Status == DocumentExportService.Ready && run.CreatedAt <= readyBefore))
                 .ExecuteUpdateAsync(setters => setters
                     .SetProperty(run => run.Status, DocumentExportService.Failed)
                     .SetProperty(run => run.FailureReason, "stale")

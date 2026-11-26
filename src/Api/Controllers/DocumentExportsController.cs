@@ -72,6 +72,11 @@ public sealed class DocumentExportsController(DocumentExportService exports, ITe
         {
             return Problem(ex);
         }
+        catch (DocumentCaptureAdmissionBusyException)
+        {
+            Response.Headers.RetryAfter = "1";
+            return Problem(new DocumentCaptureServiceException(503, "DOCUMENT_BUSY"));
+        }
     }
 
     private ObjectResult Problem(DocumentCaptureServiceException exception)

@@ -176,6 +176,8 @@ public sealed class DocumentExportRun : BaseEntity, ICompanyOwned, IHasPublicId
     public string RequestedBy { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public DateTime? StreamStartedAt { get; set; }
+    /// <summary>Renewed while the ZIP streams; a running export without a heartbeat for <c>StreamLease</c> is expired and fenced.</summary>
+    public DateTime? LastHeartbeatAt { get; set; }
     public DateTime? CompletedAt { get; set; }
     public long SelectedRevision { get; set; }
     public int SelectedCount { get; set; }

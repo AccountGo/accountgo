@@ -47,7 +47,11 @@ public sealed class DocumentExportService(
     public const string Running = "running";
     public const string ServerFinished = "server_finished";
     public const string Failed = "failed";
+    /// <summary>A ready run nobody downloads is failed after this long.</summary>
     public static readonly TimeSpan StaleAfter = TimeSpan.FromHours(2);
+    /// <summary>A running export must renew its heartbeat within this lease, or it is expired and fenced.</summary>
+    public static readonly TimeSpan StreamLease = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan HeartbeatEvery = TimeSpan.FromSeconds(30);
     public static readonly TimeSpan KeepRunsFor = TimeSpan.FromDays(30);
     private static readonly string[] FilableKinds = ["document", "expense-receipt", "purchase-invoice", "sales-invoice"];
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
@@ -86,6 +90,7 @@ public sealed class DocumentExportService(
         long revision;
         await using (var transaction = await admissionLock.AcquireCompanyAsync(companyId, cancellationToken).ConfigureAwait(false))
         {
+            await EnsureCompanyLiveAsync(companyId, cancellationToken).ConfigureAwait(false);
             await ExpireStaleAsync(companyId, now, cancellationToken).ConfigureAwait(false);
             if (await db.DocumentExportRuns.AnyAsync(r => r.CompanyId == companyId && r.Status == Running, cancellationToken).ConfigureAwait(false))
                 throw new DocumentCaptureServiceException(409, "DOCUMENT_EXPORT_RUNNING");
@@ -128,43 +133,45 @@ public sealed class DocumentExportService(
     {
         var companyId = tenant.RequireCompanyId();
         var now = _timeProvider.GetUtcNow().UtcDateTime;
-        var claimed = await db.DocumentExportRuns
-            .Where(r => r.CompanyId == companyId && r.Id == runId && r.Status == Ready)
-            .ExecuteUpdateAsync(s => s.SetProperty(r => r.Status, Running).SetProperty(r => r.StreamStartedAt, now), requestAborted)
-            .ConfigureAwait(false);
-        if (claimed != 1)
-        {
-            var exists = await db.DocumentExportRuns.AnyAsync(r => r.CompanyId == companyId && r.Id == runId, requestAborted).ConfigureAwait(false);
-            throw exists
-                ? new DocumentCaptureServiceException(409, "DOCUMENT_EXPORT_NOT_READY")
-                : new DocumentCaptureServiceException(404, "DOCUMENT_NOT_FOUND");
-        }
-        var run = await db.DocumentExportRuns.AsNoTracking().SingleAsync(r => r.CompanyId == companyId && r.Id == runId, requestAborted)
-            .ConfigureAwait(false);
-        var inventory = JsonSerializer.Deserialize<JsonElement[][]>(run.InventoryJson) ?? [];
+        await ClaimAsync(companyId, runId, now, requestAborted).ConfigureAwait(false);
 
-        response.StatusCode = StatusCodes.Status200OK;
-        response.ContentType = "application/zip";
-        response.Headers.CacheControl = "private, no-store";
-        response.Headers["X-Content-Type-Options"] = "nosniff";
-        response.Headers.ContentDisposition =
-            $"attachment; filename=\"documents-{DocumentLibraryService.SafeName(companySlug, 40)}-{now:yyyy-MM-dd}.zip\"";
-        response.HttpContext.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>()?.DisableBuffering();
-
-        var rows = new List<IndexRow>(inventory.Length);
+        // From here the run is "running": every outcome below ends in a terminal status. Failure is the default; only the
+        // explicit success path at the end sets it to finished.
+        var exportId = string.Empty;
+        var selected = 0;
         var written = 0;
-        string? failure = null;
+        var finished = false;
+        string failure = "server-error";
         try
         {
+            var run = await db.DocumentExportRuns.AsNoTracking().SingleAsync(r => r.CompanyId == companyId && r.Id == runId, requestAborted)
+                .ConfigureAwait(false);
+            exportId = run.PublicId;
+            var inventory = JsonSerializer.Deserialize<JsonElement[][]>(run.InventoryJson) ?? [];
+            selected = inventory.Length;
+
+            response.StatusCode = StatusCodes.Status200OK;
+            response.ContentType = "application/zip";
+            response.Headers.CacheControl = "private, no-store";
+            response.Headers["X-Content-Type-Options"] = "nosniff";
+            response.Headers.ContentDisposition =
+                $"attachment; filename=\"documents-{DocumentLibraryService.SafeName(companySlug, 40)}-{now:yyyy-MM-dd}.zip\"";
+            response.HttpContext.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>()?.DisableBuffering();
+
+            var rows = new List<IndexRow>(inventory.Length);
+            string? entryProblem = null;
             var body = new AsyncFlushingStream(response.Body);
             var zip = await ZipArchive.CreateAsync(body, ZipArchiveMode.Create, leaveOpen: true, entryNameEncoding: Encoding.UTF8,
                 cancellationToken: requestAborted).ConfigureAwait(false);
             await using (zip.ConfigureAwait(false))
             {
                 var usedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var lastBeat = now;
                 foreach (var item in inventory)
                 {
                     requestAborted.ThrowIfCancellationRequested();
+                    if (_timeProvider.GetUtcNow().UtcDateTime - lastBeat >= HeartbeatEvery)
+                        lastBeat = await HeartbeatAsync(companyId, runId).ConfigureAwait(false);
                     var captureId = item[0].GetInt32();
                     var expectedHash = item[1].GetString() ?? string.Empty;
                     var row = await WriteEntryAsync(zip, companyId, captureId, expectedHash, usedPaths, requestAborted).ConfigureAwait(false);
@@ -172,47 +179,94 @@ public sealed class DocumentExportService(
                     if (row.Verification == "ok")
                         written++;
                     else
-                        failure ??= row.Verification == "missing" ? "missing-files" : "hash-mismatch";
+                        entryProblem ??= row.Verification == "missing" ? "missing-files" : "hash-mismatch";
                     db.ChangeTracker.Clear();
                 }
 
-                var complete = failure is null && written == inventory.Length;
+                var complete = entryProblem is null && written == inventory.Length;
                 // Stored, not deflated: deflate flushes synchronously on dispose, which the server's response stream refuses.
                 var index = zip.CreateEntry("index.csv", CompressionLevel.NoCompression);
                 var indexStream = await index.OpenAsync(requestAborted).ConfigureAwait(false);
                 await using (indexStream.ConfigureAwait(false))
                 {
-                    var bytes = Encoding.UTF8.GetBytes(BuildIndex(rows, complete, failure, written, inventory.Length, run.PublicId));
+                    var bytes = Encoding.UTF8.GetBytes(BuildIndex(rows, complete, entryProblem, written, inventory.Length, run.PublicId));
                     await indexStream.WriteAsync(bytes, requestAborted).ConfigureAwait(false);
                 }
             }
             // Disposing the archive wrote the central directory; only now is the ZIP valid.
             await body.FlushAsync(requestAborted).ConfigureAwait(false);
             await response.CompleteAsync().ConfigureAwait(false);
+            await HeartbeatAsync(companyId, runId).ConfigureAwait(false);
+
             if (requestAborted.IsCancellationRequested)
-                failure ??= "client-disconnected";
+                failure = "client-disconnected";
+            else if (entryProblem is not null)
+                failure = entryProblem;
+            else if (written == inventory.Length)
+                finished = true;
         }
         catch (OperationCanceledException) when (requestAborted.IsCancellationRequested)
         {
-            failure ??= "client-disconnected";
+            failure = "client-disconnected";
         }
-        catch (Exception exception) when (exception is IOException or InvalidOperationException or DbUpdateException)
+        catch (ExportLeaseLostException)
         {
-            failure ??= "server-error";
+            failure = "lease-lost";
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            // Any other error (ZIP, database, serialisation, network) leaves the run failed; the reason never carries the message.
+            failure = "server-error";
         }
         finally
         {
             var completedAt = _timeProvider.GetUtcNow().UtcDateTime;
-            var finalStatus = failure is null ? ServerFinished : Failed;
-            await db.DocumentExportRuns.Where(r => r.CompanyId == companyId && r.Id == runId && r.Status == Running)
+            var finalStatus = finished ? ServerFinished : Failed;
+            string? finalReason = finished ? null : failure;
+            // Fenced: only a run still holding its lease is finalised. If it was expired meanwhile it stays failed, and the
+            // audit reports what was actually recorded, never a success the database didn't take.
+            var transitioned = await db.DocumentExportRuns.Where(r => r.CompanyId == companyId && r.Id == runId && r.Status == Running)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(r => r.Status, finalStatus)
                     .SetProperty(r => r.WrittenCount, written)
-                    .SetProperty(r => r.FailureReason, failure)
+                    .SetProperty(r => r.FailureReason, finalReason)
                     .SetProperty(r => r.CompletedAt, completedAt), CancellationToken.None).ConfigureAwait(false);
-            await AuditAsync(failure is null ? "document.export.server_finished" : "document.export.failed", companyId,
-                new { exportId = run.PublicId, written, selected = inventory.Length, reason = failure }).ConfigureAwait(false);
+            if (transitioned == 0)
+            {
+                finished = false;
+                finalReason = "lease-lost";
+            }
+            await AuditAsync(finished ? "document.export.server_finished" : "document.export.failed", companyId,
+                new { exportId, written, selected, reason = finalReason }).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Ready -> running under the company lock, the same lock <see cref="CreateAsync"/> holds, so a create and a download can't
+    /// interleave: a create sees the running run and refuses; a download of a superseded run sees it is no longer ready.
+    /// </summary>
+    private async Task ClaimAsync(int companyId, int runId, DateTime now, CancellationToken cancellationToken)
+    {
+        await using var transaction = await admissionLock.AcquireCompanyAsync(companyId, cancellationToken).ConfigureAwait(false);
+        await EnsureCompanyLiveAsync(companyId, cancellationToken).ConfigureAwait(false);
+        await ExpireStaleAsync(companyId, now, cancellationToken).ConfigureAwait(false);
+        var run = await db.DocumentExportRuns.AsNoTracking()
+            .Where(r => r.CompanyId == companyId && r.Id == runId)
+            .Select(r => new { r.Status })
+            .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false)
+            ?? throw new DocumentCaptureServiceException(404, "DOCUMENT_NOT_FOUND");
+        if (run.Status != Ready)
+            throw new DocumentCaptureServiceException(409, "DOCUMENT_EXPORT_NOT_READY");
+        if (await db.DocumentExportRuns.AnyAsync(r => r.CompanyId == companyId && r.Status == Running, cancellationToken).ConfigureAwait(false))
+            throw new DocumentCaptureServiceException(409, "DOCUMENT_EXPORT_RUNNING");
+        var claimed = await db.DocumentExportRuns
+            .Where(r => r.CompanyId == companyId && r.Id == runId && r.Status == Ready)
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.Status, Running).SetProperty(r => r.StreamStartedAt, now)
+                .SetProperty(r => r.LastHeartbeatAt, now), cancellationToken)
+            .ConfigureAwait(false);
+        if (claimed != 1)
+            throw new DocumentCaptureServiceException(409, "DOCUMENT_EXPORT_NOT_READY");
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>Whether a workspace may be deleted now: nothing filed, an explicit skip, or a confirmed export still current.</summary>
@@ -236,11 +290,31 @@ public sealed class DocumentExportService(
         return exportConfirmed ? null : "DOCUMENT_EXPORT_CONFIRMATION_REQUIRED";
     }
 
+    /// <summary>Renews the lease; throws when the run was expired (fenced) so the stream stops writing for a dead run.</summary>
+    private async Task<DateTime> HeartbeatAsync(int companyId, int runId)
+    {
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var renewed = await db.DocumentExportRuns.Where(r => r.CompanyId == companyId && r.Id == runId && r.Status == Running)
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.LastHeartbeatAt, now), CancellationToken.None).ConfigureAwait(false);
+        if (renewed == 0)
+            throw new ExportLeaseLostException();
+        return now;
+    }
+
+    private async Task EnsureCompanyLiveAsync(int companyId, CancellationToken cancellationToken)
+    {
+        // The company query filter hides deleted workspaces; checked inside the company lock, after a delete can have committed.
+        if (!await db.Companies.AnyAsync(c => c.Id == companyId && c.DeletedAt == null, cancellationToken).ConfigureAwait(false))
+            throw new DocumentCaptureServiceException(404, "DOCUMENT_NOT_FOUND");
+    }
+
+    private sealed class ExportLeaseLostException : Exception;
+
     private async Task ExpireStaleAsync(int companyId, DateTime now, CancellationToken cancellationToken)
     {
-        var staleBefore = now - StaleAfter;
+        var staleBefore = now - StreamLease;
         await db.DocumentExportRuns
-            .Where(r => r.CompanyId == companyId && r.Status == Running && r.StreamStartedAt <= staleBefore)
+            .Where(r => r.CompanyId == companyId && r.Status == Running && r.LastHeartbeatAt <= staleBefore)
             .ExecuteUpdateAsync(s => s.SetProperty(r => r.Status, Failed).SetProperty(r => r.FailureReason, "stale")
                 .SetProperty(r => r.CompletedAt, now), cancellationToken).ConfigureAwait(false);
     }

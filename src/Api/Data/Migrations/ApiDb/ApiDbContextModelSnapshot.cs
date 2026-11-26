@@ -1261,6 +1261,9 @@ namespace Api.Data.Migrations.ApiDb
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("LastHeartbeatAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("PublicId")
                         .IsRequired()
                         .ValueGeneratedOnAdd()

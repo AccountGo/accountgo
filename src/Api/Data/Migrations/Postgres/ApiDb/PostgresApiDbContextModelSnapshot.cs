@@ -1260,6 +1260,9 @@ namespace Api.Data.Migrations.Postgres.ApiDb
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<DateTime?>("LastHeartbeatAt")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<string>("PublicId")
                         .IsRequired()
                         .ValueGeneratedOnAdd()

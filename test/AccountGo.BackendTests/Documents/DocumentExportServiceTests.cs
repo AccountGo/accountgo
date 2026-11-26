@@ -136,13 +136,14 @@ public sealed class DocumentExportServiceTests
 
         var third = await h.Exports.CreateAsync(default);
         await h.Db.DocumentExportRuns.Where(r => r.PublicId == third.Id)
-            .ExecuteUpdateAsync(s => s.SetProperty(r => r.Status, "running").SetProperty(r => r.StreamStartedAt, DateTime.UtcNow));
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.Status, "running").SetProperty(r => r.StreamStartedAt, DateTime.UtcNow)
+                .SetProperty(r => r.LastHeartbeatAt, DateTime.UtcNow));
         var busy = await Assert.ThrowsAsync<DocumentCaptureServiceException>(() => h.Exports.CreateAsync(default));
         Assert.Equal("DOCUMENT_EXPORT_RUNNING", busy.ErrorCode);
 
-        // A stream stuck past two hours is failed as stale, freeing the slot.
+        // A stream without a heartbeat for longer than the lease is failed as stale, freeing the slot.
         await h.Db.DocumentExportRuns.Where(r => r.PublicId == third.Id)
-            .ExecuteUpdateAsync(s => s.SetProperty(r => r.StreamStartedAt, DateTime.UtcNow.AddHours(-3)));
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.LastHeartbeatAt, DateTime.UtcNow.AddMinutes(-6)));
         Assert.Equal("ready", (await h.Exports.CreateAsync(default)).Status);
     }
 
@@ -165,13 +166,92 @@ public sealed class DocumentExportServiceTests
     }
 
     [Fact]
+    public async Task UnexpectedErrorAfterStreamingStarts_FailsTheRun_AndWorkspaceDeleteStaysRefused()
+    {
+        await using var h = await Harness.CreateAsync();
+        await h.SeedAsync("document", "a", null);
+        var run = await h.Exports.CreateAsync(default);
+        var context = new DefaultHttpContext();
+        context.Response.Body = new ThrowingStream();
+        await h.Exports.StreamAsync(await h.RunIdOf(run.Id), context.Response, "export-co", CancellationToken.None);
+
+        var failed = await h.Exports.GetRunAsync(await h.RunIdOf(run.Id), default);
+        Assert.Equal(("failed", "server-error", false), (failed.Status, failed.FailureReason, failed.Current));
+        Assert.Equal("DOCUMENT_EXPORT_REQUIRED", await DocumentExportService.DeleteRefusalAsync(h.Db, h.CompanyId, true, false, default));
+    }
+
+    [Fact]
+    public async Task CreateWhileADownloadStreams_IsRefused_AndTheStreamStillFinishes()
+    {
+        await using var h = await Harness.CreateAsync();
+        await h.SeedAsync("document", "a", null);
+        var run = await h.Exports.CreateAsync(default);
+        var gate = new BlockingStream();
+        var context = new DefaultHttpContext();
+        context.Response.Body = gate;
+        var streaming = h.Exports.StreamAsync(await h.RunIdOf(run.Id), context.Response, "export-co", CancellationToken.None);
+        await gate.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        await using var otherDb = h.NewDb();
+        var other = new DocumentExportService(otherDb, new DocumentCaptureAdmissionLock(otherDb), h.Tenant);
+        var refused = await Assert.ThrowsAsync<DocumentCaptureServiceException>(() => other.CreateAsync(default));
+        Assert.Equal("DOCUMENT_EXPORT_RUNNING", refused.ErrorCode);
+
+        gate.Release.SetResult();
+        await streaming.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal("server_finished", (await h.Exports.GetRunAsync(await h.RunIdOf(run.Id), default)).Status);
+    }
+
+    [Fact]
+    public async Task AStreamThatLostItsLease_IsFenced_ANewExportMayStart_AndNoSuccessIsReported()
+    {
+        await using var h = await Harness.CreateAsync();
+        await h.SeedAsync("document", "a", null);
+        var run = await h.Exports.CreateAsync(default);
+        var gate = new BlockingStream();
+        var context = new DefaultHttpContext();
+        context.Response.Body = gate;
+        var streaming = h.Exports.StreamAsync(await h.RunIdOf(run.Id), context.Response, "export-co", CancellationToken.None);
+        await gate.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        // The stream misses its lease; another create expires it and starts a new run.
+        await using var otherDb = h.NewDb();
+        await otherDb.DocumentExportRuns.Where(r => r.PublicId == run.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.LastHeartbeatAt, DateTime.UtcNow.AddMinutes(-6)));
+        var other = new DocumentExportService(otherDb, new DocumentCaptureAdmissionLock(otherDb), h.Tenant);
+        Assert.Equal("ready", (await other.CreateAsync(default)).Status);
+
+        gate.Release.SetResult();
+        await streaming.WaitAsync(TimeSpan.FromSeconds(10));
+        var fenced = await h.Exports.GetRunAsync(await h.RunIdOf(run.Id), default);
+        Assert.Equal(("failed", "stale"), (fenced.Status, fenced.FailureReason));
+        h.Audit.Verify(a => a.LogEventAsync("document.export.server_finished", It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<object?>()), Times.Never);
+        h.Audit.Verify(a => a.LogEventAsync("document.export.failed", It.IsAny<string?>(), It.IsAny<string?>(), h.CompanyId, It.IsAny<object?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task DeletedWorkspace_CannotCreateOrStartAnExport()
+    {
+        await using var h = await Harness.CreateAsync();
+        await h.SeedAsync("document", "a", null);
+        var run = await h.Exports.CreateAsync(default);
+        h.Db.SuppressTenantSecurityCheck = true;
+        await h.Db.Companies.IgnoreQueryFilters().Where(c => c.Id == h.CompanyId).ExecuteUpdateAsync(s => s.SetProperty(c => c.DeletedAt, DateTime.UtcNow));
+        h.Db.SuppressTenantSecurityCheck = false;
+
+        Assert.Equal("DOCUMENT_NOT_FOUND", (await Assert.ThrowsAsync<DocumentCaptureServiceException>(() => h.Exports.CreateAsync(default))).ErrorCode);
+        Assert.Equal("DOCUMENT_NOT_FOUND", (await Assert.ThrowsAsync<DocumentCaptureServiceException>(() => h.StreamAsync(run.Id))).ErrorCode);
+        Assert.Equal("ready", (await h.Db.DocumentExportRuns.AsNoTracking().SingleAsync(r => r.PublicId == run.Id)).Status);
+    }
+
+    [Fact]
     public async Task Retention_FailsStaleRunsAndDropsOldOnes()
     {
         await using var h = await Harness.CreateAsync();
         await h.SeedAsync("document", "a", null);
         var stuck = await h.Exports.CreateAsync(default);
         await h.Db.DocumentExportRuns.Where(r => r.PublicId == stuck.Id)
-            .ExecuteUpdateAsync(s => s.SetProperty(r => r.Status, "running").SetProperty(r => r.StreamStartedAt, DateTime.UtcNow.AddHours(-3)));
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.Status, "running").SetProperty(r => r.LastHeartbeatAt, DateTime.UtcNow.AddMinutes(-6)));
         var old = await h.Exports.CreateAsync(default);
         await h.Db.DocumentExportRuns.Where(r => r.PublicId == old.Id)
             .ExecuteUpdateAsync(s => s.SetProperty(r => r.CreatedAt, DateTime.UtcNow.AddDays(-31)));
@@ -220,6 +300,35 @@ public sealed class DocumentExportServiceTests
     }
 
     private static string Sha(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+
+    private sealed class ThrowingStream : MemoryStream
+    {
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) =>
+            throw new ArgumentOutOfRangeException(nameof(buffer), "Injected failure.");
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+            throw new ArgumentOutOfRangeException(nameof(buffer), "Injected failure.");
+    }
+
+    /// <summary>Holds the first write until released, so a test can act while the export streams.</summary>
+    private sealed class BlockingStream : MemoryStream
+    {
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            Entered.TrySetResult();
+            await Release.Task.ConfigureAwait(false);
+            await base.WriteAsync(buffer, cancellationToken).ConfigureAwait(false);
+        }
+
+        public override async Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            Entered.TrySetResult();
+            await Release.Task.ConfigureAwait(false);
+            await base.WriteAsync(buffer, offset, count, cancellationToken).ConfigureAwait(false);
+        }
+    }
 
     private sealed class AbortAfterFirstWriteStream(CancellationTokenSource aborted) : MemoryStream
     {
@@ -295,6 +404,9 @@ public sealed class DocumentExportServiceTests
             Db.ChangeTracker.Clear();
             return capture;
         }
+
+        public ApiDbContext NewDb() =>
+            new(new DbContextOptionsBuilder<ApiDbContext>().UseSqlite($"Data Source={_dbPath};Pooling=False").Options, Tenant);
 
         public Task<int> RunIdOf(string publicId) =>
             Db.DocumentExportRuns.AsNoTracking().Where(r => r.PublicId == publicId).Select(r => r.Id).SingleAsync();
