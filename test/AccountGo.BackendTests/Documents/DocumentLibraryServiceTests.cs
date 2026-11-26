@@ -362,6 +362,56 @@ public sealed class DocumentLibraryServiceTests
         Assert.Equal(revision + 1, await DocumentRevision.GetCurrentAsync(h.Db, h.CompanyId));
     }
 
+    [Fact]
+    public async Task TrashRetention_PurgesOnlyExpiredUnlockedTrash()
+    {
+        await using var h = await Harness.CreateAsync();
+        var bill = h.SeedBill("B-1");
+        var now = DateTime.UtcNow;
+        async Task<int> Trashed(string label, bool old, string? linkBill = null)
+        {
+            var view = await h.Library.UploadAsync(CreatePdf(1, label: label), "application/pdf", $"{label}.pdf", Meta(), null, null, null, false, default);
+            var id = await h.IdOf(view.Id);
+            if (linkBill is not null)
+                await h.Library.LinkAsync(id, "bill", linkBill, default);
+            await h.Library.TrashAsync(id, default);
+            if (old)
+                await h.Db.DocumentCaptures.Where(c => c.Id == id).ExecuteUpdateAsync(s => s.SetProperty(c => c.DeletedAt, now.AddDays(-31)));
+            return id;
+        }
+        var expired = await Trashed("expired", old: true);
+        var recent = await Trashed("recent", old: false);
+        var lockedLater = await Trashed("locked", old: true, linkBill: bill.PublicId);
+        var restored = await Trashed("restored", old: true);
+        await h.Db.DocumentCaptures.Where(c => c.Id == restored).ExecuteUpdateAsync(s => s.SetProperty(c => c.DeletedAt, (DateTime?)null));
+        await h.Db.PurchaseInvoiceHeaders.Where(b => b.Id == bill.Id).ExecuteUpdateAsync(s => s.SetProperty(b => b.Status, PurchaseInvoiceStatus.Open));
+        var revision = await DocumentRevision.GetCurrentAsync(h.Db, h.CompanyId);
+
+        var retention = new DocumentCaptureRetentionService(h.Db, new DocumentCaptureAdmissionLock(h.Db),
+            documentsOptions: Options.Create(new DocumentsOptions { TrashRetentionDays = 30 }));
+        Assert.Equal(1, await retention.PurgeAsync(now, default));
+
+        Assert.False(await h.Db.DocumentCaptures.AnyAsync(c => c.Id == expired));
+        Assert.False(await h.Db.DocumentCaptureBlobs.AnyAsync(b => b.CaptureId == expired));
+        Assert.True(await h.Db.DocumentCaptures.AnyAsync(c => c.Id == recent));
+        Assert.True(await h.Db.DocumentCaptures.AnyAsync(c => c.Id == lockedLater));
+        Assert.True(await h.Db.DocumentCaptures.AnyAsync(c => c.Id == restored));
+        Assert.Equal(revision + 1, await DocumentRevision.GetCurrentAsync(h.Db, h.CompanyId));
+    }
+
+    [Fact]
+    public async Task ScanWhoseDraftWasDeleted_StaysVisibleAndRemovable()
+    {
+        await using var h = await Harness.CreateAsync();
+        var bill = h.SeedBill("B-1");
+        var scanId = await h.SeedFiledScanAsync(bill);
+        await DocumentLibraryService.RemoveLinksForDeletedTargetAsync(h.Db, h.CompanyId, "bill", bill.Id, default);
+
+        var listed = Assert.Single((await h.Library.ListAsync(new DocumentListQuery(null, null, false, false, null, 1, 50), default)).Items);
+        Assert.False(listed.HasSourceLink);
+        Assert.True((await h.Library.TrashAsync(scanId, default)).InTrash);
+    }
+
     // ---------- helpers ----------
 
     private static DocumentMetadataInput Meta(string? title = null, string? category = null, string? notes = null) =>

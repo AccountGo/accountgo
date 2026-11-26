@@ -10,7 +10,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Api.DocumentCaptures;
 
 public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCaptureAdmissionLock admissionLock,
-    TimeProvider? timeProvider = null, ILogger<DocumentCaptureRetentionService>? logger = null)
+    TimeProvider? timeProvider = null, ILogger<DocumentCaptureRetentionService>? logger = null,
+    Microsoft.Extensions.Options.IOptions<DocumentsOptions>? documentsOptions = null)
 {
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
     private readonly ILogger<DocumentCaptureRetentionService> _logger = logger ?? NullLogger<DocumentCaptureRetentionService>.Instance;
@@ -132,6 +133,47 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
                 }
             }
             if (!madeProgress && rejectedResidue.All(item => stalledRejectedCaptures.Contains(item.Id)))
+                break;
+        }
+
+        // Library trash older than the retention period: purge the row, blob and links (design 3.9 S4, R5).
+        var trashCutoff = utcNow.AddDays(-(documentsOptions?.Value.TrashRetentionDays ?? 30));
+        var stalledTrash = new HashSet<int>();
+        while (WithinPassBudget(passStarted))
+        {
+            var expiredTrash = await db.DocumentCaptures.IgnoreQueryFilters().AsNoTracking()
+                .Where(capture => capture.FiledAt != null && capture.DeletedAt != null && capture.DeletedAt <= trashCutoff
+                    && !stalledTrash.Contains(capture.Id))
+                .OrderBy(capture => capture.DeletedAt)
+                .Select(capture => new { capture.CompanyId, capture.Id })
+                .Take(BatchSize)
+                .ToListAsync(cancellationToken).ConfigureAwait(false);
+            if (expiredTrash.Count == 0)
+                break;
+            var madeProgress = false;
+            foreach (var item in expiredTrash)
+            {
+                if (!WithinPassBudget(passStarted))
+                    break;
+                try
+                {
+                    if (await PurgeExpiredTrashAsync(item.CompanyId, item.Id, trashCutoff, cancellationToken).ConfigureAwait(false))
+                    {
+                        madeProgress = true;
+                        purgedCaptures++;
+                    }
+                    else
+                    {
+                        stalledTrash.Add(item.Id);
+                    }
+                }
+                catch (DocumentCaptureAdmissionBusyException)
+                {
+                    stalledTrash.Add(item.Id);
+                    busyItems++;
+                }
+            }
+            if (!madeProgress && expiredTrash.All(item => stalledTrash.Contains(item.Id)))
                 break;
         }
 
@@ -289,6 +331,54 @@ public sealed class DocumentCaptureRetentionService(ApiDbContext db, IDocumentCa
                 && db.DocumentCaptures.IgnoreQueryFilters()
                     .Any(item => item.CompanyId == companyId && item.Id == captureId && item.FiledAt == null))
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        return true;
+    }
+
+    /// <summary>
+    /// Under the company lock and the linked records' row locks: purges a trashed library file whose retention has passed, unless
+    /// it was restored, is a scan's source, or a linked bill/invoice is no longer a draft (it then stays in the trash as evidence).
+    /// </summary>
+    private async Task<bool> PurgeExpiredTrashAsync(int companyId, int captureId, DateTime trashCutoff, CancellationToken cancellationToken)
+    {
+        await using var transaction = await admissionLock.AcquireCompanyAsync(companyId, cancellationToken).ConfigureAwait(false);
+        var links = await db.DocumentCaptureLinks.IgnoreQueryFilters().AsNoTracking()
+            .Where(link => link.CompanyId == companyId && link.CaptureId == captureId)
+            .Select(link => new { link.TargetType, link.TargetId, link.Role })
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        if (links.Any(link => link.Role == Core.Domain.DocumentCaptureLinkRoles.Source))
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            return false;
+        }
+        await DocumentTargetLocks.LockAsync(db, companyId, links.Select(link => (link.TargetType, link.TargetId)), cancellationToken)
+            .ConfigureAwait(false);
+        var billIds = links.Where(link => link.TargetType == "bill").Select(link => link.TargetId).ToArray();
+        var invoiceIds = links.Where(link => link.TargetType == "invoice").Select(link => link.TargetId).ToArray();
+        var locked = await db.PurchaseInvoiceHeaders.IgnoreQueryFilters().AsNoTracking()
+                .AnyAsync(h => h.CompanyId == companyId && billIds.Contains(h.Id)
+                    && ((h.Status != null && h.Status != Core.Domain.PurchaseInvoiceStatus.Draft) || h.GeneralLedgerHeaderId != null), cancellationToken)
+                .ConfigureAwait(false)
+            || await db.SalesInvoiceHeaders.IgnoreQueryFilters().AsNoTracking()
+                .AnyAsync(h => h.CompanyId == companyId && invoiceIds.Contains(h.Id)
+                    && ((h.Status != null && h.Status != Core.Domain.SalesInvoiceStatus.Draft) || h.GeneralLedgerHeaderId != null), cancellationToken)
+                .ConfigureAwait(false);
+        if (locked)
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            return false;
+        }
+        var deleted = await db.DocumentCaptures.IgnoreQueryFilters()
+            .Where(capture => capture.CompanyId == companyId && capture.Id == captureId && capture.FiledAt != null
+                && capture.DeletedAt != null && capture.DeletedAt <= trashCutoff)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        if (deleted == 0)
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            return false;
+        }
+        await DocumentRevision.BumpAsync(db, companyId, cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        db.ChangeTracker.Clear();
         return true;
     }
 

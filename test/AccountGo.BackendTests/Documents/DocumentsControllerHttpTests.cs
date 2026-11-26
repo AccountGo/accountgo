@@ -163,6 +163,49 @@ public sealed class DocumentsControllerHttpTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task DeletingADraftBillRemovesItsLinksButKeepsTheFiles()
+    {
+        string billPublicId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            db.SuppressTenantSecurityCheck = true;
+            var companyId = await db.Companies.IgnoreQueryFilters().Where(c => c.Slug == _companySlug).Select(c => c.Id).SingleAsync();
+            var bill = new Core.Domain.Purchases.PurchaseInvoiceHeader
+            {
+                CompanyId = companyId, PublicId = Core.Domain.PublicIdGenerator.New("bill"), Date = DateTime.UtcNow.Date,
+                VendorInvoiceNo = "HTTP-DOC-BILL", Status = Core.Domain.PurchaseInvoiceStatus.Draft
+            };
+            db.PurchaseInvoiceHeaders.Add(bill);
+            await db.SaveChangesAsync();
+            billPublicId = bill.PublicId;
+        }
+
+        string id;
+        using (var upload = Request(HttpMethod.Post, "/api/documents", _ownerToken))
+        {
+            upload.Content = UploadForm(CreatePdf(1), "application/pdf", "receipt.pdf", ("LinkTargetType", "bill"), ("LinkTargetId", billPublicId));
+            using var response = await _client.SendAsync(upload);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            id = body.RootElement.GetProperty("id").GetString()!;
+            Assert.Equal(1, body.RootElement.GetProperty("links").GetArrayLength());
+        }
+
+        using (var delete = Request(HttpMethod.Delete, $"/api/Purchasing/DeleteBill?id={billPublicId}", _ownerToken))
+        using (var response = await _client.SendAsync(delete))
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        using (var get = Request(HttpMethod.Get, $"/api/documents/{id}", _ownerToken))
+        using (var response = await _client.SendAsync(get))
+        {
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal(0, body.RootElement.GetProperty("links").GetArrayLength());
+        }
+    }
+
+    [Fact]
     public async Task OversizedUploadIsRefusedWith413AndTheLimit()
     {
         using var upload = Request(HttpMethod.Post, "/api/documents", _ownerToken);

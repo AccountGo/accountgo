@@ -417,7 +417,12 @@ public sealed class DocumentsLibraryFoundationSliceTests
             $"{nameof(DocumentCaptureService)}.{nameof(DocumentCaptureService.GetAsync)}",
             $"{nameof(DocumentCaptureService)}.{nameof(DocumentCaptureService.GetBytesAsync)}",
             $"{nameof(DocumentCaptureService)}.{nameof(DocumentCaptureService.GetLinkedAsync)}",
-            $"{nameof(DocumentCaptureService)}.{nameof(DocumentCaptureService.MatchPartyAsync)}"
+            $"{nameof(DocumentCaptureService)}.{nameof(DocumentCaptureService.MatchPartyAsync)}",
+            $"{nameof(DocumentLibraryService)}.{nameof(DocumentLibraryService.GetCapabilitiesAsync)}",
+            $"{nameof(DocumentLibraryService)}.{nameof(DocumentLibraryService.ListAsync)}",
+            $"{nameof(DocumentLibraryService)}.{nameof(DocumentLibraryService.GetAsync)}",
+            $"{nameof(DocumentLibraryService)}.{nameof(DocumentLibraryService.GetBytesAsync)}",
+            $"{nameof(DocumentLibraryService)}.{nameof(DocumentLibraryService.ListLinkedAsync)}"
         };
 
         var nonExportAffectingMutators = new HashSet<string>(StringComparer.Ordinal)
@@ -432,13 +437,24 @@ public sealed class DocumentsLibraryFoundationSliceTests
         {
             $"{nameof(DocumentCaptureService)}.{nameof(DocumentCaptureService.LinkAsync)}",
             $"{nameof(DocumentCaptureRetentionService)}.{nameof(DocumentCaptureRetentionService.PurgeAsync)}",
-            $"{nameof(DocumentCaptureRetentionService)}.{nameof(DocumentCaptureRetentionService.PurgeDeletedCompanyAsync)}"
+            $"{nameof(DocumentCaptureRetentionService)}.{nameof(DocumentCaptureRetentionService.PurgeDeletedCompanyAsync)}",
+            // S-A2 documents library: every mutator bumps the revision in its own transaction.
+            $"{nameof(DocumentLibraryService)}.{nameof(DocumentLibraryService.UploadAsync)}",
+            $"{nameof(DocumentLibraryService)}.{nameof(DocumentLibraryService.UpdateMetadataAsync)}",
+            $"{nameof(DocumentLibraryService)}.{nameof(DocumentLibraryService.LinkAsync)}",
+            $"{nameof(DocumentLibraryService)}.{nameof(DocumentLibraryService.UnlinkAsync)}",
+            $"{nameof(DocumentLibraryService)}.{nameof(DocumentLibraryService.ArchiveAsync)}",
+            $"{nameof(DocumentLibraryService)}.{nameof(DocumentLibraryService.UnarchiveAsync)}",
+            $"{nameof(DocumentLibraryService)}.{nameof(DocumentLibraryService.TrashAsync)}",
+            $"{nameof(DocumentLibraryService)}.{nameof(DocumentLibraryService.RestoreAsync)}",
+            $"{nameof(DocumentLibraryService)}.{nameof(DocumentLibraryService.DeletePermanentlyAsync)}",
+            $"{nameof(DocumentLibraryService)}.{nameof(DocumentLibraryService.RemoveLinksForDeletedTargetAsync)}"
         };
 
-        foreach (var serviceType in new[] { typeof(DocumentCaptureService), typeof(DocumentCaptureRetentionService) })
+        foreach (var serviceType in new[] { typeof(DocumentCaptureService), typeof(DocumentCaptureRetentionService), typeof(DocumentLibraryService) })
         {
             var methods = serviceType
-                .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
                 .Where(m => !m.IsSpecialName)
                 .Select(m => $"{serviceType.Name}.{m.Name}")
                 .Distinct(StringComparer.Ordinal);

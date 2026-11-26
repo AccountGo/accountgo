@@ -654,35 +654,8 @@ public sealed class DocumentLibraryService(
         }
     }
 
-    /// <summary>Row locks on the linked records, deterministic order. Postgres: FOR UPDATE; SQLite: the IMMEDIATE transaction already serialises writers.</summary>
-    internal async Task LockTargetsAsync(int companyId, IEnumerable<(string TargetType, int TargetId)> targets, CancellationToken cancellationToken)
-    {
-        if (!(db.Database.ProviderName ?? string.Empty).Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
-            return;
-        foreach (var (type, id) in targets.Distinct().OrderBy(t => t.TargetType, StringComparer.Ordinal).ThenBy(t => t.TargetId))
-        {
-            var entity = type switch
-            {
-                "bill" => db.Model.FindEntityType(typeof(PurchaseInvoiceHeader)),
-                "invoice" => db.Model.FindEntityType(typeof(SalesInvoiceHeader)),
-                "customer" => db.Model.FindEntityType(typeof(Customer)),
-                "vendor" => db.Model.FindEntityType(typeof(Vendor)),
-                _ => null
-            } ?? throw new DocumentCaptureServiceException(400, "DOCUMENT_LINK_INVALID");
-            // The table name comes from the EF model for one of four fixed entity types, never from input; values are parameters.
-            var sql = "SELECT \"Id\" AS \"Value\" FROM " + QualifiedTable(entity)
-                + " WHERE \"CompanyId\" = {0} AND \"Id\" = {1} FOR UPDATE";
-            await db.Database.SqlQueryRaw<int>(sql, companyId, id)
-                .ToListAsync(cancellationToken).ConfigureAwait(false);
-        }
-    }
-
-    private static string QualifiedTable(IEntityType entity)
-    {
-        var table = entity.GetTableName() ?? throw new InvalidOperationException("Entity has no table.");
-        var schema = entity.GetSchema();
-        return schema is null ? $"\"{table}\"" : $"\"{schema}\".\"{table}\"";
-    }
+    internal Task LockTargetsAsync(int companyId, IEnumerable<(string TargetType, int TargetId)> targets, CancellationToken cancellationToken) =>
+        DocumentTargetLocks.LockAsync(db, companyId, targets, cancellationToken);
 
     /// <summary>Fresh read after the row lock: true when the bill or invoice is no longer a draft (issued, posted or void).</summary>
     private async Task<bool> IsTargetLockedAsync(int companyId, string targetType, int targetId, CancellationToken cancellationToken) =>
@@ -735,12 +708,16 @@ public sealed class DocumentLibraryService(
             .Where(c => c.CompanyId == companyId && c.FiledAt != null && c.BytesDeletedAt == null
                 && (c.Kind == DocumentKind
                     || (allowedScanKinds.Contains(c.Kind)
-                        && db.DocumentCaptureLinks.Any(l => l.CompanyId == companyId && l.CaptureId == c.Id
+                        // Same rule as a scan read today: kind policy, and the source record readable when there is one
+                        // (a scan whose draft was deleted keeps no source link and stays visible, removable evidence).
+                        && (!db.DocumentCaptureLinks.Any(l => l.CompanyId == companyId && l.CaptureId == c.Id
+                                && l.Role == DocumentCaptureLinkRoles.Source)
+                        || db.DocumentCaptureLinks.Any(l => l.CompanyId == companyId && l.CaptureId == c.Id
                             && l.Role == DocumentCaptureLinkRoles.Source
                             && ((l.TargetType == "bill" && billsReadable
                                     && db.PurchaseInvoiceHeaders.Any(h => h.CompanyId == companyId && h.Id == l.TargetId))
                                 || (l.TargetType == "invoice" && invoicesReadable
-                                    && db.SalesInvoiceHeaders.Any(h => h.CompanyId == companyId && h.Id == l.TargetId)))))));
+                                    && db.SalesInvoiceHeaders.Any(h => h.CompanyId == companyId && h.Id == l.TargetId))))))));
     }
 
     private string[] ReadableScanKinds(int companyId) => ScanKinds
@@ -788,8 +765,9 @@ public sealed class DocumentLibraryService(
         var source = await db.DocumentCaptureLinks.AsNoTracking()
             .SingleOrDefaultAsync(l => l.CompanyId == companyId && l.CaptureId == capture.Id && l.Role == DocumentCaptureLinkRoles.Source,
                 cancellationToken).ConfigureAwait(false);
-        return source is not null
-            && Has(ReadPermission(source.TargetType))
+        if (source is null)
+            return true;
+        return Has(ReadPermission(source.TargetType))
             && await TargetExistsAsync(companyId, source.TargetType, source.TargetId, cancellationToken).ConfigureAwait(false);
     }
 
@@ -1129,6 +1107,43 @@ public sealed class DocumentLibraryService(
     internal sealed record NormalizedMetadata(string? FileName, string Title, string? Category, DateTime? DocumentDate, string? Notes);
 
     private sealed record PreparedDocument(byte[] Bytes, string ContentType, int? Width, int? Height, int PageCount, string NormalizationVersion);
+}
+
+/// <summary>
+/// Row locks on records that documents link to, in one deterministic order: (TargetType ordinal, TargetId ascending). Callers hold
+/// the company admission lock first (design 3.11 U1). Postgres takes <c>FOR UPDATE</c>; SQLite already serialises writers through
+/// the admission lock's IMMEDIATE transaction.
+/// </summary>
+public static class DocumentTargetLocks
+{
+    public static async Task LockAsync(ApiDbContext db, int companyId, IEnumerable<(string TargetType, int TargetId)> targets,
+        CancellationToken cancellationToken)
+    {
+        if (!(db.Database.ProviderName ?? string.Empty).Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
+            return;
+        foreach (var (type, id) in targets.Distinct().OrderBy(t => t.TargetType, StringComparer.Ordinal).ThenBy(t => t.TargetId))
+        {
+            var entity = type switch
+            {
+                "bill" => db.Model.FindEntityType(typeof(PurchaseInvoiceHeader)),
+                "invoice" => db.Model.FindEntityType(typeof(SalesInvoiceHeader)),
+                "customer" => db.Model.FindEntityType(typeof(Customer)),
+                "vendor" => db.Model.FindEntityType(typeof(Vendor)),
+                _ => null
+            } ?? throw new DocumentCaptureServiceException(400, "DOCUMENT_LINK_INVALID");
+            // The table name comes from the EF model for one of four fixed entity types, never from input; values are parameters.
+            var sql = "SELECT \"Id\" AS \"Value\" FROM " + QualifiedTable(entity)
+                + " WHERE \"CompanyId\" = {0} AND \"Id\" = {1} FOR UPDATE";
+            await db.Database.SqlQueryRaw<int>(sql, companyId, id).ToListAsync(cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private static string QualifiedTable(IEntityType entity)
+    {
+        var table = entity.GetTableName() ?? throw new InvalidOperationException("Entity has no table.");
+        var schema = entity.GetSchema();
+        return schema is null ? $"\"{table}\"" : $"\"{schema}\".\"{table}\"";
+    }
 }
 
 /// <summary>A per-file limit was exceeded; carries the limit that applied so the client can say it.</summary>
