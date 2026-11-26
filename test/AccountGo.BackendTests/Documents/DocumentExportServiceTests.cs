@@ -275,6 +275,43 @@ public sealed class DocumentExportServiceTests
     }
 
     [Fact]
+    public async Task ProductionRenewal_IsMonotonic_AndALateOlderAttemptNeverRegressesTheHeartbeat()
+    {
+        await using var h = await Harness.CreateAsync();
+        await h.SeedAsync("document", "a", null);
+        var run = await h.Exports.CreateAsync(default);
+        var runId = await h.RunIdOf(run.Id);
+        var t0 = DateTime.UtcNow;
+        await h.Db.DocumentExportRuns.Where(r => r.Id == runId)
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.Status, "running").SetProperty(r => r.LastHeartbeatAt, t0));
+
+        // Real DI path: new scope, impersonated tenant, own ApiDbContext.
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<ITenantContext>(services, _ => new Tenant());
+        Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped(services,
+            sp => new ApiDbContext(new DbContextOptionsBuilder<ApiDbContext>().UseSqlite(h.ConnectionString).Options,
+                Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<ITenantContext>(sp)));
+        await using var provider = Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(services);
+        var lease = new ScopedDocumentExportLease(
+            Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<Microsoft.Extensions.DependencyInjection.IServiceScopeFactory>(provider));
+
+        // Attempt A (heartbeat t0+1s) times out and is abandoned; attempt B (t0+2s) succeeds; A lands last.
+        Assert.Equal(DocumentExportLeaseRenewal.Renewed, await lease.RenewAsync(h.CompanyId, runId, t0.AddSeconds(2), default));
+        Assert.Equal(DocumentExportLeaseRenewal.AlreadyNewer, await lease.RenewAsync(h.CompanyId, runId, t0.AddSeconds(1), default));
+        var stored = (await h.Db.DocumentExportRuns.AsNoTracking().SingleAsync(r => r.Id == runId)).LastHeartbeatAt!.Value;
+        Assert.True(stored >= t0.AddSeconds(2).AddMilliseconds(-1), $"heartbeat regressed to {stored:O}");
+
+        // A competitor is still refused: the live lease was not made to look stale.
+        await using var otherDb = h.NewDb();
+        var competitor = new DocumentExportService(otherDb, new DocumentCaptureAdmissionLock(otherDb), h.Tenant,
+            leaseSettings: new DocumentExportLeaseSettings(TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(4), TimeSpan.FromMinutes(5)));
+        Assert.Equal("DOCUMENT_EXPORT_RUNNING", (await Assert.ThrowsAsync<DocumentCaptureServiceException>(() => competitor.CreateAsync(default))).ErrorCode);
+
+        await h.Db.DocumentExportRuns.Where(r => r.Id == runId).ExecuteUpdateAsync(s => s.SetProperty(r => r.Status, "failed"));
+        Assert.Equal(DocumentExportLeaseRenewal.Fenced, await lease.RenewAsync(h.CompanyId, runId, t0.AddSeconds(3), default));
+    }
+
+    [Fact]
     public async Task ARunFencedByAnotherRequest_StopsItsOutputAtTheNextRenewal_AndReportsNoSuccess()
     {
         await using var h = await Harness.CreateAsync();
@@ -412,26 +449,26 @@ public sealed class DocumentExportServiceTests
         }
     }
 
+    /// <summary>The production renewal statement on a fresh connection (as ScopedDocumentExportLease does through DI).</summary>
     private sealed class TestLease(Func<ApiDbContext> newDb) : IDocumentExportLease
     {
-        public async Task<bool> RenewAsync(int companyId, int runId, DateTime now, CancellationToken cancellationToken)
+        public async Task<DocumentExportLeaseRenewal> RenewAsync(int companyId, int runId, DateTime now, CancellationToken cancellationToken)
         {
             await using var db = newDb();
-            return await db.DocumentExportRuns.Where(r => r.CompanyId == companyId && r.Id == runId && r.Status == "running")
-                .ExecuteUpdateAsync(s => s.SetProperty(r => r.LastHeartbeatAt, now), cancellationToken) == 1;
+            return await ScopedDocumentExportLease.RenewAsync(db, companyId, runId, now, cancellationToken);
         }
     }
 
     /// <summary>A renewal that never completes and ignores its cancellation token (a hung connection).</summary>
     private sealed class HungLease : IDocumentExportLease
     {
-        public Task<bool> RenewAsync(int companyId, int runId, DateTime now, CancellationToken cancellationToken) =>
-            new TaskCompletionSource<bool>().Task;
+        public Task<DocumentExportLeaseRenewal> RenewAsync(int companyId, int runId, DateTime now, CancellationToken cancellationToken) =>
+            new TaskCompletionSource<DocumentExportLeaseRenewal>().Task;
     }
 
     private sealed class FailingLease : IDocumentExportLease
     {
-        public Task<bool> RenewAsync(int companyId, int runId, DateTime now, CancellationToken cancellationToken) =>
+        public Task<DocumentExportLeaseRenewal> RenewAsync(int companyId, int runId, DateTime now, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("Database unavailable.");
     }
 
@@ -513,6 +550,8 @@ public sealed class DocumentExportServiceTests
         public DocumentExportService ExportsWith(IDocumentExportLease lease, DocumentExportLeaseSettings settings) =>
             new(Db, new DocumentCaptureAdmissionLock(Db), Tenant, Audit.Object, lease: lease, leaseSettings: settings);
 
+        public string ConnectionString => $"Data Source={_dbPath};Pooling=False";
+
         public ApiDbContext NewDb() =>
             new(new DbContextOptionsBuilder<ApiDbContext>().UseSqlite($"Data Source={_dbPath};Pooling=False").Options, Tenant);
 
@@ -548,6 +587,10 @@ public sealed class DocumentExportServiceTests
         public IReadOnlySet<string> Permissions => Perms;
         public bool IsResolved => true;
         public int RequireCompanyId() => Id;
-        public IDisposable Impersonate(int id, string? slug = null, CompanyMemberRole? role = null, IReadOnlySet<string>? permissions = null) => new Scope();
+        public IDisposable Impersonate(int id, string? slug = null, CompanyMemberRole? role = null, IReadOnlySet<string>? permissions = null)
+        {
+            Id = id;
+            return new Scope();
+        }
     }
 }

@@ -334,23 +334,54 @@ public sealed class DocumentLibraryPostgresLockTests
 
     private sealed class HungLease : IDocumentExportLease
     {
-        public Task<bool> RenewAsync(int companyId, int runId, DateTime now, CancellationToken cancellationToken) =>
-            new TaskCompletionSource<bool>().Task;
+        public Task<DocumentExportLeaseRenewal> RenewAsync(int companyId, int runId, DateTime now, CancellationToken cancellationToken) =>
+            new TaskCompletionSource<DocumentExportLeaseRenewal>().Task;
     }
 
     private sealed class RenewingLease(Fixture fx) : IDocumentExportLease
     {
-        public async Task<bool> RenewAsync(int companyId, int runId, DateTime now, CancellationToken cancellationToken)
+        public async Task<DocumentExportLeaseRenewal> RenewAsync(int companyId, int runId, DateTime now, CancellationToken cancellationToken)
         {
             await using var db = fx.NewDb();
-            return await db.DocumentExportRuns.Where(r => r.CompanyId == companyId && r.Id == runId && r.Status == "running")
-                .ExecuteUpdateAsync(s => s.SetProperty(r => r.LastHeartbeatAt, now), cancellationToken) == 1;
+            return await ScopedDocumentExportLease.RenewAsync(db, companyId, runId, now, cancellationToken);
         }
+    }
+
+    [PostgresOnlyFact]
+    public async Task Export_ProductionRenewal_IsMonotonic_LateOlderAttemptCannotRegress_OnPostgres()
+    {
+        await using var fx = await Fixture.CreateAsync();
+        await fx.SeedLinkedDocumentAsync();
+        await using var db = fx.NewDb();
+        var run = await new DocumentExportService(db, new DocumentCaptureAdmissionLock(db), fx.TenantContext).CreateAsync(CancellationToken.None);
+        var runId = await db.DocumentExportRuns.Where(r => r.PublicId == run.Id).Select(r => r.Id).SingleAsync();
+        var t0 = DateTime.UtcNow;
+        await db.DocumentExportRuns.Where(r => r.Id == runId)
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.Status, "running").SetProperty(r => r.LastHeartbeatAt, t0));
+
+        var services = new ServiceCollection();
+        services.AddScoped<ITenantContext>(_ => new Tenant());
+        services.AddScoped<ApiDbContext>(sp => fx.NewDbFor(sp.GetRequiredService<ITenantContext>()));
+        await using var provider = services.BuildServiceProvider();
+        var lease = new ScopedDocumentExportLease(provider.GetRequiredService<IServiceScopeFactory>());
+
+        // B renews to t0+2s, then the abandoned A (t0+1s) lands last: no regression, competitor still refused.
+        var gateA = new TaskCompletionSource();
+        var attemptA = Task.Run(async () => { await gateA.Task; return await lease.RenewAsync(fx.CompanyId, runId, t0.AddSeconds(1), CancellationToken.None); });
+        Assert.Equal(DocumentExportLeaseRenewal.Renewed, await lease.RenewAsync(fx.CompanyId, runId, t0.AddSeconds(2), CancellationToken.None));
+        gateA.SetResult();
+        Assert.Equal(DocumentExportLeaseRenewal.AlreadyNewer, await attemptA);
+        await using var verify = fx.NewDb();
+        var stored = (await verify.DocumentExportRuns.SingleAsync(r => r.Id == runId)).LastHeartbeatAt!.Value;
+        Assert.True(stored >= t0.AddSeconds(2).AddMilliseconds(-1), $"heartbeat regressed to {stored:O}");
+        var competitor = new DocumentExportService(verify, new DocumentCaptureAdmissionLock(verify), fx.TenantContext);
+        Assert.Equal("DOCUMENT_EXPORT_RUNNING",
+            (await Assert.ThrowsAsync<DocumentCaptureServiceException>(() => competitor.CreateAsync(CancellationToken.None))).ErrorCode);
     }
 
     private sealed class BrokenLease : IDocumentExportLease
     {
-        public Task<bool> RenewAsync(int companyId, int runId, DateTime now, CancellationToken cancellationToken) =>
+        public Task<DocumentExportLeaseRenewal> RenewAsync(int companyId, int runId, DateTime now, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("Database unavailable.");
     }
 
@@ -414,6 +445,8 @@ public sealed class DocumentLibraryPostgresLockTests
 
         public PostgresApiDbContext NewDb() => new(_options, TenantContext);
 
+        public PostgresApiDbContext NewDbFor(ITenantContext tenant) => new(_options, tenant);
+
         public DocumentLibraryService Service(ApiDbContext db, int maxUploadsPerHour = 120)
         {
             var entitlements = new Mock<IEntitlementService>();
@@ -471,7 +504,11 @@ public sealed class DocumentLibraryPostgresLockTests
         };
         public bool IsResolved => true;
         public int RequireCompanyId() => CompanyIdValue;
-        public IDisposable Impersonate(int id, string? slug = null, CompanyMemberRole? role = null, IReadOnlySet<string>? permissions = null) => new Scope();
+        public IDisposable Impersonate(int id, string? slug = null, CompanyMemberRole? role = null, IReadOnlySet<string>? permissions = null)
+        {
+            CompanyIdValue = id;
+            return new Scope();
+        }
     }
 
     private sealed class PostgresOnlyFactAttribute : FactAttribute

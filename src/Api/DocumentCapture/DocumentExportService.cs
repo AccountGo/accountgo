@@ -340,7 +340,7 @@ public sealed class DocumentExportService(
             }
             var attemptStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             var heartbeat = _timeProvider.GetUtcNow().UtcDateTime;
-            bool? renewed;
+            DocumentExportLeaseRenewal? renewed;
             using var attempt = CancellationTokenSource.CreateLinkedTokenSource(stop);
             attempt.CancelAfter(_lease.RenewEvery);
             try
@@ -356,13 +356,14 @@ public sealed class DocumentExportService(
             {
                 renewed = null; // unreachable, slow or hung: no extension, the watchdog keeps counting
             }
-            if (renewed == false)
+            if (renewed == DocumentExportLeaseRenewal.Fenced)
             {
                 state.MarkLost();
                 await CancelQuietlyAsync(output).ConfigureAwait(false);
                 return;
             }
-            if (renewed == true)
+            // AlreadyNewer extends nothing: only this attempt's own confirmed renewal may move the watchdog.
+            if (renewed == DocumentExportLeaseRenewal.Renewed)
             {
                 var remaining = _lease.SelfFenceAfter - System.Diagnostics.Stopwatch.GetElapsedTime(attemptStarted);
                 if (remaining <= TimeSpan.Zero)
