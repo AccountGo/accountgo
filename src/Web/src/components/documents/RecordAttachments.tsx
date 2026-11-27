@@ -23,7 +23,10 @@ interface Props {
   targetId: string;
   /** The user may change this record (create/edit permission and a writable module). */
   canAttach: boolean;
-  /** Attachments may be removed: drafts and parties. Posted, issued and void bills/invoices keep theirs. */
+  /**
+   * The record is still a draft (always true for parties). When false, only links the server marks removable (an Owner or
+   * Admin, or the member who linked the file) get a remove button; the rest are kept as evidence.
+   */
   canRemove: boolean;
   recordLabel: string;
   /** The record's current status; a change (draft approved, voided) reloads the links' lock state. */
@@ -199,7 +202,10 @@ export const RecordAttachments: React.FC<Props> = ({ targetType, targetId, canAt
           {attachments.map((doc) => {
             const link = doc.links.find((l) => l.targetType === targetType && l.targetId === targetId);
             // A bill or invoice that is no longer a draft keeps its attachments, even before the reload confirms it.
-            const locked = !!link?.locked || (!canRemove && (targetType === 'bill' || targetType === 'invoice'));
+            const posted = !!link?.locked || (!canRemove && (targetType === 'bill' || targetType === 'invoice'));
+            // Before the reload confirms the new status, the server's flag still describes the draft: wait for it.
+            const stale = posted && !link?.locked;
+            const removable = canAttach && !!link?.canUnlink && !stale;
             return (
               <li key={doc.id} className="py-2 flex items-center gap-3">
                 {doc.contentType.startsWith('image/') ? <ImageIcon className="w-4 h-4 shrink-0" /> : <FileText className="w-4 h-4 shrink-0" />}
@@ -207,15 +213,16 @@ export const RecordAttachments: React.FC<Props> = ({ targetType, targetId, canAt
                   <span className="block text-sm truncate text-[var(--text-main)] hover:underline">{doc.title}</span>
                   <span className="block text-xs text-[var(--text-secondary)]">{categoryLabel(doc.category)} · {formatBytes(doc.byteCount)}</span>
                 </button>
-                {locked ? (
-                  <span className="inline-flex items-center gap-1 text-xs text-[var(--text-secondary)]">
-                    <Lock className="w-3 h-3" /> Kept as evidence for this posted {recordLabel}
-                  </span>
-                ) : canAttach && canRemove ? (
+                {removable ? (
                   <button type="button" disabled={busy} onClick={() => void remove(doc)} aria-label={`Remove ${doc.title}`}
+                    title={posted ? `Remove from this posted ${recordLabel}` : undefined}
                     className="p-1.5 rounded-lg hover:bg-[var(--bg-surface-hover)]">
                     <X className="w-4 h-4" />
                   </button>
+                ) : posted ? (
+                  <span className="inline-flex items-center gap-1 text-xs text-[var(--text-secondary)]">
+                    <Lock className="w-3 h-3" /> Kept as evidence for this posted {recordLabel}
+                  </span>
                 ) : null}
               </li>
             );

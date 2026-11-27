@@ -181,7 +181,7 @@ describe('Document details', () => {
     render(
       <MemoryRouter>
         <DocumentDetailDialog
-          document={doc({ hasLockedLink: true, links: [{ targetType: 'bill', targetId: 'bill_1', role: 'attachment', linkedAt: '', locked: true }] })}
+          document={doc({ hasLockedLink: true, links: [{ targetType: 'bill', targetId: 'bill_1', role: 'attachment', linkedAt: '', locked: true, canUnlink: false }] })}
           orgSlug="acme" onChanged={onChanged} onRemoved={vi.fn()} onClose={vi.fn()} />
       </MemoryRouter>,
     );
@@ -263,8 +263,8 @@ describe('Sidebar', () => {
 
 describe('Record attachments', () => {
   const attached = (overrides: Partial<LibraryDocument> = {}) =>
-    doc({ id: 'cap_receipt', title: 'Taxi receipt', links: [{ targetType: 'bill', targetId: 'bill_1', role: 'attachment', linkedAt: '', locked: false }], ...overrides });
-  const scan = doc({ id: 'cap_scan', title: 'Scanned bill', kind: 'purchase-invoice', links: [{ targetType: 'bill', targetId: 'bill_1', role: 'source', linkedAt: '', locked: false }] });
+    doc({ id: 'cap_receipt', title: 'Taxi receipt', links: [{ targetType: 'bill', targetId: 'bill_1', role: 'attachment', linkedAt: '', locked: false, canUnlink: true }], ...overrides });
+  const scan = doc({ id: 'cap_scan', title: 'Scanned bill', kind: 'purchase-invoice', links: [{ targetType: 'bill', targetId: 'bill_1', role: 'source', linkedAt: '', locked: false, canUnlink: false }] });
 
   it('lists attachments (not the scanned source), uploads to the record and removes from a draft', async () => {
     let items = [attached(), scan];
@@ -294,7 +294,7 @@ describe('Record attachments', () => {
   });
 
   it('pages through linked files with Show more, so attachments past the first 100 are never silently hidden', async () => {
-    const source = doc({ id: 'cap_src', title: 'Scan', kind: 'purchase-invoice', links: [{ targetType: 'bill', targetId: 'bill_1', role: 'source', linkedAt: '', locked: false }] });
+    const source = doc({ id: 'cap_src', title: 'Scan', kind: 'purchase-invoice', links: [{ targetType: 'bill', targetId: 'bill_1', role: 'source', linkedAt: '', locked: false, canUnlink: false }] });
     const many = Array.from({ length: 150 }, (_, i) => attached({ id: `cap_${i}`, title: `Receipt ${i}` }));
     const all = [source, ...many];
     authFetch.mockImplementation(async (url: string) => {
@@ -326,10 +326,25 @@ describe('Record attachments', () => {
   });
 
   it('keeps attachments of a posted record and offers no removal', async () => {
-    authFetch.mockResolvedValue(json({ items: [attached({ links: [{ targetType: 'bill', targetId: 'bill_1', role: 'attachment', linkedAt: '', locked: true }] })], total: 1, page: 1, pageSize: 100 }));
+    authFetch.mockResolvedValue(json({ items: [attached({ links: [{ targetType: 'bill', targetId: 'bill_1', role: 'attachment', linkedAt: '', locked: true, canUnlink: false }] })], total: 1, page: 1, pageSize: 100 }));
     render(<RecordAttachments targetType="bill" targetId="bill_1" canAttach canRemove={false} recordLabel="bill" />);
     expect(await screen.findByText('Kept as evidence for this posted bill')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Remove/ })).toBeNull();
+  });
+
+  it('lets the member who linked a file (or a documents manager) remove it from a posted record', async () => {
+    const deletes: string[] = [];
+    authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'DELETE') {
+        deletes.push(url);
+        return new Response(null, { status: 204 });
+      }
+      return json({ items: [attached({ links: [{ targetType: 'bill', targetId: 'bill_1', role: 'attachment', linkedAt: '', locked: true, canUnlink: true }] })], total: 1, page: 1, pageSize: 100 });
+    });
+    render(<RecordAttachments targetType="bill" targetId="bill_1" canAttach canRemove={false} recordLabel="bill" recordStatus="Open" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove Taxi receipt' }));
+    await waitFor(() => expect(deletes).toEqual(['/api/documents/cap_receipt/links/bill/bill_1']));
+    expect(screen.queryByText('Kept as evidence for this posted bill')).toBeNull();
   });
 
   it('links an existing library file, and only offers the library to users who can view it', async () => {

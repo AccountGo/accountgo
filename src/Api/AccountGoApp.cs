@@ -223,7 +223,9 @@ public static class AccountGoApp
 
         builder.Services.AddSingleton<SessionRefreshTestGate>();
         builder.Services.AddScoped<ISessionService, SessionService>();
-        builder.Services.AddScoped<ISecurityAuditService, SecurityAuditService>();
+        builder.Services.AddScoped<SecurityAuditService>();
+        builder.Services.AddScoped<ISecurityAuditService>(sp => sp.GetRequiredService<SecurityAuditService>());
+        builder.Services.AddScoped<ITransactionalSecurityAudit>(sp => sp.GetRequiredService<SecurityAuditService>());
         builder.Services.Configure<Api.Service.CliOAuthOptions>(
             builder.Configuration.GetSection(Api.Service.CliOAuthOptions.SectionName));
         builder.Services.AddScoped<ICliOAuthService, CliOAuthService>();
