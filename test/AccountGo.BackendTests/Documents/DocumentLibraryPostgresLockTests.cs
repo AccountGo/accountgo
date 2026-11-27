@@ -37,6 +37,12 @@ public sealed class DocumentLibraryPostgresLockTests
         await poster.PurchaseInvoiceHeaders.Where(b => b.Id == billA.Id)
             .ExecuteUpdateAsync(s => s.SetProperty(b => b.Status, PurchaseInvoiceStatus.Open));
 
+        // Another member without Manage Documents: the linker or a documents manager could still remove it.
+        fx.TenantContext.UserId = "actor-2";
+        fx.TenantContext.Permissions = new HashSet<string>(StringComparer.Ordinal)
+        {
+            SystemPermissions.DocumentsView, SystemPermissions.PurchasesBillsView, SystemPermissions.PurchasesBillsCreate
+        };
         await using var docDb = fx.NewDb();
         var unlink = fx.Service(docDb).UnlinkAsync(docId, "bill", billA.PublicId, CancellationToken.None);
         await Task.Delay(750);
@@ -44,7 +50,7 @@ public sealed class DocumentLibraryPostgresLockTests
         await postTx.CommitAsync();
 
         var refused = await Assert.ThrowsAsync<DocumentCaptureServiceException>(() => unlink.WaitAsync(TimeSpan.FromSeconds(30)));
-        Assert.Equal("DOCUMENT_LOCKED_BY_POSTED_RECORD", refused.ErrorCode);
+        Assert.Equal("DOCUMENT_UNLINK_RESTRICTED", refused.ErrorCode);
         await using var verify = fx.NewDb();
         Assert.Equal(2, await verify.DocumentCaptureLinks.CountAsync(l => l.CaptureId == docId));
     }
@@ -496,8 +502,8 @@ public sealed class DocumentLibraryPostgresLockTests
         public int? CompanyId => CompanyIdValue;
         public string? CompanySlug => "docs-lock-co";
         public CompanyMemberRole? Role => CompanyMemberRole.Member;
-        public string? UserId => "actor-1";
-        public IReadOnlySet<string> Permissions { get; } = new HashSet<string>(StringComparer.Ordinal)
+        public string? UserId { get; set; } = "actor-1";
+        public IReadOnlySet<string> Permissions { get; set; } = new HashSet<string>(StringComparer.Ordinal)
         {
             SystemPermissions.DocumentsView, SystemPermissions.DocumentsManage,
             SystemPermissions.PurchasesBillsView, SystemPermissions.PurchasesBillsCreate

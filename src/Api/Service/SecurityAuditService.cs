@@ -3,15 +3,19 @@
 
 #nullable enable
 using System;
+using System.Data;
+using System.Threading;
 using System.Threading.Tasks;
 using Api.Auditing;
 using Api.Data;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 
 namespace Api.Service
 {
-    public class SecurityAuditService : ISecurityAuditService
+    public class SecurityAuditService : ISecurityAuditService, ITransactionalSecurityAudit
     {
         private readonly ApplicationIdentityDbContext _identityContext;
         private readonly ILogger<SecurityAuditService> _logger;
@@ -54,11 +58,7 @@ namespace Api.Service
             int? companyId,
             object? metadata = null)
         {
-            var http = _httpContextAccessor?.HttpContext;
-            var ip = _auditContext?.IpAddress ?? http?.Connection.RemoteIpAddress?.ToString();
-            var userAgent = http?.Request.Headers.UserAgent.ToString();
-            if (string.IsNullOrWhiteSpace(userAgent))
-                userAgent = null;
+            var (ip, userAgent) = RequestOrigin();
             return PersistAsync(
                 eventType,
                 outcome,
@@ -68,6 +68,70 @@ namespace Api.Service
                 userAgent,
                 _auditContext?.CorrelationId,
                 metadata);
+        }
+
+        /// <summary>
+        /// Joins the identity context to <paramref name="owner"/>'s connection and open transaction (both contexts use the
+        /// same database) and saves the event there. Throws when it can't be written, so the caller's change rolls back.
+        /// </summary>
+        public async Task LogEventInTransactionAsync(
+            DbContext owner,
+            string eventType,
+            string? outcome,
+            string? userId,
+            int? companyId,
+            object? metadata,
+            CancellationToken cancellationToken)
+        {
+            var transaction = owner.Database.CurrentTransaction
+                ?? throw new InvalidOperationException("A transactional audit event needs the caller's open transaction.");
+            var connection = owner.Database.GetDbConnection();
+            var identityConnection = _identityContext.Database.GetDbConnection();
+            if (!ReferenceEquals(identityConnection, connection))
+            {
+                if (identityConnection.State != ConnectionState.Closed)
+                    await identityConnection.CloseAsync().ConfigureAwait(false);
+                _identityContext.Database.SetDbConnection(connection);
+            }
+
+            var (ip, userAgent) = RequestOrigin();
+            var auditEvent = new SecurityAuditEvent
+            {
+                EventType = eventType,
+                Outcome = outcome,
+                UserId = userId,
+                CompanyId = companyId,
+                IpAddress = ip,
+                UserAgent = userAgent,
+                CorrelationId = _auditContext?.CorrelationId,
+                MetadataJson = SecurityAuditMetadata.Serialize(metadata),
+                CreatedAt = DateTime.UtcNow
+            };
+            _logger.LogInformation(
+                "[SecurityAudit] eventType={EventType} outcome={Outcome} correlationId={CorrelationId}",
+                eventType, outcome, auditEvent.CorrelationId);
+
+            await _identityContext.Database.UseTransactionAsync(transaction.GetDbTransaction(), cancellationToken).ConfigureAwait(false);
+            var entry = _identityContext.SecurityAuditEvents.Add(auditEvent);
+            try
+            {
+                await _identityContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                // A failed event must not linger in the tracker: a later best-effort save in this request would record a
+                // change that rolled back. A saved one is detached too; the caller's transaction decides if it survives.
+                entry.State = EntityState.Detached;
+                await _identityContext.Database.UseTransactionAsync(null, CancellationToken.None).ConfigureAwait(false);
+            }
+        }
+
+        private (string? Ip, string? UserAgent) RequestOrigin()
+        {
+            var http = _httpContextAccessor?.HttpContext;
+            var ip = _auditContext?.IpAddress ?? http?.Connection.RemoteIpAddress?.ToString();
+            var userAgent = http?.Request.Headers.UserAgent.ToString();
+            return (ip, string.IsNullOrWhiteSpace(userAgent) ? null : userAgent);
         }
 
         private async Task PersistAsync(

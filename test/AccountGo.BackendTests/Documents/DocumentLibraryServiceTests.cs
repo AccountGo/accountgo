@@ -210,6 +210,104 @@ public sealed class DocumentLibraryServiceTests
     }
 
     [Fact]
+    public async Task PostedRecordAttachment_CanBeRemovedByWhoeverLinkedIt()
+    {
+        await using var h = await Harness.CreateAsync();
+        var invoice = h.SeedInvoice("I-POSTED");
+        var doc = await h.Library.UploadAsync(CreatePdf(1), "application/pdf", "a.pdf", Meta(), null, null, null, false, default);
+        var id = await h.IdOf(doc.Id);
+        await h.Db.SalesInvoiceHeaders.Where(i => i.Id == invoice.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(i => i.Status, SalesInvoiceStatus.Open));
+        // Linked after the invoice was issued, by actor-1.
+        await h.Library.LinkAsync(id, "invoice", invoice.PublicId, default);
+
+        var link = (await h.Library.GetAsync(id, default)).Links.Single();
+        Assert.True(link.Locked);
+        Assert.True(link.CanUnlink);
+        await h.Library.UnlinkAsync(id, "invoice", invoice.PublicId, default);
+        Assert.Empty((await h.Library.GetAsync(id, default)).Links);
+    }
+
+    [Fact]
+    public async Task PostedRecordAttachment_CanBeRemovedByWhoeverManagesDocuments()
+    {
+        await using var h = await Harness.CreateAsync();
+        var bill = h.SeedBill("B-POSTED");
+        var doc = await h.Library.UploadAsync(CreatePdf(1), "application/pdf", "a.pdf", Meta(), null, null, null, false, default);
+        var id = await h.IdOf(doc.Id);
+        await h.Library.LinkAsync(id, "bill", bill.PublicId, default);
+        await h.Db.PurchaseInvoiceHeaders.Where(b => b.Id == bill.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(b => b.Status, PurchaseInvoiceStatus.Open));
+
+        // Owner and Admin hold Manage Documents through Full access.
+        h.Tenant.UserId = "admin-1";
+        h.Tenant.SetPermissions(SystemPermissions.DocumentsView, SystemPermissions.DocumentsManage,
+            SystemPermissions.PurchasesBillsView, SystemPermissions.PurchasesBillsCreate);
+        Assert.True((await h.Library.GetAsync(id, default)).Links.Single().CanUnlink);
+        await h.Library.UnlinkAsync(id, "bill", bill.PublicId, default);
+        Assert.Empty((await h.Library.GetAsync(id, default)).Links);
+    }
+
+    [Fact]
+    public async Task PostedRecordAttachment_StillNeedsAttachPermission_EvenForWhoeverLinkedIt()
+    {
+        await using var h = await Harness.CreateAsync();
+        var bill = h.SeedBill("B-POSTED");
+        var doc = await h.Library.UploadAsync(CreatePdf(1), "application/pdf", "a.pdf", Meta(), null, null, null, false, default);
+        var id = await h.IdOf(doc.Id);
+        await h.Library.LinkAsync(id, "bill", bill.PublicId, default);
+        await h.Db.PurchaseInvoiceHeaders.Where(b => b.Id == bill.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(b => b.Status, PurchaseInvoiceStatus.Open));
+
+        h.Tenant.SetPermissions(SystemPermissions.DocumentsView, SystemPermissions.DocumentsManage, SystemPermissions.PurchasesBillsView);
+        Assert.False((await h.Library.GetAsync(id, default)).Links.Single().CanUnlink);
+        var refused = await Assert.ThrowsAsync<DocumentCaptureServiceException>(() =>
+            h.Library.UnlinkAsync(id, "bill", bill.PublicId, default));
+        Assert.Equal("DOCUMENT_PERMISSION_REQUIRED", refused.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Unlink_WritesItsAuditEventInTheSameTransaction()
+    {
+        await using var h = await Harness.CreateAsync();
+        var (library, identity) = h.WithTransactionalAudit();
+        await using var _ = identity;
+        var bill = h.SeedBill("B-POSTED");
+        var doc = await library.UploadAsync(CreatePdf(1), "application/pdf", "a.pdf", Meta(), "bill", bill.PublicId, null, false, default);
+        var id = await h.IdOf(doc.Id);
+        await h.Db.PurchaseInvoiceHeaders.Where(b => b.Id == bill.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(b => b.Status, PurchaseInvoiceStatus.Open));
+
+        await library.UnlinkAsync(id, "bill", bill.PublicId, default);
+
+        var logged = await identity.SecurityAuditEvents.AsNoTracking().SingleAsync(e => e.EventType == "document.unlinked");
+        Assert.Equal("actor-1", logged.UserId);
+        Assert.Contains("\"postedRecord\":true", logged.MetadataJson);
+        Assert.Empty((await library.GetAsync(id, default)).Links);
+        h.Audit.Verify(a => a.LogEventAsync("document.unlinked", It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<object?>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Unlink_RollsBack_WhenItsAuditEventCannotBeWritten()
+    {
+        await using var h = await Harness.CreateAsync();
+        var (library, identity) = h.WithTransactionalAudit();
+        await using var _ = identity;
+        var bill = h.SeedBill("B-POSTED");
+        var doc = await library.UploadAsync(CreatePdf(1), "application/pdf", "a.pdf", Meta(), "bill", bill.PublicId, null, false, default);
+        var id = await h.IdOf(doc.Id);
+        await h.Db.PurchaseInvoiceHeaders.Where(b => b.Id == bill.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(b => b.Status, PurchaseInvoiceStatus.Open));
+        await identity.Database.ExecuteSqlRawAsync("DROP TABLE \"SecurityAuditEvents\"");
+
+        await Assert.ThrowsAnyAsync<Exception>(() => library.UnlinkAsync(id, "bill", bill.PublicId, default));
+
+        h.Db.ChangeTracker.Clear();
+        Assert.Single((await library.GetAsync(id, default)).Links);
+        Assert.Empty(identity.ChangeTracker.Entries<SecurityAuditEvent>());
+    }
+
+    [Fact]
     public async Task PostedRecordsLockTheirAttachments_DraftsDoNot()
     {
         await using var h = await Harness.CreateAsync();
@@ -222,18 +320,26 @@ public sealed class DocumentLibraryServiceTests
         await h.Db.PurchaseInvoiceHeaders.Where(b => b.Id == posted.Id)
             .ExecuteUpdateAsync(s => s.SetProperty(b => b.Status, PurchaseInvoiceStatus.Open));
 
+        // Another member who didn't link the file and can't manage Documents can remove it from the draft, not the posted bill.
+        h.Tenant.UserId = "actor-2";
+        h.Tenant.SetPermissions(SystemPermissions.DocumentsView, SystemPermissions.PurchasesBillsView, SystemPermissions.PurchasesBillsCreate);
         var view = await h.Library.GetAsync(id, default);
         Assert.True(view.HasLockedLink);
         Assert.True(view.Links.Single(l => l.TargetId == posted.PublicId).Locked);
+        Assert.False(view.Links.Single(l => l.TargetId == posted.PublicId).CanUnlink);
+        Assert.True(view.Links.Single(l => l.TargetId == draft.PublicId).CanUnlink);
 
         var unlinkPosted = await Assert.ThrowsAsync<DocumentCaptureServiceException>(() =>
             h.Library.UnlinkAsync(id, "bill", posted.PublicId, default));
-        Assert.Equal("DOCUMENT_LOCKED_BY_POSTED_RECORD", unlinkPosted.ErrorCode);
-        var trash = await Assert.ThrowsAsync<DocumentCaptureServiceException>(() => h.Library.TrashAsync(id, default));
-        Assert.Equal("DOCUMENT_LOCKED_BY_POSTED_RECORD", trash.ErrorCode);
-
+        Assert.Equal("DOCUMENT_UNLINK_RESTRICTED", unlinkPosted.ErrorCode);
         await h.Library.UnlinkAsync(id, "bill", draft.PublicId, default);
         Assert.Single((await h.Library.GetAsync(id, default)).Links);
+
+        // Even a documents manager can't trash a file a posted record keeps.
+        h.Tenant.SetPermissions(SystemPermissions.DocumentsView, SystemPermissions.DocumentsManage,
+            SystemPermissions.PurchasesBillsView, SystemPermissions.PurchasesBillsCreate);
+        var trash = await Assert.ThrowsAsync<DocumentCaptureServiceException>(() => h.Library.TrashAsync(id, default));
+        Assert.Equal("DOCUMENT_LOCKED_BY_POSTED_RECORD", trash.ErrorCode);
         Assert.NotNull(await h.Library.ArchiveAsync(id, default));
 
         // A hidden locked record still locks the file.
@@ -607,10 +713,26 @@ public sealed class DocumentLibraryServiceTests
                     return found is > 0 ? PublicIdLookupResult.Success(found.Value) : PublicIdLookupResult.Fail(PublicIdLookupError.NotFound, prefix);
                 });
 
-            Library = new DocumentLibraryService(db, new DocumentCaptureAdmissionLock(db), entitlements.Object, publicIds.Object, tenant,
+            _libraryFactory = transactional => new DocumentLibraryService(db, new DocumentCaptureAdmissionLock(db), entitlements.Object,
+                publicIds.Object, tenant,
                 Options.Create(new DocumentsOptions { Enabled = enabled, MaxUploadsPerHour = maxUploadsPerHour }),
                 Options.Create(new DocumentCaptureOptions()),
-                audit.Object);
+                audit.Object, transactionalAudit: transactional);
+            Library = _libraryFactory(null);
+        }
+
+        private readonly Func<ITransactionalSecurityAudit?, DocumentLibraryService> _libraryFactory;
+
+        /// <summary>The library with a real audit service whose identity context shares this harness's database.</summary>
+        public (DocumentLibraryService Library, ApplicationIdentityDbContext Identity) WithTransactionalAudit()
+        {
+            var identity = new ApplicationIdentityDbContext(new DbContextOptionsBuilder<ApplicationIdentityDbContext>()
+                .UseSqlite($"Data Source={_dbPath};Pooling=False").Options);
+            var creator = (Microsoft.EntityFrameworkCore.Storage.RelationalDatabaseCreator)
+                Microsoft.EntityFrameworkCore.Infrastructure.AccessorExtensions.GetService<Microsoft.EntityFrameworkCore.Storage.IDatabaseCreator>(identity);
+            creator.CreateTables();
+            var service = new SecurityAuditService(identity, NullLogger<SecurityAuditService>.Instance);
+            return (_libraryFactory(service), identity);
         }
 
         public static async Task<Harness> CreateAsync(DocumentStoragePolicy? policy = null, bool enabled = true, int maxUploadsPerHour = 120)
@@ -724,7 +846,7 @@ public sealed class DocumentLibraryServiceTests
         public int? CompanyId => CompanyIdValue;
         public string? CompanySlug => "docs-co";
         public CompanyMemberRole? Role => CompanyMemberRole.Member;
-        public string? UserId => "actor-1";
+        public string? UserId { get; set; } = "actor-1";
         public IReadOnlySet<string> Permissions => _permissions;
         public bool IsResolved => true;
         public int RequireCompanyId() => CompanyIdValue;

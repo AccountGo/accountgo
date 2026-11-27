@@ -15,7 +15,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 - A Documents page keeps contracts, agreements, receipts and other files (PDF, JPEG or PNG) in one place, with categories, notes, search, archive and a 30-day trash. Scanned bills and invoices appear there too, and files kept as evidence for a posted bill or invoice can't be deleted.
 
-- Attach receipts, purchase orders, contracts and other files to bills, invoices, clients and vendors, by uploading or choosing from Documents. Attachments on a posted or void bill or invoice stay with it as evidence.
+- Attach receipts, purchase orders, contracts and other files to bills, invoices, clients and vendors, by uploading or choosing from Documents. Attachments on a posted or void bill or invoice stay with it as evidence: only someone who can manage Documents (such as an Owner or Admin) or the person who attached a file can remove it, and they still need permission to create bills or invoices.
 
 - Workspace owners can download all documents as one ZIP with an index of every file and its fingerprint. Deleting a workspace now asks you to download your documents first, or to confirm you don't need them.
 

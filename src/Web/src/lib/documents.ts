@@ -10,7 +10,10 @@ export interface DocumentLink {
   targetId: string;
   role: 'source' | 'attachment';
   linkedAt: string;
+  /** The record is posted, issued or void. */
   locked: boolean;
+  /** The caller may remove this link: anyone who can attach on a draft; on a posted record whoever can manage Documents or linked it. */
+  canUnlink: boolean;
 }
 
 export interface LibraryDocument {
@@ -158,6 +161,8 @@ export function documentProblemMessage(problem: DocumentProblem | null, fallback
       return 'This file is already in Documents.';
     case 'DOCUMENT_LOCKED_BY_POSTED_RECORD':
       return 'Kept as evidence for a posted bill or invoice. You can archive it instead.';
+    case 'DOCUMENT_UNLINK_RESTRICTED':
+      return 'This file is kept as evidence for a posted bill or invoice. Only someone who can manage Documents or the person who attached it can remove it.';
     case 'DOCUMENT_SOURCE_LINK_FIXED':
       return 'This is the scanned source of a bill or invoice. Delete the draft to free it; a posted record keeps it as evidence.';
     case 'DOCUMENT_PERMISSION_REQUIRED':

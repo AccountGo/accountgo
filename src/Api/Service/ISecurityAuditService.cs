@@ -1,7 +1,9 @@
 // Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 
 namespace Api.Service
 {
@@ -24,5 +26,21 @@ namespace Api.Service
             string? userId,
             int? companyId,
             object? metadata = null);
+    }
+
+    /// <summary>
+    /// Writes a security event inside the caller's open database transaction, so the event and the change it records
+    /// commit or roll back together. Unlike <see cref="ISecurityAuditService"/>, a failure to write throws.
+    /// </summary>
+    public interface ITransactionalSecurityAudit
+    {
+        Task LogEventInTransactionAsync(
+            DbContext owner,
+            string eventType,
+            string? outcome,
+            string? userId,
+            int? companyId,
+            object? metadata,
+            CancellationToken cancellationToken);
     }
 }

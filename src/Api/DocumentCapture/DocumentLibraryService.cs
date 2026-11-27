@@ -20,7 +20,11 @@ using Microsoft.Extensions.Options;
 
 namespace Api.DocumentCaptures;
 
-public sealed record DocumentLinkView(string TargetType, string TargetId, string Role, DateTime LinkedAt, bool Locked);
+/// <param name="Locked">The record is posted, issued or void: its attachments are evidence.</param>
+/// <param name="CanUnlink">The caller may remove this link. Everyone needs the record's attach (create/manage) permission;
+/// on a posted record they must also hold Manage Documents (Owner and Admin do) or be the member who linked it. Scanned
+/// sources never.</param>
+public sealed record DocumentLinkView(string TargetType, string TargetId, string Role, DateTime LinkedAt, bool Locked, bool CanUnlink);
 
 public sealed record DocumentView(
     string Id,
@@ -79,7 +83,8 @@ public sealed class DocumentLibraryService(
     IOptions<DocumentsOptions> options,
     IOptions<DocumentCaptureOptions> captureOptions,
     ISecurityAuditService? securityAudit = null,
-    TimeProvider? timeProvider = null)
+    TimeProvider? timeProvider = null,
+    ITransactionalSecurityAudit? transactionalAudit = null)
 {
     public const string DocumentKind = "document";
     public const string StoredStatus = "stored";
@@ -475,6 +480,7 @@ public sealed class DocumentLibraryService(
             throw new DocumentCaptureServiceException(403, "DOCUMENT_PERMISSION_REQUIRED");
         var targetId = await ResolveTargetIdAsync(targetType, targetPublicId, cancellationToken).ConfigureAwait(false);
         string publicId;
+        var postedRecord = false;
         await using (var transaction = await admissionLock.AcquireCompanyAsync(companyId, cancellationToken).ConfigureAwait(false))
         {
             await EnsureCompanyLiveAsync(companyId, cancellationToken).ConfigureAwait(false);
@@ -486,15 +492,21 @@ public sealed class DocumentLibraryService(
             if (link.Role != DocumentCaptureLinkRoles.Attachment)
                 throw new DocumentCaptureServiceException(409, "DOCUMENT_SOURCE_LINK_FIXED");
             await LockTargetsAsync(companyId, [(targetType, targetId)], cancellationToken).ConfigureAwait(false);
-            if (await IsTargetLockedAsync(companyId, targetType, targetId, cancellationToken).ConfigureAwait(false))
-                throw new DocumentCaptureServiceException(409, "DOCUMENT_LOCKED_BY_POSTED_RECORD");
+            postedRecord = await IsTargetLockedAsync(companyId, targetType, targetId, cancellationToken).ConfigureAwait(false);
+            if (!CanUnlink(link, postedRecord))
+                throw new DocumentCaptureServiceException(403, "DOCUMENT_UNLINK_RESTRICTED");
             await db.DocumentCaptureLinks.Where(l => l.CompanyId == companyId && l.Id == link.Id)
                 .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
             await DocumentRevision.BumpAsync(db, companyId, cancellationToken).ConfigureAwait(false);
+            // Removing evidence is recorded in the same transaction: no unlink commits without its audit event.
+            if (transactionalAudit is not null)
+                await transactionalAudit.LogEventInTransactionAsync(db, "document.unlinked", "success", tenant.UserId, companyId,
+                    UnlinkAuditMetadata(publicId, targetType, targetPublicId, postedRecord), cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         db.ChangeTracker.Clear();
-        await AuditAsync("document.unlinked", companyId, publicId, new { targetType, targetId = targetPublicId }).ConfigureAwait(false);
+        if (transactionalAudit is null)
+            await AuditAsync("document.unlinked", companyId, publicId, new { targetType, targetId = targetPublicId, postedRecord }).ConfigureAwait(false);
     }
 
     public Task<DocumentView> ArchiveAsync(int captureId, CancellationToken cancellationToken) =>
@@ -875,7 +887,8 @@ public sealed class DocumentLibraryService(
                 .Select(l =>
                 {
                     var target = resolved[(l.TargetType, l.TargetId)];
-                    return new DocumentLinkView(l.TargetType, target.PublicId, l.Role, DateTime.SpecifyKind(l.LinkedAt, DateTimeKind.Utc), target.Locked);
+                    return new DocumentLinkView(l.TargetType, target.PublicId, l.Role, DateTime.SpecifyKind(l.LinkedAt, DateTimeKind.Utc), target.Locked,
+                        CanUnlink(l, target.Locked));
                 })
                 .ToList();
             return new DocumentView(
@@ -1027,6 +1040,24 @@ public sealed class DocumentLibraryService(
 
     private bool Has(string permission) => tenant.Permissions.Contains(permission);
 
+    /// <summary>
+    /// Removing needs the record's attach permission, for everyone: losing invoice or bill create rights ends the right to
+    /// change their evidence. On a draft (or a party) that is enough. Once a bill or invoice is posted, issued or void, the
+    /// caller must also hold Manage Documents (Owner and Admin do), or be the member who linked the file. A scanned source is
+    /// never removable.
+    /// </summary>
+    private bool CanUnlink(DocumentCaptureLink link, bool postedRecord)
+    {
+        if (link.Role != DocumentCaptureLinkRoles.Attachment || !Has(AttachPermission(link.TargetType)))
+            return false;
+        if (!postedRecord)
+            return true;
+        // Manage Documents is the library's admin authority (Owner and Admin hold it through Full access).
+        if (Has(SystemPermissions.DocumentsManage))
+            return true;
+        return !string.IsNullOrWhiteSpace(tenant.UserId) && string.Equals(link.LinkedBy, tenant.UserId, StringComparison.Ordinal);
+    }
+
     private static void EnsureKnownTargetType(string targetType)
     {
         if (!TargetTypes.Contains(targetType, StringComparer.Ordinal))
@@ -1052,6 +1083,9 @@ public sealed class DocumentLibraryService(
     };
 
     private static DocumentCaptureServiceException NotFound() => new(404, "DOCUMENT_NOT_FOUND");
+
+    private static object UnlinkAuditMetadata(string documentId, string targetType, string targetId, bool postedRecord) =>
+        new { documentId, details = new { targetType, targetId, postedRecord } };
 
     private Task AuditAsync(string eventType, int companyId, string documentId, object? details) => securityAudit is null
         ? Task.CompletedTask
