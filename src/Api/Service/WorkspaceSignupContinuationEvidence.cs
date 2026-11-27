@@ -3,9 +3,12 @@
 
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using Api.Data;
 using Core.Domain.Auditing;
 using Microsoft.EntityFrameworkCore;
@@ -80,6 +83,40 @@ namespace Api.Service
                           && a.RecordId == companyId.ToString(CultureInfo.InvariantCulture)
                           && a.UserName == ownerUserId
                           && a.OriginalValue == EventPending);
+        }
+
+        /// <summary>
+        /// Batched async lookup of which company ids in <paramref name="companyIds"/> carry a
+        /// pending-signup-continuation marker bound to <paramref name="ownerUserId"/>. Used as a routing
+        /// hint on sign-in; <c>/api/organizations/current</c> remains authoritative.
+        /// </summary>
+        public static async Task<HashSet<int>> GetPendingContinuationCompanyIdsAsync(
+            ApiDbContext db,
+            IReadOnlyCollection<int> companyIds,
+            string ownerUserId,
+            CancellationToken cancellationToken = default)
+        {
+            if (companyIds.Count == 0 || string.IsNullOrEmpty(ownerUserId))
+                return new HashSet<int>();
+
+            var matches = await db.AuditLogs
+                .IgnoreQueryFilters()
+                .AsNoTracking()
+                .Where(a => companyIds.Contains(a.CompanyId)
+                            && a.TableName == AuditTableName
+                            && a.UserName == ownerUserId
+                            && a.OriginalValue == EventPending)
+                .Select(a => new { a.CompanyId, a.RecordId })
+                .ToListAsync(cancellationToken);
+
+            var result = new HashSet<int>();
+            foreach (var match in matches)
+            {
+                if (string.Equals(match.RecordId, match.CompanyId.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal))
+                    result.Add(match.CompanyId);
+            }
+
+            return result;
         }
     }
 }

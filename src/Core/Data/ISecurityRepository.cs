@@ -1,11 +1,19 @@
 using Core.Domain.Security;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Core.Data
 {
     public interface ISecurityRepository : IUserRepository<User>, IRoleRepository<SecurityRole>, IGroupRepository<SecurityGroup>
     { 
 
+    }
+
+    public interface IAsyncSecurityRepository
+    {
+        Task<User?> GetUserAsync(string username, CancellationToken cancellationToken = default);
+        Task<IReadOnlyList<string>> GetAllPermissionNamesAsync(CancellationToken cancellationToken = default);
     }
     public interface IUserRepository<User>
     {

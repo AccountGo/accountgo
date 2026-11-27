@@ -3,6 +3,8 @@ using Core.Domain.Security;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Services.Security
 {
@@ -71,6 +73,14 @@ namespace Services.Security
             return user;
         }
 
+        public Task<User?> GetUserAsync(string username, CancellationToken cancellationToken = default)
+        {
+            if (_securityRepository is IAsyncSecurityRepository asyncRepo)
+                return asyncRepo.GetUserAsync(username, cancellationToken);
+
+            return Task.FromResult<User?>(_securityRepository.GetUser(username));
+        }
+
         public SecurityRole? GetRole(string rolename)
         {
             return _securityRoleRepo.Table.Where(r => r.Name == rolename).FirstOrDefault();
@@ -123,7 +133,7 @@ namespace Services.Security
             if (user == null)
                 return Enumerable.Empty<string>();
 
-            if (user.IsSysAdmin() || (user.Roles != null && user.Roles.Any(r => r?.SecurityRole?.Name == "SystemAdministrators" || r?.SecurityRole?.SysAdmin == true)))
+            if (IsSysAdminUser(user))
             {
                 var permissionsSysAdmin = _securityPermissionRepo.Table.Select(p => p.Name).Where(n => n != null).Select(n => n!).ToList();
                 if (permissionsSysAdmin.Count == 0)
@@ -134,18 +144,46 @@ namespace Services.Security
                 return permissionsSysAdmin;
             }
 
+            return ExtractRolePermissions(user);
+        }
+
+        public async Task<IEnumerable<string>> GetPermissionsForUserAsync(User user, CancellationToken cancellationToken = default)
+        {
+            if (user == null)
+                return Enumerable.Empty<string>();
+
+            if (IsSysAdminUser(user))
+            {
+                IReadOnlyList<string> permissionsSysAdmin = _securityRepository is IAsyncSecurityRepository asyncRepo
+                    ? await asyncRepo.GetAllPermissionNamesAsync(cancellationToken)
+                    : _securityPermissionRepo.Table.Select(p => p.Name).Where(n => n != null).Select(n => n!).ToList();
+
+                if (permissionsSysAdmin.Count == 0)
+                {
+                    return GetAllDefaultPermissionNames();
+                }
+
+                return permissionsSysAdmin;
+            }
+
+            return ExtractRolePermissions(user);
+        }
+
+        private static bool IsSysAdminUser(User user) =>
+            user.IsSysAdmin() || (user.Roles != null && user.Roles.Any(r => r?.SecurityRole?.Name == "SystemAdministrators" || r?.SecurityRole?.SysAdmin == true));
+
+        private static IEnumerable<string> ExtractRolePermissions(User user)
+        {
             var roles = user.Roles;
             if (roles == null) return Enumerable.Empty<string>();
 
-            var permissions = roles
+            return roles
                 .Where(r => r?.SecurityRole?.Permissions != null)
                 .SelectMany(r => r.SecurityRole.Permissions)
                 .Where(p => p?.SecurityPermission != null && !string.IsNullOrEmpty(p.SecurityPermission.Name))
                 .Select(p => p.SecurityPermission!.Name!)
                 .Distinct()
                 .ToList();
-
-            return permissions;
         }
 
         public void EnsureDefaultPermissionsAndRoles()

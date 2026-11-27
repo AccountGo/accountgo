@@ -41,6 +41,7 @@ namespace Dto.Security
         public string Slug { get; set; }
         public string Name { get; set; }
         public string Role { get; set; }
+        public bool MayNeedSetup { get; set; }
     }
     #nullable restore
 

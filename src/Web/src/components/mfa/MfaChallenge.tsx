@@ -1,7 +1,12 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { AuthResponse } from '../../types/auth';
 import { ShieldCheck, Key, ArrowRight, ArrowLeft, Loader2, AlertCircle, HelpCircle, Fingerprint } from 'lucide-react';
-import { getPasskeyAssertion, isWebAuthnSupported } from '../../lib/webauthn';
+import {
+  createPasskeyOptionsPrefetcher,
+  getPasskeyAssertion,
+  isWebAuthnSupported,
+  type PasskeyOptionsPrefetcher,
+} from '../../lib/webauthn';
 import { MfaSubmitStage, runMfaSignIn } from '../../lib/mfaSubmission';
 
 interface MfaChallengeProps {
@@ -33,6 +38,8 @@ export const MfaChallenge: React.FC<MfaChallengeProps> = ({
   // Synchronous re-entry guard: React state updates are async, so a fast double click (or TOTP
   // auto-submit racing a button click) could otherwise start two verifications.
   const inFlightRef = useRef(false);
+  const prefetcherRef = useRef<PasskeyOptionsPrefetcher | null>(null);
+  const prefetchTokenRef = useRef<string | null>(null);
 
   const runSubmission = async (
     verify: (report: (s: MfaSubmitStage) => void) => Promise<AuthResponse>,
@@ -58,6 +65,22 @@ export const MfaChallenge: React.FC<MfaChallengeProps> = ({
 
   const readJson = async (res: Response) => res.json().catch(() => null);
 
+  const fetchPasskeyOptions = useCallback(async () => {
+    const beginRes = await fetch('/api/auth/mfa/webauthn/assertion/options', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${mfaToken}`,
+      },
+    });
+
+    const options = await readJson(beginRes);
+    if (!beginRes.ok) {
+      throw new Error(options?.detail || options?.title || 'Failed to initialize passkey challenge.');
+    }
+    return options;
+  }, [mfaToken]);
+
   useEffect(() => {
     if (mode === 'totp') {
       setTimeout(() => {
@@ -66,48 +89,75 @@ export const MfaChallenge: React.FC<MfaChallengeProps> = ({
     }
   }, [mode]);
 
-  const submitPasskey = () =>
-    runSubmission(
+  useEffect(() => {
+    if (mode !== 'webauthn' || !hasWebAuthn) return;
+    if (!prefetcherRef.current || prefetchTokenRef.current !== mfaToken) {
+      prefetcherRef.current?.invalidate();
+      prefetcherRef.current = createPasskeyOptionsPrefetcher(fetchPasskeyOptions);
+      prefetchTokenRef.current = mfaToken;
+    }
+    prefetcherRef.current.prefetch();
+  }, [mode, hasWebAuthn, mfaToken, fetchPasskeyOptions]);
+
+  useEffect(() => {
+    return () => {
+      prefetcherRef.current?.invalidate();
+    };
+  }, []);
+
+  const submitPasskey = () => {
+    if (inFlightRef.current) return;
+    const prefetcher = prefetcherRef.current;
+    // Consume prefetched options synchronously inside the click handler so
+    // navigator.credentials.get starts before any awaited network call (keeps Safari user activation).
+    const readyOptions = prefetcher?.consumeReady() ?? null;
+    const immediateAssertionPromise = readyOptions ? getPasskeyAssertion(readyOptions) : null;
+
+    void runSubmission(
       async (report) => {
-        const beginRes = await fetch('/api/auth/mfa/webauthn/assertion/options', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${mfaToken}`,
-          },
-        });
+        try {
+          let assertion: any;
+          if (immediateAssertionPromise) {
+            assertion = await immediateAssertionPromise;
+          } else {
+            const options = prefetcher
+              ? await prefetcher.resolveOptions()
+              : await fetchPasskeyOptions();
+            assertion = await getPasskeyAssertion(options);
+          }
 
-        const options = await readJson(beginRes);
-        if (!beginRes.ok) {
-          throw new Error(options?.detail || options?.title || 'Failed to initialize passkey challenge.');
+          // The biometric / security-key step is done; the rest is network-bound.
+          report('verifying');
+          const completeRes = await fetch('/api/auth/mfa/webauthn/assertion/complete', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${mfaToken}`,
+            },
+            body: JSON.stringify({
+              assertion,
+              rememberDevice,
+            }),
+            credentials: 'include',
+          });
+
+          const data = await readJson(completeRes);
+          if (!completeRes.ok) {
+            throw new Error(data?.detail || data?.title || 'Passkey verification failed.');
+          }
+          return data as AuthResponse;
+        } catch (err) {
+          // The server consumes/replaces the challenge on complete or cancellation;
+          // drop any cached options and prefetch fresh ones for the next click.
+          prefetcher?.invalidate();
+          prefetcher?.prefetch();
+          throw err;
         }
-
-        const assertion = await getPasskeyAssertion(options);
-
-        // The biometric / security-key step is done; the rest is network-bound.
-        report('verifying');
-        const completeRes = await fetch('/api/auth/mfa/webauthn/assertion/complete', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${mfaToken}`,
-          },
-          body: JSON.stringify({
-            assertion,
-            rememberDevice,
-          }),
-          credentials: 'include',
-        });
-
-        const data = await readJson(completeRes);
-        if (!completeRes.ok) {
-          throw new Error(data?.detail || data?.title || 'Passkey verification failed.');
-        }
-        return data as AuthResponse;
       },
       'Passkey verification failed.',
       'prompting'
     );
+  };
 
   const handleTotpChange = (index: number, val: string) => {
     const numericVal = val.replace(/\D/g, '');

@@ -38,11 +38,18 @@ export interface TrustedDevice {
   isCurrent?: boolean;
 }
 
+export interface OrganizationDto {
+  slug: string;
+  name: string;
+  role: string;
+  mayNeedSetup?: boolean;
+}
+
 export interface AuthResponse {
   accessToken: string;
   expiresIn: number;
   user: UserDto;
-  organizations?: { slug: string; name: string; role: string }[];
+  organizations?: OrganizationDto[];
   /** Sign out after this many seconds without activity (strictest of the user's workspaces). */
   idleTimeoutSeconds?: number;
   /** Hard end of this sign-in (ISO 8601, UTC); activity does not extend it. */

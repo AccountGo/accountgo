@@ -13,6 +13,11 @@ export type PostAuthDestination =
   | { kind: 'path'; path: string }
   | { kind: 'select-org' };
 
+export interface PostAuthOrgHint {
+  slug?: string;
+  mayNeedSetup?: boolean;
+}
+
 export interface PostAuthInputs {
   /** Slug passed explicitly to the post-auth handler (e.g. invite accept target). */
   targetSlugOverride?: string | null;
@@ -22,6 +27,8 @@ export interface PostAuthInputs {
   persistedSlug?: string | null;
   /** The protected path the user was originally heading to (location.state.from.pathname). */
   fromPath?: string | null;
+  /** Organizations returned on the sign-in response, when provided by the server. */
+  organizations?: PostAuthOrgHint[] | null;
 }
 
 /** Extract an org slug from a protected path like /org/<slug>/... */
@@ -78,22 +85,39 @@ export const resolvePostAuthDestination = async (
   authFetch: (url: string, init?: RequestInit) => Promise<Response>,
   inputs: PostAuthInputs,
 ): Promise<PostAuthDestination> => {
-  const { targetSlugOverride, targetOrgSlug, persistedSlug, fromPath } = inputs;
+  const { targetSlugOverride, targetOrgSlug, persistedSlug, fromPath, organizations } = inputs;
 
   // CLI consent must win over workspace-setup continuation — do not divert an in-flight OAuth approve.
   if (fromPath && fromPath.startsWith('/cli/authorize')) {
     return { kind: 'path', path: fromPath };
   }
 
+  const hasOrganizations = Array.isArray(organizations);
   const candidateSlug =
     targetSlugOverride ||
     targetOrgSlug ||
     persistedSlug ||
     slugFromPath(fromPath) ||
-    (await soleWorkspaceSlug(authFetch));
+    (hasOrganizations
+      ? (organizations.length === 1 ? organizations[0]?.slug || null : null)
+      : await soleWorkspaceSlug(authFetch));
 
-  if (candidateSlug && (await workspaceNeedsSetup(authFetch, candidateSlug))) {
-    return { kind: 'continue', slug: candidateSlug };
+  if (candidateSlug) {
+    if (hasOrganizations) {
+      const matched = organizations.find(
+        (org) => typeof org.slug === 'string' && org.slug.toLowerCase() === candidateSlug.toLowerCase(),
+      );
+      // Only consult /api/organizations/current when the candidate is in the user's memberships
+      // and either the server hinted mayNeedSetup=true or omitted the hint (older server).
+      // A persisted slug not in the list behaves like a failed /current check (no continuation).
+      if (matched && (matched.mayNeedSetup === true || matched.mayNeedSetup === undefined)) {
+        if (await workspaceNeedsSetup(authFetch, candidateSlug)) {
+          return { kind: 'continue', slug: candidateSlug };
+        }
+      }
+    } else if (await workspaceNeedsSetup(authFetch, candidateSlug)) {
+      return { kind: 'continue', slug: candidateSlug };
+    }
   }
 
   if (targetSlugOverride || targetOrgSlug) {

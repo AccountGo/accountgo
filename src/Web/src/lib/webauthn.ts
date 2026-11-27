@@ -106,3 +106,87 @@ export async function getPasskeyAssertion(options: any): Promise<any> {
     clientExtensionResults: assertion.getClientExtensionResults?.() ?? {},
   };
 }
+
+export interface PasskeyOptionsPrefetcher {
+  /** Starts fetching options if none are ready or in flight. Safe to call repeatedly. */
+  prefetch: () => void;
+  /**
+   * Returns already-resolved options synchronously and consumes them (single-use),
+   * or null if options are not yet ready. Keeps click handlers synchronous up to
+   * navigator.credentials.get so Safari preserves user activation.
+   */
+  consumeReady: () => any | null;
+  /**
+   * Awaits the currently in-flight prefetch, or starts a fresh fetch if none is in flight
+   * (e.g. if an earlier prefetch failed). Always consumes the result (single-use).
+   */
+  resolveOptions: () => Promise<any>;
+  /** Drops any cached or in-flight options (e.g. after cancel, failure, or token change). */
+  invalidate: () => void;
+}
+
+export function createPasskeyOptionsPrefetcher(
+  fetchOptions: () => Promise<any>
+): PasskeyOptionsPrefetcher {
+  let generation = 0;
+  let ready: any | null = null;
+  let hasReady = false;
+  let inFlight: Promise<any> | null = null;
+
+  const prefetch = () => {
+    if (hasReady || inFlight) return;
+    const gen = generation;
+    const promise = fetchOptions()
+      .then((options) => {
+        if (gen === generation) {
+          ready = options;
+          hasReady = true;
+        }
+        return options;
+      })
+      .finally(() => {
+        if (inFlight === promise) {
+          inFlight = null;
+        }
+      });
+    // Prevent unhandled-rejection noise when a background prefetch fails before click.
+    promise.catch(() => {});
+    inFlight = promise;
+  };
+
+  const consumeReady = () => {
+    if (!hasReady) return null;
+    const options = ready;
+    ready = null;
+    hasReady = false;
+    return options;
+  };
+
+  const resolveOptions = () => {
+    if (hasReady) {
+      return Promise.resolve(consumeReady());
+    }
+    if (inFlight) {
+      const promise = inFlight;
+      inFlight = null;
+      generation++;
+      return promise;
+    }
+    generation++;
+    return fetchOptions();
+  };
+
+  const invalidate = () => {
+    generation++;
+    ready = null;
+    hasReady = false;
+    inFlight = null;
+  };
+
+  return {
+    prefetch,
+    consumeReady,
+    resolveOptions,
+    invalidate,
+  };
+}

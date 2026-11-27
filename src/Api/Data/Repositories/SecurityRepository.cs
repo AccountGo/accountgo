@@ -1,5 +1,7 @@
 using System;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Core.Data;
 using Core.Domain.Security;
@@ -7,7 +9,7 @@ using System.Collections.Generic;
 
 namespace Api.Data.Repositories
 {
-    public class SecurityRepository : ISecurityRepository
+    public class SecurityRepository : ISecurityRepository, IAsyncSecurityRepository
     {
         private readonly ApiDbContext _context;
         public SecurityRepository(ApiDbContext context)
@@ -43,6 +45,26 @@ namespace Api.Data.Repositories
                 .ThenInclude(u => u.SecurityPermission.Group)
                 .Where(u => u.UserName == username)
                 .FirstOrDefault()!;
+        }
+
+        public Task<User?> GetUserAsync(string username, CancellationToken cancellationToken = default)
+        {
+            return _context.Users
+                .AsNoTracking()
+                .Include(u => u.Roles)
+                .ThenInclude(u => u.SecurityRole.Permissions)
+                .ThenInclude(u => u.SecurityPermission.Group)
+                .Where(u => u.UserName == username)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        public async Task<IReadOnlyList<string>> GetAllPermissionNamesAsync(CancellationToken cancellationToken = default)
+        {
+            return await _context.SecurityPermissions
+                .AsNoTracking()
+                .Where(p => p.Name != null)
+                .Select(p => p.Name!)
+                .ToListAsync(cancellationToken);
         }
 
         public User GetUserById(int id)

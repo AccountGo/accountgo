@@ -683,17 +683,13 @@ namespace Api.Controllers
                 SetRefreshTokenCookie(result.RawRefreshToken, result.Response?.SessionExpiresAt);
             }
 
-            var verifiedUser = await _userManager.FindByEmailAsync(request.Email.Trim());
-            if (verifiedUser == null)
+            var verifiedUserId = result.Response?.User?.Id;
+            if (string.IsNullOrEmpty(verifiedUserId))
             {
                 await AuditSignInFailureAsync("otp", "user_not_found");
                 return Unauthorized();
             }
-            result.Response!.Organizations = (from m in _apiDb.CompanyMembers
-                                             join c in _apiDb.Companies on m.CompanyId equals c.Id
-                                             where m.UserId == verifiedUser.Id && m.Status == Core.Domain.CompanyMemberStatus.Active
-                                             select new OrganizationDto { Slug = c.Slug ?? "", Name = c.Name, Role = m.Role.ToString() }).ToList();
-            await AuditAsync("auth.signin.success", "success", verifiedUser.Id, new { method = "otp" });
+            await AuditAsync("auth.signin.success", "success", verifiedUserId, new { method = "otp" });
             return Ok(result.Response);
         }
 
