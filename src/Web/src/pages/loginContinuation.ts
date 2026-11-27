@@ -13,6 +13,11 @@ export type PostAuthDestination =
   | { kind: 'path'; path: string }
   | { kind: 'select-org' };
 
+export interface PostAuthOrgHint {
+  slug?: string;
+  mayNeedSetup?: boolean | null;
+}
+
 export interface PostAuthInputs {
   /** Slug passed explicitly to the post-auth handler (e.g. invite accept target). */
   targetSlugOverride?: string | null;
@@ -22,6 +27,8 @@ export interface PostAuthInputs {
   persistedSlug?: string | null;
   /** The protected path the user was originally heading to (location.state.from.pathname). */
   fromPath?: string | null;
+  /** Organizations returned on the sign-in response, when provided by the server. */
+  organizations?: PostAuthOrgHint[] | null;
 }
 
 /** Extract an org slug from a protected path like /org/<slug>/... */
@@ -70,30 +77,50 @@ export const soleWorkspaceSlug = async (
 };
 
 /**
- * Resolve where to route after authentication. If any candidate workspace (resolved across all entry
- * paths, including the user's sole workspace from the server) still needs setup, route to the guided
- * continuation; otherwise fall back to the normal dashboard / path / selector routing.
+ * Resolve where to route after authentication. Uses the auth-response `organizations` list when
+ * present (falling back to `/api/organizations` only for older servers) and checks
+ * `/api/organizations/current` when the candidate workspace's `mayNeedSetup` hint is not explicitly
+ * `false`. If the workspace still needs setup, route to the guided continuation; otherwise fall back
+ * to the normal dashboard / path / selector routing.
  */
 export const resolvePostAuthDestination = async (
   authFetch: (url: string, init?: RequestInit) => Promise<Response>,
   inputs: PostAuthInputs,
 ): Promise<PostAuthDestination> => {
-  const { targetSlugOverride, targetOrgSlug, persistedSlug, fromPath } = inputs;
+  const { targetSlugOverride, targetOrgSlug, persistedSlug, fromPath, organizations } = inputs;
 
   // CLI consent must win over workspace-setup continuation — do not divert an in-flight OAuth approve.
   if (fromPath && fromPath.startsWith('/cli/authorize')) {
     return { kind: 'path', path: fromPath };
   }
 
+  const hasOrganizations = Array.isArray(organizations);
   const candidateSlug =
     targetSlugOverride ||
     targetOrgSlug ||
     persistedSlug ||
     slugFromPath(fromPath) ||
-    (await soleWorkspaceSlug(authFetch));
+    (hasOrganizations
+      ? (organizations.length === 1 ? organizations[0]?.slug || null : null)
+      : await soleWorkspaceSlug(authFetch));
 
-  if (candidateSlug && (await workspaceNeedsSetup(authFetch, candidateSlug))) {
-    return { kind: 'continue', slug: candidateSlug };
+  if (candidateSlug) {
+    if (hasOrganizations) {
+      const matched = organizations.find(
+        (org) => typeof org.slug === 'string' && org.slug.toLowerCase() === candidateSlug.toLowerCase(),
+      );
+      // Only consult /api/organizations/current when the candidate is in the user's memberships
+      // and the server did not explicitly certify mayNeedSetup === false (true, null, or undefined
+      // all verify authoritatively against /current). A persisted slug not in the list behaves like
+      // a failed /current check (no continuation).
+      if (matched && matched.mayNeedSetup !== false) {
+        if (await workspaceNeedsSetup(authFetch, candidateSlug)) {
+          return { kind: 'continue', slug: candidateSlug };
+        }
+      }
+    } else if (await workspaceNeedsSetup(authFetch, candidateSlug)) {
+      return { kind: 'continue', slug: candidateSlug };
+    }
   }
 
   if (targetSlugOverride || targetOrgSlug) {

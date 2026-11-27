@@ -45,8 +45,36 @@ namespace Api.Service
             IEnumerable<Claim>? extraClaims = null,
             string? audience = null)
         {
+            return await CreateTokenCoreAsync(user, purpose, lifetime, amr, mfa, mfaTimestamp, extraClaims, audience, preloadedRoles: null);
+        }
+
+        public Task<Token> CreateTokenWithRolesAsync(
+            ApplicationUser user,
+            string? purpose,
+            IReadOnlyCollection<string> preloadedRoles,
+            TimeSpan? lifetime = null,
+            IEnumerable<string>? amr = null,
+            bool? mfa = null,
+            DateTimeOffset? mfaTimestamp = null,
+            IEnumerable<Claim>? extraClaims = null,
+            string? audience = null)
+        {
+            return CreateTokenCoreAsync(user, purpose, lifetime, amr, mfa, mfaTimestamp, extraClaims, audience, preloadedRoles);
+        }
+
+        private async Task<Token> CreateTokenCoreAsync(
+            ApplicationUser user,
+            string? purpose,
+            TimeSpan? lifetime,
+            IEnumerable<string>? amr,
+            bool? mfa,
+            DateTimeOffset? mfaTimestamp,
+            IEnumerable<Claim>? extraClaims,
+            string? audience,
+            IReadOnlyCollection<string>? preloadedRoles)
+        {
             var signingCredentials = GetSigningCredentials();
-            var claims = await BuildClaimsAsync(user, purpose, amr, mfa, mfaTimestamp, extraClaims);
+            var claims = await BuildClaimsAsync(user, purpose, amr, mfa, mfaTimestamp, extraClaims, preloadedRoles);
             var expiry = ResolveExpiry(purpose, lifetime);
             var tokenOptions = GenerateTokenOptions(signingCredentials, claims, expiry, audience);
             var accessToken = new JwtSecurityTokenHandler().WriteToken(tokenOptions);
@@ -74,7 +102,8 @@ namespace Api.Service
             IEnumerable<string>? amr,
             bool? mfa,
             DateTimeOffset? mfaTimestamp,
-            IEnumerable<Claim>? extraClaims)
+            IEnumerable<Claim>? extraClaims,
+            IReadOnlyCollection<string>? preloadedRoles = null)
         {
             var claims = new List<Claim>
             {
@@ -116,23 +145,13 @@ namespace Api.Service
             // Only attach full roles to normal access tokens, not partial tokens (mfa_pending, mfa_enroll)
             if (string.IsNullOrEmpty(purpose) || purpose == "access")
             {
-                // 1. ASP.NET Identity roles
-                var identityRoles = await _userManager.GetRolesAsync(user);
-                foreach (var role in identityRoles)
+                var roles = preloadedRoles
+                    ?? (await UserRoleResolver.LoadAsync(_userManager, _securityService, user)).Roles;
+                foreach (var role in roles)
                 {
-                    claims.Add(new Claim(ClaimTypes.Role, role));
-                }
-
-                // 2. Domain Security roles
-                var domainUser = _securityService.GetUser(user.UserName ?? user.Email ?? string.Empty);
-                if (domainUser != null && domainUser.Roles != null)
-                {
-                    foreach (var role in domainUser.Roles)
+                    if (!string.IsNullOrEmpty(role) && !claims.Any(c => c.Type == ClaimTypes.Role && c.Value == role))
                     {
-                        if (role?.SecurityRole != null && !claims.Any(c => c.Type == ClaimTypes.Role && c.Value == role.SecurityRole.Name))
-                        {
-                            claims.Add(new Claim(ClaimTypes.Role, role.SecurityRole.Name!));
-                        }
+                        claims.Add(new Claim(ClaimTypes.Role, role));
                     }
                 }
             }

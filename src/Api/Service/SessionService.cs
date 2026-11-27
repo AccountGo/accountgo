@@ -111,9 +111,11 @@ public class SessionService : ISessionService
             amrList.Add(mfaMethod);
         }
 
-        var tokenResult = await _authService.CreateToken(
+        var (roles, userDto) = await LoadUserAuthorizationAsync(user);
+        var tokenResult = await _authService.CreateTokenWithRolesAsync(
             user,
             purpose: "access",
+            preloadedRoles: roles,
             lifetime: null,
             amr: amrList,
             mfa: mfaSatisfied,
@@ -122,7 +124,7 @@ public class SessionService : ISessionService
         var rawRefreshToken = GenerateSecureToken();
         var tokenHash = ComputeSha256(rawRefreshToken);
         var now = DateTime.UtcNow;
-        var (clientIdle, serverIdle) = await ResolveIdleTimeoutAsync(user.Id);
+        var (clientIdle, serverIdle, memberships) = await ResolveMembershipsAndIdleTimeoutAsync(user.Id);
         var absoluteExpiresAt = now + AbsoluteLifetime();
 
         var session = new RefreshTokenSession
@@ -144,7 +146,7 @@ public class SessionService : ISessionService
         _identityContext.RefreshTokens.Add(session);
         await _identityContext.SaveChangesAsync();
 
-        var userDto = await BuildUserDtoAsync(user);
+        var organizations = await BuildOrganizationsAsync(user.Id, memberships);
         var expiresInMinutes = Convert.ToInt32(_configuration["JwtSettings:expires"] ?? "15");
         var expiresInSeconds = expiresInMinutes * 60;
 
@@ -153,6 +155,7 @@ public class SessionService : ISessionService
             expiresInSeconds,
             userDto)
         {
+            Organizations = organizations,
             IdleTimeoutSeconds = (int)clientIdle.TotalSeconds,
             SessionExpiresAt = absoluteExpiresAt
         };
@@ -481,8 +484,11 @@ public class SessionService : ISessionService
         TimeSpan idle,
         DateTime absoluteExpiresAt)
     {
-        var tokenResult = await _authService.CreateToken(user, populateExp: false);
-        var userDto = await BuildUserDtoAsync(user);
+        var (roles, userDto) = await LoadUserAuthorizationAsync(user);
+        var tokenResult = await _authService.CreateTokenWithRolesAsync(
+            user,
+            purpose: null,
+            preloadedRoles: roles);
         var expiresInMinutes = Convert.ToInt32(_configuration["JwtSettings:expires"] ?? "15");
         var expiresInSeconds = expiresInMinutes * 60;
 
@@ -575,28 +581,24 @@ public class SessionService : ISessionService
 
     public async Task<UserDto> BuildUserDtoAsync(ApplicationUser user)
     {
-        var roles = new HashSet<string>(await _userManager.GetRolesAsync(user));
-        var domainUser = _securityService.GetUser(user.UserName ?? user.Email ?? string.Empty);
-        string firstName = string.Empty;
-        string lastName = string.Empty;
+        var (_, userDto) = await LoadUserAuthorizationAsync(user);
+        return userDto;
+    }
 
-        if (domainUser != null)
-        {
-            firstName = domainUser.Firstname ?? string.Empty;
-            lastName = domainUser.Lastname ?? string.Empty;
-            if (domainUser.Roles != null)
-            {
-                foreach (var r in domainUser.Roles)
-                {
-                    if (r?.SecurityRole?.Name != null)
-                        roles.Add(r.SecurityRole.Name);
-                }
-            }
-        }
+    private async Task<(IReadOnlyList<string> Roles, UserDto UserDto)> LoadUserAuthorizationAsync(ApplicationUser user)
+    {
+        var (roles, domainUser) = await UserRoleResolver.LoadAsync(
+            _userManager,
+            _securityService,
+            user);
 
-        var permissions = domainUser == null ? Array.Empty<string>() : _securityService.GetPermissionsForUser(domainUser);
+        var firstName = domainUser?.Firstname ?? string.Empty;
+        var lastName = domainUser?.Lastname ?? string.Empty;
+        var permissions = domainUser == null
+            ? Array.Empty<string>()
+            : await _securityService.GetPermissionsForUserAsync(domainUser);
 
-        return new UserDto(
+        var userDto = new UserDto(
             user.Id,
             user.Email ?? user.UserName ?? string.Empty,
             firstName,
@@ -606,6 +608,35 @@ public class SessionService : ISessionService
             user.PhoneNumber,
             !string.IsNullOrEmpty(user.PasswordHash),
             user.MfaReEnrollRequired);
+
+        return (roles, userDto);
+    }
+
+    private readonly record struct ActiveMembershipRow(
+        int CompanyId,
+        string? Slug,
+        string? Name,
+        CompanyMemberRole Role,
+        int Minutes);
+
+    private async Task<List<OrganizationDto>> BuildOrganizationsAsync(string userId, IReadOnlyList<ActiveMembershipRow> memberships)
+    {
+        if (memberships.Count == 0 || _apiDb is null)
+            return new List<OrganizationDto>();
+
+        var companyIds = memberships.Select(m => m.CompanyId).ToList();
+        var pendingCompanyIds = await WorkspaceSignupContinuationEvidence.GetPendingContinuationCompanyIdsAsync(
+            _apiDb,
+            companyIds,
+            userId);
+
+        return memberships.Select(m => new OrganizationDto
+        {
+            Slug = m.Slug ?? string.Empty,
+            Name = m.Name ?? string.Empty,
+            Role = m.Role.ToString(),
+            MayNeedSetup = pendingCompanyIds.Contains(m.CompanyId)
+        }).ToList();
     }
 
     /// <summary>
@@ -614,10 +645,18 @@ public class SessionService : ISessionService
     /// </summary>
     private async Task<(TimeSpan ClientIdle, TimeSpan ServerIdle)> ResolveIdleTimeoutAsync(string userId, string? orgSlug = null)
     {
+        var (clientIdle, serverIdle, _) = await ResolveMembershipsAndIdleTimeoutAsync(userId, orgSlug);
+        return (clientIdle, serverIdle);
+    }
+
+    private async Task<(TimeSpan ClientIdle, TimeSpan ServerIdle, IReadOnlyList<ActiveMembershipRow> Memberships)> ResolveMembershipsAndIdleTimeoutAsync(
+        string userId,
+        string? orgSlug = null)
+    {
         if (_apiDb == null)
         {
             var fallback = TimeSpan.FromMinutes(SessionTimeoutPolicy.DefaultIdleMinutes);
-            return (fallback, fallback);
+            return (fallback, fallback, Array.Empty<ActiveMembershipRow>());
         }
 
         var effectiveOrgSlug = !string.IsNullOrWhiteSpace(orgSlug)
@@ -627,12 +666,13 @@ public class SessionService : ISessionService
         if (resolved == null)
         {
             var fallback = TimeSpan.FromMinutes(SessionTimeoutPolicy.DefaultIdleMinutes);
-            return (fallback, fallback);
+            return (fallback, fallback, Array.Empty<ActiveMembershipRow>());
         }
 
         return (
             TimeSpan.FromMinutes(resolved.Value.ClientMinutes),
-            TimeSpan.FromMinutes(resolved.Value.ServerMinutes));
+            TimeSpan.FromMinutes(resolved.Value.ServerMinutes),
+            resolved.Value.Memberships);
     }
 
     /// <summary>
@@ -650,7 +690,7 @@ public class SessionService : ISessionService
             : new EffectiveIdleTimeout(resolved.Value.ClientMinutes, resolved.Value.SetBy);
     }
 
-    private static async Task<(int ClientMinutes, int ServerMinutes, IReadOnlyList<string> SetBy)?> ResolveEffectiveIdleTimeoutsAsync(
+    private static async Task<(int ClientMinutes, int ServerMinutes, IReadOnlyList<string> SetBy, IReadOnlyList<ActiveMembershipRow> Memberships)?> ResolveEffectiveIdleTimeoutsAsync(
         ApiDbContext apiDb,
         string userId,
         string? orgSlug = null)
@@ -666,15 +706,15 @@ public class SessionService : ISessionService
             .Where(m => m.UserId == userId
                 && m.Status == CompanyMemberStatus.Active
                 && m.Company.DeletedAt == null)
-            .Select(m => new
-            {
+            .Select(m => new ActiveMembershipRow(
+                m.CompanyId,
                 m.Company.Slug,
                 m.Company.Name,
-                Minutes = apiDb.CompanySettings
+                m.Role,
+                apiDb.CompanySettings
                     .Where(s => s.CompanyId == m.CompanyId)
                     .Select(s => (int?)s.IdleTimeoutMinutes)
-                    .FirstOrDefault() ?? SessionTimeoutPolicy.DefaultIdleMinutes,
-            })
+                    .FirstOrDefault() ?? SessionTimeoutPolicy.DefaultIdleMinutes))
             .ToListAsync();
         if (rows.Count == 0)
             return null;
@@ -690,12 +730,12 @@ public class SessionService : ISessionService
         if (!string.IsNullOrEmpty(activeRow.Name) || !string.IsNullOrEmpty(activeRow.Slug))
         {
             clientMinutes = activeRow.Minutes;
-            setBy = string.IsNullOrEmpty(activeRow.Name) ? Array.Empty<string>() : new[] { activeRow.Name };
+            setBy = string.IsNullOrEmpty(activeRow.Name) ? Array.Empty<string>() : new[] { activeRow.Name! };
         }
         else if (normalized.Count == 1)
         {
             clientMinutes = normalized[0].Minutes;
-            setBy = string.IsNullOrEmpty(normalized[0].Name) ? Array.Empty<string>() : new[] { normalized[0].Name };
+            setBy = string.IsNullOrEmpty(normalized[0].Name) ? Array.Empty<string>() : new[] { normalized[0].Name! };
         }
         else
         {
@@ -704,7 +744,7 @@ public class SessionService : ISessionService
         }
 
         var serverMinutes = Math.Max(clientMinutes, normalized.Max(r => r.Minutes));
-        return (clientMinutes, serverMinutes, setBy);
+        return (clientMinutes, serverMinutes, setBy, rows);
     }
 
     private TimeSpan AbsoluteLifetime() => TimeSpan.FromHours(AbsoluteHours(_configuration));

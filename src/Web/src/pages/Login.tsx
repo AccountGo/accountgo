@@ -9,7 +9,7 @@ import { GoogleSignInButton } from '../components/GoogleSignInButton';
 import { MfaChallenge } from '../components/mfa/MfaChallenge';
 import { MfaEnrollWizard } from '../components/mfa/MfaEnrollWizard';
 import { TurnstileWidget, TurnstileWidgetHandle } from '../components/TurnstileWidget';
-import { MfaRequiredResponse, MfaEnrollmentRequiredResponse } from '../types/auth';
+import { MfaRequiredResponse, MfaEnrollmentRequiredResponse, OrganizationDto } from '../types/auth';
 import { rememberSignupPlan } from '../lib/signupPlanIntent';
 import {
   Mail,
@@ -379,7 +379,10 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
   };
 
   // Common post-authentication routing (invitation acceptance or dashboard redirection)
-  const handlePostAuthSuccess = async (targetSlugOverride?: string | null) => {
+  const handlePostAuthSuccess = async (
+    targetSlugOverride?: string | null,
+    organizations?: OrganizationDto[] | null
+  ) => {
     const pendingToken = invitationToken || getInvitationToken();
     if (pendingToken) {
       const acceptResponse = await authFetch(`/api/invitations/${encodeURIComponent(pendingToken)}/accept`, {
@@ -420,6 +423,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
       targetOrgSlug,
       persistedSlug: getPersistedOrgSlug(),
       fromPath,
+      organizations,
     });
 
     switch (decision.kind) {
@@ -470,7 +474,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
       }
 
       verified = true;
-      await handlePostAuthSuccess();
+      await handlePostAuthSuccess(undefined, result.data.organizations);
     } catch (err: any) {
       verifyTurnstileRef.current?.reset();
       setVerifyTurnstileToken('');
@@ -659,7 +663,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
                       return;
                     }
                     completeSession(data);
-                    await handlePostAuthSuccess();
+                    await handlePostAuthSuccess(undefined, data.organizations);
                   } catch (error) {
                     verificationOwnsNavigation.current = false;
                     handleGoogleError('unexpected_error');
@@ -1048,7 +1052,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
               // redirect effect cannot race the post-auth hand-off (invitation acceptance / routing).
               verificationOwnsNavigation.current = true;
               completeSession(authResponse);
-              await handlePostAuthSuccess();
+              await handlePostAuthSuccess(undefined, authResponse.organizations);
             }}
             onCancel={() => {
               setStep(googleMfa.current ? 1 : 2);
@@ -1067,7 +1071,7 @@ export const Login: React.FC<LoginProps> = ({ initialMode, initialGoogleConfig }
               // redirect effect cannot race the post-auth hand-off (invitation acceptance / routing).
               verificationOwnsNavigation.current = true;
               completeSession(authResponse);
-              await handlePostAuthSuccess();
+              await handlePostAuthSuccess(undefined, authResponse.organizations);
             }}
             onCancel={() => {
               setStep(googleMfa.current ? 1 : 2);

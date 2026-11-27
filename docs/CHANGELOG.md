@@ -29,6 +29,7 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ### Changed
 
+- Signing in with a passkey or an authenticator code is faster: the passkey prompt opens straight away and you reach your workspace with fewer steps.
 - The GitHub README links to a walkthrough showing an invoice and payment in the ledger and trial balance.
 - The GitHub README now introduces the accounting workspace and offers a concise local setup prompt.
 - Attach a document to the assistant from the message box; the file is read on our servers and only masked text reaches the AI, never the file itself.
