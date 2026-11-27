@@ -6,7 +6,6 @@ import {
   errorText,
   isNotDispatchedUnavailable,
   serviceUnavailable,
-  stripInternalResponseHeaders,
 } from "./container-errors.ts";
 import { scrubPathForLog } from "./server-timing.ts";
 
@@ -108,13 +107,12 @@ async function readUnavailableCode(res: Response): Promise<string> {
 }
 
 function withFallbackHeader(res: Response): Response {
-  const clean = stripInternalResponseHeaders(res);
-  if (clean.status === 101) return clean;
-  const headers = new Headers(clean.headers);
+  if (res.status === 101) return res;
+  const headers = new Headers(res.headers);
   headers.set(AUTH_POOL_HEADER, AUTH_POOL_V1_FALLBACK);
-  return new Response(clean.body, {
-    status: clean.status,
-    statusText: clean.statusText,
+  return new Response(res.body, {
+    status: res.status,
+    statusText: res.statusText,
     headers,
   });
 }
@@ -168,7 +166,7 @@ export async function routePublicAuthRequest(opts: RoutePublicAuthOptions): Prom
   }
 
   if (!prepared.canFallback || !isNotDispatchedUnavailable(v2Res)) {
-    return stripInternalResponseHeaders(v2Res);
+    return v2Res;
   }
 
   const v2Code = await readUnavailableCode(v2Res);

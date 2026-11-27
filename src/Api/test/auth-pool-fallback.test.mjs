@@ -182,7 +182,7 @@ test("V2 stub.fetch throwing returns 503 SERVICE_INTERRUPTED without replaying o
   assert.ok(logs[0].includes("path=/api/auth/mfa/webauthn/assertion/complete"));
 });
 
-test("body over the 64 KiB cap skips fallback and strips x-accountgo-not-dispatched (both Content-Length and chunked)", async () => {
+test("body over the 64 KiB cap skips fallback (both Content-Length and chunked)", async () => {
   const oversized = "x".repeat(MAX_AUTH_FALLBACK_BODY_BYTES + 1);
 
   // Case 1: declared Content-Length over cap
@@ -219,7 +219,7 @@ test("body over the 64 KiB cap skips fallback and strips x-accountgo-not-dispatc
     assert.equal(v2BodyLen, oversized.length);
     assert.equal(v1Called, 0);
     assert.equal(res.status, 503);
-    assert.equal(res.headers.get(NOT_DISPATCHED_HEADER), null);
+    assert.equal(stripInternalResponseHeaders(res).headers.get(NOT_DISPATCHED_HEADER), null);
   }
 
   // Case 2: streamed body without Content-Length over cap
@@ -262,12 +262,12 @@ test("body over the 64 KiB cap skips fallback and strips x-accountgo-not-dispatc
     assert.equal(v2BodyLen, chunkA.byteLength + chunkB.byteLength);
     assert.equal(v1Called, 0);
     assert.equal(res.status, 503);
-    assert.equal(res.headers.get(NOT_DISPATCHED_HEADER), null);
+    assert.equal(stripInternalResponseHeaders(res).headers.get(NOT_DISPATCHED_HEADER), null);
   }
 });
 
-test("internal x-accountgo-not-dispatched header is stripped from V1 marked 503s and un-replayed V2 marked 503s before reaching the client", async () => {
-  // Marked 503 from V1 (e.g. V1 unavailableResponse on a non-auth route, or V1 fallback itself returning a marked 503)
+test("internal x-accountgo-not-dispatched header is stripped at Worker exit from V1 marked 503s and un-replayed V2 marked 503s", async () => {
+  // Marked 503 from V1 (e.g. V1 unavailableResponse on a non-auth route)
   const v1Marked = unavailableResponse(new ContainerUnavailableError("not running", "not-reached"));
   assert.equal(v1Marked.headers.get(NOT_DISPATCHED_HEADER), "1");
   const v1ClientRes = stripInternalResponseHeaders(v1Marked);
@@ -275,28 +275,37 @@ test("internal x-accountgo-not-dispatched header is stripped from V1 marked 503s
   assert.equal(v1ClientRes.headers.get(NOT_DISPATCHED_HEADER), null);
   assert.equal(v1ClientRes.headers.get("Retry-After"), "5");
 
-  // Fallback where V1 itself returns a marked 503: client gets V1 503 with auth-pool header and WITHOUT not-dispatched
+  // Un-replayed marked 503 from V2 (e.g. over-cap request) stripped at Worker exit
+  const v2Marked = serviceUnavailable("SERVICE_STARTING", "V2 starting", 5, { notDispatched: true });
+  assert.equal(v2Marked.headers.get(NOT_DISPATCHED_HEADER), "1");
+  const v2ClientRes = stripInternalResponseHeaders(v2Marked);
+  assert.equal(v2ClientRes.status, 503);
+  assert.equal(v2ClientRes.headers.get(NOT_DISPATCHED_HEADER), null);
+
+  // Fallback where V1 itself returns a marked 503: after Worker exit strip, client gets auth-pool header without not-dispatched
   const req = new Request("https://api.accountgo.dev/api/auth/google/start", { method: "GET" });
-  const fallbackRes = await routePublicAuthRequest({
-    request: req,
-    url: new URL(req.url),
-    getV2Stub: () => ({
-      async fetch() {
-        return serviceUnavailable("SERVICE_STARTING", "V2 starting", 5, { notDispatched: true });
-      },
-    }),
-    getV1Stub: () => ({
-      async fetch() {
-        return unavailableResponse(new ContainerUnavailableError("not running", "not-reached"));
-      },
-    }),
-    logWarn: () => {},
-  });
+  const fallbackRes = stripInternalResponseHeaders(
+    await routePublicAuthRequest({
+      request: req,
+      url: new URL(req.url),
+      getV2Stub: () => ({
+        async fetch() {
+          return serviceUnavailable("SERVICE_STARTING", "V2 starting", 5, { notDispatched: true });
+        },
+      }),
+      getV1Stub: () => ({
+        async fetch() {
+          return unavailableResponse(new ContainerUnavailableError("not running", "not-reached"));
+        },
+      }),
+      logWarn: () => {},
+    })
+  );
   assert.equal(fallbackRes.status, 503);
   assert.equal(fallbackRes.headers.get(AUTH_POOL_HEADER), AUTH_POOL_V1_FALLBACK);
   assert.equal(fallbackRes.headers.get(NOT_DISPATCHED_HEADER), null);
 
-  // Worker outer fetch wraps handleWorkerFetch with stripInternalResponseHeaders so every route strips it
+  // Worker outer fetch wraps handleWorkerFetch with stripInternalResponseHeaders so every route strips it in one place
   const workerSource = fs.readFileSync(path.join(__dirname, "..", "worker.ts"), "utf8");
   assert.ok(
     workerSource.includes("return stripInternalResponseHeaders(await handleWorkerFetch(request, env, ctx));"),
