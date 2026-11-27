@@ -3,6 +3,7 @@
 
 using System.Threading;
 using System.Threading.Tasks;
+using Api.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace Api.Service
@@ -25,6 +26,21 @@ namespace Api.Service
             string? outcome,
             string? userId,
             int? companyId,
+            object? metadata = null);
+
+        /// <summary>
+        /// Adds a security event to the shared <see cref="ApplicationIdentityDbContext"/> without saving
+        /// and returns the staged entity. The event is persisted only by a later <c>SaveChangesAsync</c>
+        /// on that context; the caller must save before returning success and must detach the returned
+        /// entity on a failure path.
+        /// </summary>
+        SecurityAuditEvent StageEvent(
+            string eventType,
+            string? outcome,
+            string? userId,
+            int? companyId,
+            string? ipAddress,
+            string? userAgent,
             object? metadata = null);
     }
 

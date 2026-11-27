@@ -48,7 +48,6 @@ namespace Api.Service
                 companyId,
                 ipAddress,
                 userAgent,
-                _auditContext?.CorrelationId,
                 metadata);
 
         public Task LogEventAsync(
@@ -66,8 +65,21 @@ namespace Api.Service
                 companyId,
                 ip,
                 userAgent,
-                _auditContext?.CorrelationId,
                 metadata);
+        }
+
+        public SecurityAuditEvent StageEvent(
+            string eventType,
+            string? outcome,
+            string? userId,
+            int? companyId,
+            string? ipAddress,
+            string? userAgent,
+            object? metadata = null)
+        {
+            var auditEvent = BuildAndLogEvent(eventType, outcome, userId, companyId, ipAddress, userAgent, metadata);
+            _identityContext.SecurityAuditEvents.Add(auditEvent);
+            return auditEvent;
         }
 
         /// <summary>
@@ -95,21 +107,7 @@ namespace Api.Service
             }
 
             var (ip, userAgent) = RequestOrigin();
-            var auditEvent = new SecurityAuditEvent
-            {
-                EventType = eventType,
-                Outcome = outcome,
-                UserId = userId,
-                CompanyId = companyId,
-                IpAddress = ip,
-                UserAgent = userAgent,
-                CorrelationId = _auditContext?.CorrelationId,
-                MetadataJson = SecurityAuditMetadata.Serialize(metadata),
-                CreatedAt = DateTime.UtcNow
-            };
-            _logger.LogInformation(
-                "[SecurityAudit] eventType={EventType} outcome={Outcome} correlationId={CorrelationId}",
-                eventType, outcome, auditEvent.CorrelationId);
+            var auditEvent = BuildAndLogEvent(eventType, outcome, userId, companyId, ip, userAgent, metadata);
 
             await _identityContext.Database.UseTransactionAsync(transaction.GetDbTransaction(), cancellationToken).ConfigureAwait(false);
             var entry = _identityContext.SecurityAuditEvents.Add(auditEvent);
@@ -134,14 +132,13 @@ namespace Api.Service
             return (ip, string.IsNullOrWhiteSpace(userAgent) ? null : userAgent);
         }
 
-        private async Task PersistAsync(
+        private SecurityAuditEvent BuildAndLogEvent(
             string eventType,
             string? outcome,
             string? userId,
             int? companyId,
             string? ipAddress,
             string? userAgent,
-            string? correlationId,
             object? metadata)
         {
             string? metadataJson = null;
@@ -154,25 +151,41 @@ namespace Api.Service
                 _logger.LogWarning(ex, "Failed to serialize security audit metadata for {EventType}", eventType);
             }
 
+            var correlationId = _auditContext?.CorrelationId;
+
             // Text logs keep only type/outcome/request id — IP, user agent, user id and metadata stay in the DB row.
             _logger.LogInformation(
                 "[SecurityAudit] eventType={EventType} outcome={Outcome} correlationId={CorrelationId}",
                 eventType, outcome, correlationId);
 
+            return new SecurityAuditEvent
+            {
+                EventType = eventType,
+                Outcome = outcome,
+                UserId = userId,
+                CompanyId = companyId,
+                IpAddress = ipAddress,
+                UserAgent = userAgent,
+                CorrelationId = correlationId,
+                MetadataJson = metadataJson,
+                CreatedAt = DateTime.UtcNow
+            };
+        }
+
+        private async Task PersistAsync(
+            string eventType,
+            string? outcome,
+            string? userId,
+            int? companyId,
+            string? ipAddress,
+            string? userAgent,
+            object? metadata)
+        {
+            var auditEvent = BuildAndLogEvent(eventType, outcome, userId, companyId, ipAddress, userAgent, metadata);
+
             try
             {
-                _identityContext.SecurityAuditEvents.Add(new SecurityAuditEvent
-                {
-                    EventType = eventType,
-                    Outcome = outcome,
-                    UserId = userId,
-                    CompanyId = companyId,
-                    IpAddress = ipAddress,
-                    UserAgent = userAgent,
-                    CorrelationId = correlationId,
-                    MetadataJson = metadataJson,
-                    CreatedAt = DateTime.UtcNow
-                });
+                _identityContext.SecurityAuditEvents.Add(auditEvent);
                 await _identityContext.SaveChangesAsync();
             }
             catch (Exception ex)

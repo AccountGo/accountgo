@@ -788,6 +788,9 @@ public sealed class SalesInvoiceCaptureReviewTests : MultiTenancyPhase3TestBase
 
         public Task LogEventAsync(string eventType, string? userId, int? companyId, string? ipAddress, string? userAgent, object? metadata = null) =>
             throw new InvalidOperationException("Simulated audit store outage.");
+
+        public Api.Data.SecurityAuditEvent StageEvent(string eventType, string? outcome, string? userId, int? companyId, string? ipAddress, string? userAgent, object? metadata = null) =>
+            throw new InvalidOperationException("Simulated audit store outage.");
     }
 
     private sealed class CapturingLoggerProvider : ILoggerProvider

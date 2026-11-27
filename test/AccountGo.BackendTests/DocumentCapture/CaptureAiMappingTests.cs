@@ -973,5 +973,18 @@ public sealed class CaptureAiMappingTests : IDisposable
             Events.Add(new AuditEvent(eventType, outcome, companyId, metadata));
             return Task.CompletedTask;
         }
+        public Api.Data.SecurityAuditEvent StageEvent(string eventType, string? outcome, string? userId, int? companyId, string? ipAddress, string? userAgent, object? metadata = null)
+        {
+            Events.Add(new AuditEvent(eventType, outcome, companyId, metadata));
+            return new Api.Data.SecurityAuditEvent
+            {
+                EventType = eventType,
+                Outcome = outcome,
+                UserId = userId,
+                CompanyId = companyId,
+                IpAddress = ipAddress,
+                UserAgent = userAgent
+            };
+        }
     }
 }
