@@ -1,12 +1,15 @@
 import {
   BuildMismatchError,
+  NOT_DISPATCHED_HEADER,
   ServiceUnavailableCode,
   StartupInterruptedError,
   errorText,
+  isNotDispatchedUnavailable,
   isStartupTransient,
   isTransientContainerError,
   serviceUnavailable,
   startupCode,
+  stripInternalResponseHeaders,
 } from "./container-errors";
 
 export function sleep(ms: number): Promise<void> {
@@ -30,11 +33,14 @@ export {
 
 export {
   BuildMismatchError,
+  NOT_DISPATCHED_HEADER,
   ServiceUnavailableCode,
   StartupInterruptedError,
   errorText,
+  isNotDispatchedUnavailable,
   isStartupTransient,
   isTransientContainerError,
   serviceUnavailable,
   startupCode,
+  stripInternalResponseHeaders,
 };

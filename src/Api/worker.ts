@@ -25,6 +25,7 @@ import {
   serviceUnavailable,
   sleep,
   startupCode,
+  stripInternalResponseHeaders,
 } from "./container-shared";
 import { shouldSkipPortsReady, type ReadyTiming } from "./ports-ready";
 import {
@@ -44,6 +45,7 @@ import {
   type ContainerHost,
 } from "./container-proxy";
 import { constantTimeEqual } from "./constant-time";
+import { routePublicAuthRequest } from "./auth-pool-fallback";
 import { RuntimeFlags, TIERED_CAPACITY_FLAG_KEY, AUTH_CAPACITY_FLAG_KEY } from "./runtime-flags";
 import {
   isServerTimingEnabled,
@@ -505,209 +507,216 @@ async function verifyTurnstile(
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const url = new URL(request.url);
+    return stripInternalResponseHeaders(await handleWorkerFetch(request, env, ctx));
+  },
+};
 
-    if (url.pathname === "/healthz" || url.pathname === "/readyz") {
+async function handleWorkerFetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const url = new URL(request.url);
+
+  if (url.pathname === "/healthz" || url.pathname === "/readyz") {
+    return new Response(
+      JSON.stringify({ status: "healthy", runtime: "cloudflare-container-dotnet10" }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }
+
+  const expectedAction = turnstileActionForRoute(url.pathname, request.method);
+
+  if (expectedAction) {
+    let bodyText = "";
+    let token: string | null = request.headers.get("cf-turnstile-response");
+
+    try {
+      bodyText = await request.text();
+      if (bodyText) {
+        const parsed = JSON.parse(bodyText);
+        if (parsed && typeof parsed["cf-turnstile-response"] === "string") {
+          token = parsed["cf-turnstile-response"];
+        }
+      }
+    } catch {
+      // Fall back to header
+    }
+
+    const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for");
+    const isValid = await verifyTurnstile(
+      token,
+      expectedAction,
+      env.TURNSTILE_SECRET,
+      env.TURNSTILE_HOSTNAMES,
+      clientIp
+    );
+
+    if (!isValid) {
       return new Response(
-        JSON.stringify({ status: "healthy", runtime: "cloudflare-container-dotnet10" }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }
+        JSON.stringify({
+          title: "Forbidden",
+          status: 403,
+          detail: "Turnstile verification failed",
+        }),
+        { status: 403, headers: { "content-type": "application/problem+json" } }
       );
     }
 
-    const expectedAction = turnstileActionForRoute(url.pathname, request.method);
+    request = new Request(request.url, {
+      method: request.method,
+      headers: request.headers,
+      body: bodyText,
+    });
+  }
 
-    if (expectedAction) {
-      let bodyText = "";
-      let token: string | null = request.headers.get("cf-turnstile-response");
+  const isAdminRequest =
+    url.pathname === "/restart-container" || request.headers.get("x-restart-container") === "true";
 
-      try {
-        bodyText = await request.text();
-        if (bodyText) {
-          const parsed = JSON.parse(bodyText);
-          if (parsed && typeof parsed["cf-turnstile-response"] === "string") {
-            token = parsed["cf-turnstile-response"];
-          }
-        }
-      } catch {
-        // Fall back to header
-      }
+  let containerName: string;
 
-      const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for");
-      const isValid = await verifyTurnstile(
-        token,
-        expectedAction,
-        env.TURNSTILE_SECRET,
-        env.TURNSTILE_HOSTNAMES,
-        clientIp
+  if (isAdminRequest) {
+    const secret = env.SECRET_KEY || env.SECRET__key;
+    const providedKey = request.headers.get("x-internal-key");
+    if (!secret || !providedKey || !constantTimeEqual(secret, providedKey)) {
+      return new Response(
+        JSON.stringify({
+          title: "Not Found",
+          status: 404,
+          detail: "Not Found",
+        }),
+        { status: 404, headers: { "content-type": "application/problem+json" } }
       );
-
-      if (!isValid) {
-        return new Response(
-          JSON.stringify({
-            title: "Forbidden",
-            status: 403,
-            detail: "Turnstile verification failed",
-          }),
-          { status: 403, headers: { "content-type": "application/problem+json" } }
-        );
-      }
-
-      request = new Request(request.url, {
-        method: request.method,
-        headers: request.headers,
-        body: bodyText,
-      });
     }
 
-    const isAdminRequest =
-      url.pathname === "/restart-container" || request.headers.get("x-restart-container") === "true";
+    const versionId = env.CF_VERSION_METADATA?.id || "dev";
+    const defaultName = resolveWriterContainerName(versionId);
+    containerName = request.headers.get("x-container-name") || defaultName;
+  } else {
+    const versionId = env.CF_VERSION_METADATA?.id || "dev";
+    containerName = resolveWriterContainerName(versionId);
 
-    let containerName: string;
+    const isDev =
+      !env.CF_VERSION_METADATA?.id ||
+      env.CF_VERSION_METADATA.id === "dev" ||
+      env.ENVIRONMENT !== "Production";
+    if (!loggedContainerName && isDev) {
+      loggedContainerName = true;
+      console.warn(`[worker] Routing public request to container: ${containerName}`);
+    }
+  }
 
-    if (isAdminRequest) {
-      const secret = env.SECRET_KEY || env.SECRET__key;
-      const providedKey = request.headers.get("x-internal-key");
-      if (!secret || !providedKey || !constantTimeEqual(secret, providedKey)) {
-        return new Response(
-          JSON.stringify({
-            title: "Not Found",
-            status: 404,
-            detail: "Not Found",
-          }),
-          { status: 404, headers: { "content-type": "application/problem+json" } }
+  // Route document capture uploads to the V2 paid pool when DOCUMENT_CAPTURE_EXTRACTION_POOL=paid
+  // (applies whether or not tiered capacity is enabled). Other capture routes stay on their current route.
+  const captureExtractionPool = parseDocumentCaptureExtractionPool(env.DOCUMENT_CAPTURE_EXTRACTION_POOL);
+  if (!isAdminRequest && captureExtractionPool === "paid") {
+    const method = request.method.toUpperCase();
+    if (method === "POST" && isDocumentCaptureUploadRoute(url.pathname)) {
+      const binding = env.CONTAINER_V2;
+      if (!binding) {
+        console.error(
+          "[worker] DOCUMENT_CAPTURE_EXTRACTION_POOL=paid but CONTAINER_V2 binding is missing"
+        );
+        return serviceUnavailable(
+          "SERVICE_MISCONFIGURED",
+          "Document capture extraction pool is misconfigured",
+          30
         );
       }
-
-      const versionId = env.CF_VERSION_METADATA?.id || "dev";
-      const defaultName = resolveWriterContainerName(versionId);
-      containerName = request.headers.get("x-container-name") || defaultName;
-    } else {
-      const versionId = env.CF_VERSION_METADATA?.id || "dev";
-      containerName = resolveWriterContainerName(versionId);
-
-      const isDev =
-        !env.CF_VERSION_METADATA?.id ||
-        env.CF_VERSION_METADATA.id === "dev" ||
-        env.ENVIRONMENT !== "Production";
-      if (!loggedContainerName && isDev) {
-        loggedContainerName = true;
-        console.warn(`[worker] Routing public request to container: ${containerName}`);
-      }
-    }
-
-    // Route document capture uploads to the V2 paid pool when DOCUMENT_CAPTURE_EXTRACTION_POOL=paid
-    // (applies whether or not tiered capacity is enabled). Other capture routes stay on their current route.
-    const captureExtractionPool = parseDocumentCaptureExtractionPool(env.DOCUMENT_CAPTURE_EXTRACTION_POOL);
-    if (!isAdminRequest && captureExtractionPool === "paid") {
-      const method = request.method.toUpperCase();
-      if (method === "POST" && isDocumentCaptureUploadRoute(url.pathname)) {
-        const binding = env.CONTAINER_V2;
-        if (!binding) {
-          console.error(
-            "[worker] DOCUMENT_CAPTURE_EXTRACTION_POOL=paid but CONTAINER_V2 binding is missing"
-          );
-          return serviceUnavailable(
-            "SERVICE_MISCONFIGURED",
-            "Document capture extraction pool is misconfigured",
-            30
-          );
-        }
-        const headers = new Headers(request.headers);
-        headers.set(CAPACITY_POOL_HEADER, "paid");
-        const versionId = env.CF_VERSION_METADATA?.id || "dev";
-        const name = resolvePoolContainerName("paid", versionId);
-        const stub = binding.get(binding.idFromName(name), { locationHint: "enam" });
-        return stub.fetch(new Request(request, { headers }));
-      }
-
-      // Opt-in non-blocking warm-up of the V2 paid pool when a scan panel opens (?warmup=1), throttled to 1/60s per isolate.
-      if (
-        isDocumentCaptureWarmupRequest(url.pathname, method, url.search) &&
-        env.CONTAINER_V2 &&
-        captureWarmupThrottle.shouldRun()
-      ) {
-        const versionId = env.CF_VERSION_METADATA?.id || "dev";
-        const name = resolvePoolContainerName("paid", versionId);
-        const stub = env.CONTAINER_V2.get(env.CONTAINER_V2.idFromName(name), { locationHint: "enam" });
-        const warmupUrl = new URL("/health", url.origin);
-        const warmupRequest = new Request(warmupUrl.toString(), {
-          method: "GET",
-          headers: { [CAPACITY_POOL_HEADER]: "paid" },
-        });
-        ctx.waitUntil(
-          stub.fetch(warmupRequest).then(
-            (res) => res.body?.cancel(),
-            (err) => console.warn(`[worker] capture pool warm-up failed: ${errorText(err)}`)
-          )
-        );
-      }
-    }
-
-    // Only pre-workspace authentication uses this independent V2 switch; workspace routing is unchanged.
-    if (!isAdminRequest && isPublicAuthRequest(url.pathname) && env.CONTAINER_V2 &&
-        await runtimeFlags.isEnabled(env.FLAGS, AUTH_CAPACITY_FLAG_KEY, isTieredCapacityEnabled(env.AUTH_CAPACITY_ENABLED))) {
       const headers = new Headers(request.headers);
       headers.set(CAPACITY_POOL_HEADER, "paid");
       const versionId = env.CF_VERSION_METADATA?.id || "dev";
       const name = resolvePoolContainerName("paid", versionId);
-      const stub = env.CONTAINER_V2.get(env.CONTAINER_V2.idFromName(name), { locationHint: "enam" });
+      const stub = binding.get(binding.idFromName(name), { locationHint: "enam" });
       return stub.fetch(new Request(request, { headers }));
     }
 
-    // The FLAGS KV value (runtime switch, no deploy) wins over the deployed TIERED_CAPACITY_ENABLED var.
-    const useV2 = await runtimeFlags.isEnabled(
-      env.FLAGS,
-      TIERED_CAPACITY_FLAG_KEY,
-      isTieredCapacityEnabled(env.TIERED_CAPACITY_ENABLED)
-    );
-    if (useV2) {
-      // Pool by workspace plan: paid workspaces get a V2 container on CONTAINER_INSTANCE_TYPE_PAID. Free
-      // workspaces, slugs the router has not learnt yet and requests without a workspace (sign-in, refresh,
-      // workspace list) stay on V1. Both are "lite", but a durable_object-scheduled lite container gets the
-      // documented 256 MiB (.NET heap limit 154 MB) while V1's gets far more (459 MB): the app needs 316-421 MiB,
-      // so on V2 lite a signed-in refresh pushes it into continuous GC and the whole process stalls (2026-10-31).
-      const slug = request.headers.get(WORKSPACE_HEADER);
-      const pool = isAdminRequest
-        ? parseCapacityPool(request.headers.get(CAPACITY_POOL_HEADER)) ?? "free"
-        : capacityRouter.poolFor(slug);
-      if (pool === "free") {
-        const v1 = env.CONTAINER.get(env.CONTAINER.idFromName(containerName), { locationHint: "enam" });
-        const response = await v1.fetch(request);
-        const hint = parseCapacityPool(response.headers.get(CAPACITY_HINT_HEADER));
-        if (hint) capacityRouter.remember(slug, hint);
-        return response;
-      }
-      const binding = env.CONTAINER_V2;
-      if (!binding) {
-        console.error(
-          "[worker] TIERED_CAPACITY_ENABLED=true but CONTAINER_V2 binding is missing"
-        );
-        return serviceUnavailable(
-          "SERVICE_MISCONFIGURED",
-          "Tiered capacity is misconfigured",
-          30
-        );
-      }
+    // Opt-in non-blocking warm-up of the V2 paid pool when a scan panel opens (?warmup=1), throttled to 1/60s per isolate.
+    if (
+      isDocumentCaptureWarmupRequest(url.pathname, method, url.search) &&
+      env.CONTAINER_V2 &&
+      captureWarmupThrottle.shouldRun()
+    ) {
       const versionId = env.CF_VERSION_METADATA?.id || "dev";
-      const poolContainerName =
-        isAdminRequest && request.headers.get("x-container-name")
-          ? containerName
-          : resolvePoolContainerName(pool, versionId);
-      const headers = new Headers(request.headers);
-      headers.set(CAPACITY_POOL_HEADER, pool);
-      const stub = binding.get(binding.idFromName(poolContainerName), { locationHint: "enam" });
-      const response = await stub.fetch(new Request(request, { headers }));
+      const name = resolvePoolContainerName("paid", versionId);
+      const stub = env.CONTAINER_V2.get(env.CONTAINER_V2.idFromName(name), { locationHint: "enam" });
+      const warmupUrl = new URL("/health", url.origin);
+      const warmupRequest = new Request(warmupUrl.toString(), {
+        method: "GET",
+        headers: { [CAPACITY_POOL_HEADER]: "paid" },
+      });
+      ctx.waitUntil(
+        stub.fetch(warmupRequest).then(
+          (res) => res.body?.cancel(),
+          (err) => console.warn(`[worker] capture pool warm-up failed: ${errorText(err)}`)
+        )
+      );
+    }
+  }
+
+  // Only pre-workspace authentication uses this independent V2 switch; workspace routing is unchanged.
+  if (!isAdminRequest && isPublicAuthRequest(url.pathname) && env.CONTAINER_V2 &&
+      await runtimeFlags.isEnabled(env.FLAGS, AUTH_CAPACITY_FLAG_KEY, isTieredCapacityEnabled(env.AUTH_CAPACITY_ENABLED))) {
+    const versionId = env.CF_VERSION_METADATA?.id || "dev";
+    const v2Name = resolvePoolContainerName("paid", versionId);
+    const containerV2 = env.CONTAINER_V2;
+    return routePublicAuthRequest({
+      request,
+      url,
+      getV2Stub: () => containerV2.get(containerV2.idFromName(v2Name), { locationHint: "enam" }),
+      getV1Stub: () => env.CONTAINER.get(env.CONTAINER.idFromName(containerName), { locationHint: "enam" }),
+    });
+  }
+
+  // The FLAGS KV value (runtime switch, no deploy) wins over the deployed TIERED_CAPACITY_ENABLED var.
+  const useV2 = await runtimeFlags.isEnabled(
+    env.FLAGS,
+    TIERED_CAPACITY_FLAG_KEY,
+    isTieredCapacityEnabled(env.TIERED_CAPACITY_ENABLED)
+  );
+  if (useV2) {
+    // Pool by workspace plan: paid workspaces get a V2 container on CONTAINER_INSTANCE_TYPE_PAID. Free
+    // workspaces, slugs the router has not learnt yet and requests without a workspace (sign-in, refresh,
+    // workspace list) stay on V1. Both are "lite", but a durable_object-scheduled lite container gets the
+    // documented 256 MiB (.NET heap limit 154 MB) while V1's gets far more (459 MB): the app needs 316-421 MiB,
+    // so on V2 lite a signed-in refresh pushes it into continuous GC and the whole process stalls (2026-10-31).
+    const slug = request.headers.get(WORKSPACE_HEADER);
+    const pool = isAdminRequest
+      ? parseCapacityPool(request.headers.get(CAPACITY_POOL_HEADER)) ?? "free"
+      : capacityRouter.poolFor(slug);
+    if (pool === "free") {
+      const v1 = env.CONTAINER.get(env.CONTAINER.idFromName(containerName), { locationHint: "enam" });
+      const response = await v1.fetch(request);
       const hint = parseCapacityPool(response.headers.get(CAPACITY_HINT_HEADER));
       if (hint) capacityRouter.remember(slug, hint);
       return response;
     }
+    const binding = env.CONTAINER_V2;
+    if (!binding) {
+      console.error(
+        "[worker] TIERED_CAPACITY_ENABLED=true but CONTAINER_V2 binding is missing"
+      );
+      return serviceUnavailable(
+        "SERVICE_MISCONFIGURED",
+        "Tiered capacity is misconfigured",
+        30
+      );
+    }
+    const versionId = env.CF_VERSION_METADATA?.id || "dev";
+    const poolContainerName =
+      isAdminRequest && request.headers.get("x-container-name")
+        ? containerName
+        : resolvePoolContainerName(pool, versionId);
+    const headers = new Headers(request.headers);
+    headers.set(CAPACITY_POOL_HEADER, pool);
+    const stub = binding.get(binding.idFromName(poolContainerName), { locationHint: "enam" });
+    const response = await stub.fetch(new Request(request, { headers }));
+    const hint = parseCapacityPool(response.headers.get(CAPACITY_HINT_HEADER));
+    if (hint) capacityRouter.remember(slug, hint);
+    return response;
+  }
 
-    const id = env.CONTAINER.idFromName(containerName);
-    // Prefer US placement for new Durable Objects (existing DO names keep their original region).
-    const stub = env.CONTAINER.get(id, { locationHint: "enam" });
-    return stub.fetch(request);
-  },
-};
+  const id = env.CONTAINER.idFromName(containerName);
+  // Prefer US placement for new Durable Objects (existing DO names keep their original region).
+  const stub = env.CONTAINER.get(id, { locationHint: "enam" });
+  return stub.fetch(request);
+}
