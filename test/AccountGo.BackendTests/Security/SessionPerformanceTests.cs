@@ -403,6 +403,8 @@ public sealed class SessionPerformanceTests : IDisposable
             var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
             var expectedIssuer = config["JwtSettings:validIssuer"];
             var expectedAudience = config["JwtSettings:validAudience"];
+            Assert.False(string.IsNullOrEmpty(expectedIssuer));
+            Assert.False(string.IsNullOrEmpty(expectedAudience));
 
             var expectedClaims = new List<(string Type, string Value)>
             {
@@ -411,12 +413,10 @@ public sealed class SessionPerformanceTests : IDisposable
                 (ClaimTypes.Email, user.Email!),
                 ("purpose", "access"),
                 ("amr", "otp mfa totp"),
-                ("mfa", "true")
+                ("mfa", "true"),
+                (JwtRegisteredClaimNames.Iss, expectedIssuer!),
+                (JwtRegisteredClaimNames.Aud, expectedAudience!)
             };
-            if (!string.IsNullOrEmpty(expectedIssuer))
-                expectedClaims.Add((JwtRegisteredClaimNames.Iss, expectedIssuer));
-            if (!string.IsNullOrEmpty(expectedAudience))
-                expectedClaims.Add((JwtRegisteredClaimNames.Aud, expectedAudience));
             expectedClaims.AddRange(expectedRoles.Select(r => (ClaimTypes.Role, r)));
             expectedClaims = expectedClaims
                 .OrderBy(c => c.Type, StringComparer.Ordinal)
