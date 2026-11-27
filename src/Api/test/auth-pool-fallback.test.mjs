@@ -7,20 +7,20 @@ import {
   AUTH_POOL_HEADER,
   AUTH_POOL_V1_FALLBACK,
   MAX_AUTH_FALLBACK_BODY_BYTES,
-  isAuthWarmupTriggerRequest,
   routePublicAuthRequest,
 } from "../auth-pool-fallback.ts";
-import { CAPACITY_POOL_HEADER, WarmupThrottle } from "../container-capacity.ts";
+import { CAPACITY_POOL_HEADER } from "../container-capacity.ts";
 import {
   NOT_DISPATCHED_HEADER,
   isNotDispatchedUnavailable,
   serviceUnavailable,
+  stripInternalResponseHeaders,
 } from "../container-errors.ts";
 import { ContainerUnavailableError, unavailableResponse } from "../container-proxy.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-test("flag on + V2 pre-dispatch 503 replays once on V1 with identical method, body, and headers minus pool header", async () => {
+test("V2 pre-dispatch 503 replays once on V1 with identical method, body, and headers minus pool header", async () => {
   const v2Calls = [];
   const v1Calls = [];
   const logs = [];
@@ -38,7 +38,6 @@ test("flag on + V2 pre-dispatch 503 replays once on V1 with identical method, bo
   const res = await routePublicAuthRequest({
     request: req,
     url: new URL(req.url),
-    v2Enabled: true,
     getV2Stub: () => ({
       async fetch(r) {
         v2Calls.push({
@@ -65,8 +64,6 @@ test("flag on + V2 pre-dispatch 503 replays once on V1 with identical method, bo
         });
       },
     }),
-    waitUntil: () => {},
-    warmupThrottle: new WarmupThrottle(60_000),
     logWarn: (msg) => logs.push(msg),
   });
 
@@ -84,6 +81,7 @@ test("flag on + V2 pre-dispatch 503 replays once on V1 with identical method, bo
 
   assert.equal(res.status, 200);
   assert.equal(res.headers.get(AUTH_POOL_HEADER), AUTH_POOL_V1_FALLBACK);
+  assert.equal(res.headers.get(NOT_DISPATCHED_HEADER), null);
   assert.deepEqual(await res.json(), { accessToken: "v1-ok" });
 
   assert.equal(logs.length, 1);
@@ -133,7 +131,6 @@ test("V2 kind-2 503, SERVICE_MISCONFIGURED, app 503, 500, and 401 are returned a
     const res = await routePublicAuthRequest({
       request: req,
       url: new URL(req.url),
-      v2Enabled: true,
       getV2Stub: () => ({ async fetch() { return tc.response(); } }),
       getV1Stub: () => ({
         async fetch() {
@@ -141,14 +138,13 @@ test("V2 kind-2 503, SERVICE_MISCONFIGURED, app 503, 500, and 401 are returned a
           return new Response("should not happen", { status: 200 });
         },
       }),
-      waitUntil: () => {},
-      warmupThrottle: new WarmupThrottle(60_000),
       logWarn: () => {},
     });
 
     assert.equal(v1Called, 0, `${tc.name}: V1 must not be called`);
     assert.equal(res.status, tc.expectedStatus, tc.name);
     assert.equal(res.headers.get(AUTH_POOL_HEADER), null, tc.name);
+    assert.equal(res.headers.get(NOT_DISPATCHED_HEADER), null, tc.name);
   }
 });
 
@@ -163,7 +159,6 @@ test("V2 stub.fetch throwing returns 503 SERVICE_INTERRUPTED without replaying o
   const res = await routePublicAuthRequest({
     request: req,
     url: new URL(req.url),
-    v2Enabled: true,
     getV2Stub: () => ({
       async fetch() {
         throw new Error("Durable Object network connection lost");
@@ -175,8 +170,6 @@ test("V2 stub.fetch throwing returns 503 SERVICE_INTERRUPTED without replaying o
         return new Response("ok", { status: 200 });
       },
     }),
-    waitUntil: () => {},
-    warmupThrottle: new WarmupThrottle(60_000),
     logWarn: (m) => logs.push(m),
   });
 
@@ -189,7 +182,7 @@ test("V2 stub.fetch throwing returns 503 SERVICE_INTERRUPTED without replaying o
   assert.ok(logs[0].includes("path=/api/auth/mfa/webauthn/assertion/complete"));
 });
 
-test("body over the 64 KiB cap skips fallback (both declared Content-Length and chunked stream)", async () => {
+test("body over the 64 KiB cap skips fallback and strips x-accountgo-not-dispatched (both Content-Length and chunked)", async () => {
   const oversized = "x".repeat(MAX_AUTH_FALLBACK_BODY_BYTES + 1);
 
   // Case 1: declared Content-Length over cap
@@ -208,7 +201,6 @@ test("body over the 64 KiB cap skips fallback (both declared Content-Length and 
     const res = await routePublicAuthRequest({
       request: req,
       url: new URL(req.url),
-      v2Enabled: true,
       getV2Stub: () => ({
         async fetch(r) {
           v2BodyLen = (await r.text()).length;
@@ -221,14 +213,13 @@ test("body over the 64 KiB cap skips fallback (both declared Content-Length and 
           return new Response("v1", { status: 200 });
         },
       }),
-      waitUntil: () => {},
-      warmupThrottle: new WarmupThrottle(60_000),
       logWarn: () => {},
     });
 
     assert.equal(v2BodyLen, oversized.length);
     assert.equal(v1Called, 0);
     assert.equal(res.status, 503);
+    assert.equal(res.headers.get(NOT_DISPATCHED_HEADER), null);
   }
 
   // Case 2: streamed body without Content-Length over cap
@@ -253,7 +244,6 @@ test("body over the 64 KiB cap skips fallback (both declared Content-Length and 
     const res = await routePublicAuthRequest({
       request: req,
       url: new URL(req.url),
-      v2Enabled: true,
       getV2Stub: () => ({
         async fetch(r) {
           v2BodyLen = (await r.arrayBuffer()).byteLength;
@@ -266,119 +256,52 @@ test("body over the 64 KiB cap skips fallback (both declared Content-Length and 
           return new Response("v1", { status: 200 });
         },
       }),
-      waitUntil: () => {},
-      warmupThrottle: new WarmupThrottle(60_000),
       logWarn: () => {},
     });
 
     assert.equal(v2BodyLen, chunkA.byteLength + chunkB.byteLength);
     assert.equal(v1Called, 0);
     assert.equal(res.status, 503);
+    assert.equal(res.headers.get(NOT_DISPATCHED_HEADER), null);
   }
 });
 
-test("warm-up fires once per throttle window on send-otp and google/start with flag on, never with flag off, and failures do not affect response", async () => {
-  assert.equal(isAuthWarmupTriggerRequest("/api/auth/send-otp"), true);
-  assert.equal(isAuthWarmupTriggerRequest("/API/Auth/Google/Start/"), true);
-  assert.equal(isAuthWarmupTriggerRequest("/api/auth/verify-otp"), false);
-  assert.equal(isAuthWarmupTriggerRequest("/api/auth/refresh"), false);
+test("internal x-accountgo-not-dispatched header is stripped from V1 marked 503s and un-replayed V2 marked 503s before reaching the client", async () => {
+  // Marked 503 from V1 (e.g. V1 unavailableResponse on a non-auth route, or V1 fallback itself returning a marked 503)
+  const v1Marked = unavailableResponse(new ContainerUnavailableError("not running", "not-reached"));
+  assert.equal(v1Marked.headers.get(NOT_DISPATCHED_HEADER), "1");
+  const v1ClientRes = stripInternalResponseHeaders(v1Marked);
+  assert.equal(v1ClientRes.status, 503);
+  assert.equal(v1ClientRes.headers.get(NOT_DISPATCHED_HEADER), null);
+  assert.equal(v1ClientRes.headers.get("Retry-After"), "5");
 
-  let now = 10_000;
-  const throttle = new WarmupThrottle(60_000, () => now);
-  const warmupCalls = [];
-  const pending = [];
-  const logs = [];
-
-  const send = (pathname, v2Enabled, failWarmup = false) => {
-    const req = new Request(`https://api.accountgo.dev${pathname}`, {
-      method: pathname.includes("send-otp") ? "POST" : "GET",
-      body: pathname.includes("send-otp") ? JSON.stringify({ email: "a@b.com" }) : undefined,
-    });
-    return routePublicAuthRequest({
-      request: req,
-      url: new URL(req.url),
-      v2Enabled,
-      getV2Stub: () => ({
-        async fetch(r) {
-          if (new URL(r.url).pathname === "/health") {
-            warmupCalls.push({ url: r.url, pool: r.headers.get(CAPACITY_POOL_HEADER) });
-            if (failWarmup) throw new Error("warmup boom");
-            return new Response("ok", { status: 200 });
-          }
-          return new Response("v2-ok", { status: 200 });
-        },
-      }),
-      getV1Stub: () => ({
-        async fetch() {
-          return new Response("v1-ok", { status: 200 });
-        },
-      }),
-      waitUntil: (p) => pending.push(p),
-      warmupThrottle: throttle,
-      logWarn: (m) => logs.push(m),
-    });
-  };
-
-  // Flag off: never warms up, routes straight to V1
-  const offRes = await send("/api/auth/send-otp", false);
-  assert.equal(await offRes.text(), "v1-ok");
-  assert.equal(warmupCalls.length, 0);
-
-  // Flag on, send-otp: fires 1 warm-up
-  const onRes1 = await send("/api/auth/send-otp", true);
-  assert.equal(await onRes1.text(), "v2-ok");
-  await Promise.all(pending);
-  assert.equal(warmupCalls.length, 1);
-  assert.equal(warmupCalls[0].url, "https://api.accountgo.dev/health");
-  assert.equal(warmupCalls[0].pool, "paid");
-
-  // Within 60s window: google/start does NOT fire another warm-up
-  now += 30_000;
-  const onRes2 = await send("/api/auth/google/start", true);
-  assert.equal(await onRes2.text(), "v2-ok");
-  assert.equal(warmupCalls.length, 1);
-
-  // After 60s window: google/start fires warm-up; a failing warm-up does not fail the request
-  now += 30_000;
-  const onRes3 = await send("/api/auth/google/start", true, true);
-  assert.equal(onRes3.status, 200);
-  assert.equal(await onRes3.text(), "v2-ok");
-  await Promise.all(pending);
-  assert.equal(warmupCalls.length, 2);
-  assert.ok(logs.some((l) => l.includes("auth pool warm-up failed")));
-});
-
-test("flag off routes directly to V1 and never touches V2", async () => {
-  let v2Called = 0;
-  let v1Called = 0;
-  const req = new Request("https://api.accountgo.dev/api/auth/google", {
-    method: "POST",
-    body: JSON.stringify({ code: "abc" }),
-  });
-
-  const res = await routePublicAuthRequest({
+  // Fallback where V1 itself returns a marked 503: client gets V1 503 with auth-pool header and WITHOUT not-dispatched
+  const req = new Request("https://api.accountgo.dev/api/auth/google/start", { method: "GET" });
+  const fallbackRes = await routePublicAuthRequest({
     request: req,
     url: new URL(req.url),
-    v2Enabled: false,
-    getV2Stub: () => {
-      v2Called++;
-      return { async fetch() { return new Response("v2", { status: 200 }); } };
-    },
-    getV1Stub: () => ({
+    getV2Stub: () => ({
       async fetch() {
-        v1Called++;
-        return new Response("v1-direct", { status: 200 });
+        return serviceUnavailable("SERVICE_STARTING", "V2 starting", 5, { notDispatched: true });
       },
     }),
-    waitUntil: () => {},
-    warmupThrottle: new WarmupThrottle(60_000),
+    getV1Stub: () => ({
+      async fetch() {
+        return unavailableResponse(new ContainerUnavailableError("not running", "not-reached"));
+      },
+    }),
+    logWarn: () => {},
   });
+  assert.equal(fallbackRes.status, 503);
+  assert.equal(fallbackRes.headers.get(AUTH_POOL_HEADER), AUTH_POOL_V1_FALLBACK);
+  assert.equal(fallbackRes.headers.get(NOT_DISPATCHED_HEADER), null);
 
-  assert.equal(v2Called, 0);
-  assert.equal(v1Called, 1);
-  assert.equal(res.status, 200);
-  assert.equal(res.headers.get(AUTH_POOL_HEADER), null);
-  assert.equal(await res.text(), "v1-direct");
+  // Worker outer fetch wraps handleWorkerFetch with stripInternalResponseHeaders so every route strips it
+  const workerSource = fs.readFileSync(path.join(__dirname, "..", "worker.ts"), "utf8");
+  assert.ok(
+    workerSource.includes("return stripInternalResponseHeaders(await handleWorkerFetch(request, env, ctx));"),
+    "expected worker.ts fetch() to strip internal headers at its single exit point"
+  );
 });
 
 test("not-dispatched header is set only on pre-dispatch 503 helpers and never on SERVICE_MISCONFIGURED or post-dispatch paths", () => {

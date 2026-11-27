@@ -131,6 +131,20 @@ export function isNotDispatchedUnavailable(res: Response): boolean {
   return res.status === 503 && res.headers.get(NOT_DISPATCHED_HEADER) === "1";
 }
 
+/** Strips internal Worker/DO signalling headers before a response leaves the Worker. */
+export function stripInternalResponseHeaders(res: Response): Response {
+  if (res.status === 101 || !res.headers.has(NOT_DISPATCHED_HEADER)) {
+    return res;
+  }
+  const headers = new Headers(res.headers);
+  headers.delete(NOT_DISPATCHED_HEADER);
+  return new Response(res.body, {
+    status: res.status,
+    statusText: res.statusText,
+    headers,
+  });
+}
+
 export function serviceUnavailable(
   code: ServiceUnavailableCode,
   detail: string,

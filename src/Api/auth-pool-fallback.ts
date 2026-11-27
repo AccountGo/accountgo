@@ -1,14 +1,12 @@
 // Copyright (c) 2015-2026 Marvin Perez and AccountGo contributors.
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import {
-  CAPACITY_POOL_HEADER,
-  type WarmupThrottle,
-} from "./container-capacity.ts";
+import { CAPACITY_POOL_HEADER } from "./container-capacity.ts";
 import {
   errorText,
   isNotDispatchedUnavailable,
   serviceUnavailable,
+  stripInternalResponseHeaders,
 } from "./container-errors.ts";
 import { scrubPathForLog } from "./server-timing.ts";
 
@@ -19,16 +17,6 @@ export const AUTH_POOL_V1_FALLBACK = "v1-fallback";
 /** Maximum request body buffered for V2 → V1 auth fallback (64 KiB). Larger bodies skip fallback. */
 export const MAX_AUTH_FALLBACK_BODY_BYTES = 64 * 1024;
 
-const AUTH_WARMUP_TRIGGER_PATHS = new Set([
-  "/api/auth/send-otp",
-  "/api/auth/google/start",
-]);
-
-export function isAuthWarmupTriggerRequest(path: string): boolean {
-  const normalized = path.split(/[?#]/)[0].replace(/\/+/g, "/").replace(/\/+$/, "").toLowerCase();
-  return AUTH_WARMUP_TRIGGER_PATHS.has(normalized);
-}
-
 export interface FetchStub {
   fetch(request: Request): Promise<Response>;
 }
@@ -36,11 +24,8 @@ export interface FetchStub {
 export interface RoutePublicAuthOptions {
   request: Request;
   url: URL;
-  v2Enabled: boolean;
   getV2Stub: () => FetchStub;
   getV1Stub: () => FetchStub;
-  waitUntil: (promise: Promise<unknown>) => void;
-  warmupThrottle: WarmupThrottle;
   maxFallbackBodyBytes?: number;
   logWarn?: (message: string) => void;
 }
@@ -123,69 +108,33 @@ async function readUnavailableCode(res: Response): Promise<string> {
 }
 
 function withFallbackHeader(res: Response): Response {
-  if (res.status === 101) return res;
-  const headers = new Headers(res.headers);
+  const clean = stripInternalResponseHeaders(res);
+  if (clean.status === 101) return clean;
+  const headers = new Headers(clean.headers);
   headers.set(AUTH_POOL_HEADER, AUTH_POOL_V1_FALLBACK);
-  return new Response(res.body, {
-    status: res.status,
-    statusText: res.statusText,
+  return new Response(clean.body, {
+    status: clean.status,
+    statusText: clean.statusText,
     headers,
   });
 }
 
-function triggerAuthWarmup(
-  url: URL,
-  v2Stub: FetchStub,
-  waitUntil: (promise: Promise<unknown>) => void,
-  warmupThrottle: WarmupThrottle,
-  logWarn: (message: string) => void
-): void {
-  if (!isAuthWarmupTriggerRequest(url.pathname) || !warmupThrottle.shouldRun()) {
-    return;
-  }
-  const warmupUrl = new URL("/health", url.origin);
-  const warmupRequest = new Request(warmupUrl.toString(), {
-    method: "GET",
-    headers: { [CAPACITY_POOL_HEADER]: "paid" },
-  });
-  try {
-    const promise = Promise.resolve(v2Stub.fetch(warmupRequest)).then(
-      (res) => res.body?.cancel(),
-      (err) => logWarn(`[worker] auth pool warm-up failed: ${errorText(err)}`)
-    );
-    waitUntil(promise);
-  } catch (err) {
-    logWarn(`[worker] auth pool warm-up failed: ${errorText(err)}`);
-  }
-}
-
 /**
- * Routes a public pre-workspace auth request.
- * - When `v2Enabled` is false: sends directly to V1 (existing routing unchanged).
- * - When `v2Enabled` is true: sends to the V2 paid pool, firing a non-blocking throttled warm-up
- *   on `/api/auth/send-otp` and `/api/auth/google/start`. Replays once on V1 ONLY when V2 returns
- *   a 503 carrying `x-accountgo-not-dispatched: 1` and the body fit within the fallback cap.
+ * Routes a public pre-workspace auth request to the V2 paid pool when `auth_capacity` is enabled.
+ * Replays once on V1 ONLY when V2 returns a 503 carrying `x-accountgo-not-dispatched: 1` and the
+ * request body fit within the fallback cap.
  */
 export async function routePublicAuthRequest(opts: RoutePublicAuthOptions): Promise<Response> {
   const {
     request,
     url,
-    v2Enabled,
     getV2Stub,
     getV1Stub,
-    waitUntil,
-    warmupThrottle,
     maxFallbackBodyBytes = MAX_AUTH_FALLBACK_BODY_BYTES,
     logWarn = (msg) => console.warn(msg),
   } = opts;
 
-  if (!v2Enabled) {
-    return getV1Stub().fetch(request);
-  }
-
   const v2Stub = getV2Stub();
-  triggerAuthWarmup(url, v2Stub, waitUntil, warmupThrottle, logWarn);
-
   const prepared = await prepareBodyForFallback(request, maxFallbackBodyBytes);
   const v2Headers = new Headers(request.headers);
   v2Headers.set(CAPACITY_POOL_HEADER, "paid");
@@ -219,7 +168,7 @@ export async function routePublicAuthRequest(opts: RoutePublicAuthOptions): Prom
   }
 
   if (!prepared.canFallback || !isNotDispatchedUnavailable(v2Res)) {
-    return v2Res;
+    return stripInternalResponseHeaders(v2Res);
   }
 
   const v2Code = await readUnavailableCode(v2Res);

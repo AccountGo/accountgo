@@ -25,6 +25,7 @@ import {
   serviceUnavailable,
   sleep,
   startupCode,
+  stripInternalResponseHeaders,
 } from "./container-shared";
 import { shouldSkipPortsReady, type ReadyTiming } from "./ports-ready";
 import {
@@ -435,8 +436,6 @@ const runtimeFlags = new RuntimeFlags();
 const capacityRouter = new CapacityRouter();
 /** Per-isolate throttle (60 s) for non-blocking paid-pool warm-up pings from capabilities requests. */
 const captureWarmupThrottle = new WarmupThrottle(60_000);
-/** Per-isolate throttle (60 s) for non-blocking paid-pool warm-up pings from auth start requests. */
-const authWarmupThrottle = new WarmupThrottle(60_000);
 let loggedContainerName = false;
 
 interface TurnstileVerifyResponse {
@@ -508,6 +507,11 @@ async function verifyTurnstile(
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    return stripInternalResponseHeaders(await handleWorkerFetch(request, env, ctx));
+  },
+};
+
+async function handleWorkerFetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
     if (url.pathname === "/healthz" || url.pathname === "/readyz") {
@@ -658,11 +662,8 @@ export default {
       return routePublicAuthRequest({
         request,
         url,
-        v2Enabled: true,
         getV2Stub: () => containerV2.get(containerV2.idFromName(v2Name), { locationHint: "enam" }),
         getV1Stub: () => env.CONTAINER.get(env.CONTAINER.idFromName(containerName), { locationHint: "enam" }),
-        waitUntil: (promise) => ctx.waitUntil(promise),
-        warmupThrottle: authWarmupThrottle,
       });
     }
 
@@ -718,5 +719,4 @@ export default {
     // Prefer US placement for new Durable Objects (existing DO names keep their original region).
     const stub = env.CONTAINER.get(id, { locationHint: "enam" });
     return stub.fetch(request);
-  },
-};
+}

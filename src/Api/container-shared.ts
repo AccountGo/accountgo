@@ -9,6 +9,7 @@ import {
   isTransientContainerError,
   serviceUnavailable,
   startupCode,
+  stripInternalResponseHeaders,
 } from "./container-errors";
 
 export function sleep(ms: number): Promise<void> {
@@ -41,4 +42,5 @@ export {
   isTransientContainerError,
   serviceUnavailable,
   startupCode,
+  stripInternalResponseHeaders,
 };
