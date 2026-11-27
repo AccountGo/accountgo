@@ -587,7 +587,7 @@ public class SessionService : ISessionService
 
     private async Task<(IReadOnlyList<string> Roles, UserDto UserDto)> LoadUserAuthorizationAsync(ApplicationUser user)
     {
-        var (roles, domainUser) = await AuthenticationService.LoadRolesAndDomainUserAsync(
+        var (roles, domainUser) = await UserRoleResolver.LoadAsync(
             _userManager,
             _securityService,
             user);
@@ -621,12 +621,12 @@ public class SessionService : ISessionService
 
     private async Task<List<OrganizationDto>> BuildOrganizationsAsync(string userId, IReadOnlyList<ActiveMembershipRow> memberships)
     {
-        if (memberships.Count == 0)
+        if (memberships.Count == 0 || _apiDb is null)
             return new List<OrganizationDto>();
 
         var companyIds = memberships.Select(m => m.CompanyId).ToList();
         var pendingCompanyIds = await WorkspaceSignupContinuationEvidence.GetPendingContinuationCompanyIdsAsync(
-            _apiDb!,
+            _apiDb,
             companyIds,
             userId);
 

@@ -62,34 +62,6 @@ namespace Api.Service
             return CreateTokenCoreAsync(user, purpose, lifetime, amr, mfa, mfaTimestamp, extraClaims, audience, preloadedRoles);
         }
 
-        internal static async Task<(IReadOnlyList<string> Roles, Core.Domain.Security.User? DomainUser)> LoadRolesAndDomainUserAsync(
-            UserManager<ApplicationUser> userManager,
-            Services.Security.ISecurityService securityService,
-            ApplicationUser user)
-        {
-            var identityRoles = await userManager.GetRolesAsync(user);
-            var roles = new List<string>(identityRoles.Count);
-            var seen = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var role in identityRoles)
-            {
-                if (!string.IsNullOrEmpty(role) && seen.Add(role))
-                    roles.Add(role);
-            }
-
-            var domainUser = await securityService.GetUserAsync(user.UserName ?? user.Email ?? string.Empty);
-            if (domainUser?.Roles != null)
-            {
-                foreach (var r in domainUser.Roles)
-                {
-                    var name = r?.SecurityRole?.Name;
-                    if (!string.IsNullOrEmpty(name) && seen.Add(name))
-                        roles.Add(name);
-                }
-            }
-
-            return (roles, domainUser);
-        }
-
         private async Task<Token> CreateTokenCoreAsync(
             ApplicationUser user,
             string? purpose,
@@ -174,7 +146,7 @@ namespace Api.Service
             if (string.IsNullOrEmpty(purpose) || purpose == "access")
             {
                 var roles = preloadedRoles
-                    ?? (await LoadRolesAndDomainUserAsync(_userManager, _securityService, user)).Roles;
+                    ?? (await UserRoleResolver.LoadAsync(_userManager, _securityService, user)).Roles;
                 foreach (var role in roles)
                 {
                     if (!string.IsNullOrEmpty(role) && !claims.Any(c => c.Type == ClaimTypes.Role && c.Value == role))

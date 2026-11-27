@@ -328,8 +328,6 @@ public sealed class SessionPerformanceTests : IDisposable
             JwtRegisteredClaimNames.Nbf,
             JwtRegisteredClaimNames.Exp,
             JwtRegisteredClaimNames.AuthTime,
-            JwtRegisteredClaimNames.Iss,
-            JwtRegisteredClaimNames.Aud,
             "mfa_ts"
         };
 
@@ -402,6 +400,10 @@ public sealed class SessionPerformanceTests : IDisposable
                 .ThenBy(c => c.Value, StringComparer.Ordinal)
                 .ToList();
 
+            var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+            var expectedIssuer = config["JwtSettings:validIssuer"];
+            var expectedAudience = config["JwtSettings:validAudience"];
+
             var expectedClaims = new List<(string Type, string Value)>
             {
                 (ClaimTypes.NameIdentifier, user.Id),
@@ -411,6 +413,10 @@ public sealed class SessionPerformanceTests : IDisposable
                 ("amr", "otp mfa totp"),
                 ("mfa", "true")
             };
+            if (!string.IsNullOrEmpty(expectedIssuer))
+                expectedClaims.Add((JwtRegisteredClaimNames.Iss, expectedIssuer));
+            if (!string.IsNullOrEmpty(expectedAudience))
+                expectedClaims.Add((JwtRegisteredClaimNames.Aud, expectedAudience));
             expectedClaims.AddRange(expectedRoles.Select(r => (ClaimTypes.Role, r)));
             expectedClaims = expectedClaims
                 .OrderBy(c => c.Type, StringComparer.Ordinal)
