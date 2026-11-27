@@ -77,7 +77,8 @@ namespace Api.Service
             string? userAgent,
             object? metadata = null)
         {
-            var auditEvent = BuildAndLogEvent(eventType, outcome, userId, companyId, ipAddress, userAgent, metadata);
+            var auditEvent = BuildAndLogEvent(
+                eventType, outcome, userId, companyId, ipAddress, userAgent, metadata, throwOnMetadataError: false);
             _identityContext.SecurityAuditEvents.Add(auditEvent);
             return auditEvent;
         }
@@ -107,7 +108,8 @@ namespace Api.Service
             }
 
             var (ip, userAgent) = RequestOrigin();
-            var auditEvent = BuildAndLogEvent(eventType, outcome, userId, companyId, ip, userAgent, metadata);
+            var auditEvent = BuildAndLogEvent(
+                eventType, outcome, userId, companyId, ip, userAgent, metadata, throwOnMetadataError: true);
 
             await _identityContext.Database.UseTransactionAsync(transaction.GetDbTransaction(), cancellationToken).ConfigureAwait(false);
             var entry = _identityContext.SecurityAuditEvents.Add(auditEvent);
@@ -139,16 +141,24 @@ namespace Api.Service
             int? companyId,
             string? ipAddress,
             string? userAgent,
-            object? metadata)
+            object? metadata,
+            bool throwOnMetadataError)
         {
             string? metadataJson = null;
-            try
+            if (throwOnMetadataError)
             {
                 metadataJson = SecurityAuditMetadata.Serialize(metadata);
             }
-            catch (Exception ex)
+            else
             {
-                _logger.LogWarning(ex, "Failed to serialize security audit metadata for {EventType}", eventType);
+                try
+                {
+                    metadataJson = SecurityAuditMetadata.Serialize(metadata);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to serialize security audit metadata for {EventType}", eventType);
+                }
             }
 
             var correlationId = _auditContext?.CorrelationId;
@@ -181,7 +191,8 @@ namespace Api.Service
             string? userAgent,
             object? metadata)
         {
-            var auditEvent = BuildAndLogEvent(eventType, outcome, userId, companyId, ipAddress, userAgent, metadata);
+            var auditEvent = BuildAndLogEvent(
+                eventType, outcome, userId, companyId, ipAddress, userAgent, metadata, throwOnMetadataError: false);
 
             try
             {
