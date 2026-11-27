@@ -413,6 +413,20 @@ public sealed class CaptureReviewReconcilerTests : IDisposable
             Events.Add((eventType, outcome, userId, companyId, details));
             return Task.CompletedTask;
         }
+
+        public Api.Data.SecurityAuditEvent StageEvent(string eventType, string? outcome, string? userId, int? companyId, string? ipAddress, string? userAgent, object? metadata = null)
+        {
+            Events.Add((eventType, outcome, userId, companyId, metadata));
+            return new Api.Data.SecurityAuditEvent
+            {
+                EventType = eventType,
+                Outcome = outcome,
+                UserId = userId,
+                CompanyId = companyId,
+                IpAddress = ipAddress,
+                UserAgent = userAgent
+            };
+        }
     }
 
     private sealed class ThrowingSecurityAuditService : ISecurityAuditService
@@ -421,6 +435,9 @@ public sealed class CaptureReviewReconcilerTests : IDisposable
             => throw new InvalidOperationException("Audit store unavailable");
 
         public Task LogEventAsync(string eventType, string? outcome, string? userId, int? companyId, object? details)
+            => throw new InvalidOperationException("Audit store unavailable");
+
+        public Api.Data.SecurityAuditEvent StageEvent(string eventType, string? outcome, string? userId, int? companyId, string? ipAddress, string? userAgent, object? metadata = null)
             => throw new InvalidOperationException("Audit store unavailable");
     }
 
