@@ -6,19 +6,15 @@ using System.Threading.Tasks;
 namespace Core.Data
 {
     public interface ISecurityRepository : IUserRepository<User>, IRoleRepository<SecurityRole>, IGroupRepository<SecurityGroup>
-    { 
-
-    }
-
-    public interface IAsyncSecurityRepository
     {
-        Task<User?> GetUserAsync(string username, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<string>> GetAllPermissionNamesAsync(CancellationToken cancellationToken = default);
     }
+
     public interface IUserRepository<User>
     {
         void AddUser(User user);
         User GetUser(string username);
+        Task<User?> GetUserAsync(string username, CancellationToken cancellationToken = default);
         User GetUserById(int id);
         IEnumerable<User> GetAllUsers();
         void DeleteUser(int id);

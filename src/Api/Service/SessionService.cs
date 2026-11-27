@@ -112,13 +112,14 @@ public class SessionService : ISessionService
         }
 
         var (roles, userDto) = await LoadUserAuthorizationAsync(user);
-        var tokenResult = await CreateAccessTokenAsync(
+        var tokenResult = await _authService.CreateTokenWithRolesAsync(
             user,
             purpose: "access",
+            preloadedRoles: roles,
+            lifetime: null,
             amr: amrList,
             mfa: mfaSatisfied,
-            mfaTimestamp: mfaSatisfied ? DateTimeOffset.UtcNow : null,
-            preloadedRoles: roles);
+            mfaTimestamp: mfaSatisfied ? DateTimeOffset.UtcNow : null);
 
         var rawRefreshToken = GenerateSecureToken();
         var tokenHash = ComputeSha256(rawRefreshToken);
@@ -484,12 +485,9 @@ public class SessionService : ISessionService
         DateTime absoluteExpiresAt)
     {
         var (roles, userDto) = await LoadUserAuthorizationAsync(user);
-        var tokenResult = await CreateAccessTokenAsync(
+        var tokenResult = await _authService.CreateTokenWithRolesAsync(
             user,
             purpose: null,
-            amr: null,
-            mfa: null,
-            mfaTimestamp: null,
             preloadedRoles: roles);
         var expiresInMinutes = Convert.ToInt32(_configuration["JwtSettings:expires"] ?? "15");
         var expiresInSeconds = expiresInMinutes * 60;
@@ -587,66 +585,15 @@ public class SessionService : ISessionService
         return userDto;
     }
 
-    private Task<Token> CreateAccessTokenAsync(
-        ApplicationUser user,
-        string? purpose,
-        IEnumerable<string>? amr,
-        bool? mfa,
-        DateTimeOffset? mfaTimestamp,
-        IReadOnlyCollection<string> preloadedRoles)
+    private async Task<(IReadOnlyList<string> Roles, UserDto UserDto)> LoadUserAuthorizationAsync(ApplicationUser user)
     {
-        if (_authService is AuthenticationService concreteAuth)
-        {
-            return concreteAuth.CreateTokenWithRolesAsync(
-                user,
-                purpose: purpose,
-                preloadedRoles: preloadedRoles,
-                lifetime: null,
-                amr: amr,
-                mfa: mfa,
-                mfaTimestamp: mfaTimestamp);
-        }
+        var (roles, domainUser) = await AuthenticationService.LoadRolesAndDomainUserAsync(
+            _userManager,
+            _securityService,
+            user);
 
-        return purpose == null && amr == null && !mfa.HasValue && !mfaTimestamp.HasValue
-            ? _authService.CreateToken(user, populateExp: false)
-            : _authService.CreateToken(
-                user,
-                purpose: purpose,
-                lifetime: null,
-                amr: amr,
-                mfa: mfa,
-                mfaTimestamp: mfaTimestamp);
-    }
-
-    private async Task<(IReadOnlyCollection<string> Roles, UserDto UserDto)> LoadUserAuthorizationAsync(ApplicationUser user)
-    {
-        var identityRoles = await _userManager.GetRolesAsync(user);
-        var roles = new List<string>(identityRoles.Count);
-        var roleSet = new HashSet<string>();
-        foreach (var role in identityRoles)
-        {
-            if (roleSet.Add(role))
-                roles.Add(role);
-        }
-
-        var domainUser = await _securityService.GetUserAsync(user.UserName ?? user.Email ?? string.Empty);
-        string firstName = string.Empty;
-        string lastName = string.Empty;
-
-        if (domainUser != null)
-        {
-            firstName = domainUser.Firstname ?? string.Empty;
-            lastName = domainUser.Lastname ?? string.Empty;
-            if (domainUser.Roles != null)
-            {
-                foreach (var r in domainUser.Roles)
-                {
-                    if (r?.SecurityRole?.Name != null && roleSet.Add(r.SecurityRole.Name))
-                        roles.Add(r.SecurityRole.Name);
-                }
-            }
-        }
-
+        var firstName = domainUser?.Firstname ?? string.Empty;
+        var lastName = domainUser?.Lastname ?? string.Empty;
         var permissions = domainUser == null
             ? Array.Empty<string>()
             : await _securityService.GetPermissionsForUserAsync(domainUser);
@@ -677,19 +624,11 @@ public class SessionService : ISessionService
         if (memberships.Count == 0)
             return new List<OrganizationDto>();
 
-        HashSet<int> pendingCompanyIds;
-        if (_apiDb != null)
-        {
-            var companyIds = memberships.Select(m => m.CompanyId).ToList();
-            pendingCompanyIds = await WorkspaceSignupContinuationEvidence.GetPendingContinuationCompanyIdsAsync(
-                _apiDb,
-                companyIds,
-                userId);
-        }
-        else
-        {
-            pendingCompanyIds = new HashSet<int>();
-        }
+        var companyIds = memberships.Select(m => m.CompanyId).ToList();
+        var pendingCompanyIds = await WorkspaceSignupContinuationEvidence.GetPendingContinuationCompanyIdsAsync(
+            _apiDb!,
+            companyIds,
+            userId);
 
         return memberships.Select(m => new OrganizationDto
         {

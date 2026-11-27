@@ -9,7 +9,7 @@ using System.Collections.Generic;
 
 namespace Api.Data.Repositories
 {
-    public class SecurityRepository : ISecurityRepository, IAsyncSecurityRepository
+    public class SecurityRepository : ISecurityRepository
     {
         private readonly ApiDbContext _context;
         public SecurityRepository(ApiDbContext context)

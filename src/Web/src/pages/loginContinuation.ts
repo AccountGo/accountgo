@@ -15,7 +15,7 @@ export type PostAuthDestination =
 
 export interface PostAuthOrgHint {
   slug?: string;
-  mayNeedSetup?: boolean;
+  mayNeedSetup?: boolean | null;
 }
 
 export interface PostAuthInputs {
@@ -77,9 +77,11 @@ export const soleWorkspaceSlug = async (
 };
 
 /**
- * Resolve where to route after authentication. If any candidate workspace (resolved across all entry
- * paths, including the user's sole workspace from the server) still needs setup, route to the guided
- * continuation; otherwise fall back to the normal dashboard / path / selector routing.
+ * Resolve where to route after authentication. Uses the auth-response `organizations` list when
+ * present (falling back to `/api/organizations` only for older servers) and checks
+ * `/api/organizations/current` when the candidate workspace's `mayNeedSetup` hint is not explicitly
+ * `false`. If the workspace still needs setup, route to the guided continuation; otherwise fall back
+ * to the normal dashboard / path / selector routing.
  */
 export const resolvePostAuthDestination = async (
   authFetch: (url: string, init?: RequestInit) => Promise<Response>,
@@ -108,9 +110,10 @@ export const resolvePostAuthDestination = async (
         (org) => typeof org.slug === 'string' && org.slug.toLowerCase() === candidateSlug.toLowerCase(),
       );
       // Only consult /api/organizations/current when the candidate is in the user's memberships
-      // and either the server hinted mayNeedSetup=true or omitted the hint (older server).
-      // A persisted slug not in the list behaves like a failed /current check (no continuation).
-      if (matched && (matched.mayNeedSetup === true || matched.mayNeedSetup === undefined)) {
+      // and the server did not explicitly certify mayNeedSetup === false (true, null, or undefined
+      // all verify authoritatively against /current). A persisted slug not in the list behaves like
+      // a failed /current check (no continuation).
+      if (matched && matched.mayNeedSetup !== false) {
         if (await workspaceNeedsSetup(authFetch, candidateSlug)) {
           return { kind: 'continue', slug: candidateSlug };
         }

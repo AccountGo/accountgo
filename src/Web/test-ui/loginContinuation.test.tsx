@@ -107,7 +107,7 @@ describe('post-auth continuation routing resolves from trusted server state', ()
     expect(calls).toEqual([]);
   });
 
-  it('skips /api/organizations and /api/organizations/current for sole workspace with mayNeedSetup false and no persisted slug', async () => {
+  it('falls through to the selector without calling /api/organizations or /api/organizations/current for a sole workspace with mayNeedSetup false and no persisted slug', async () => {
     const { authFetch, calls } = makeAuthFetch({ needsSetup: { acme: false } });
     const d = await resolvePostAuthDestination(authFetch, {
       organizations: [{ slug: 'acme', mayNeedSetup: false }],
@@ -125,6 +125,24 @@ describe('post-auth continuation routing resolves from trusted server state', ()
     expect(calls).toEqual(['/api/organizations/current']);
   });
 
+  it('matches auth response organization slugs case-insensitively', async () => {
+    const { authFetch: fetchFalse, calls: callsFalse } = makeAuthFetch({ needsSetup: { acme: false } });
+    const dFalse = await resolvePostAuthDestination(fetchFalse, {
+      persistedSlug: 'ACME',
+      organizations: [{ slug: 'acme', mayNeedSetup: false }],
+    });
+    expect(dFalse).toEqual({ kind: 'dashboard', slug: 'ACME' });
+    expect(callsFalse).toEqual([]);
+
+    const { authFetch: fetchTrue, calls: callsTrue } = makeAuthFetch({ needsSetup: { ACME: true } });
+    const dTrue = await resolvePostAuthDestination(fetchTrue, {
+      persistedSlug: 'ACME',
+      organizations: [{ slug: 'acme', mayNeedSetup: true }],
+    });
+    expect(dTrue).toEqual({ kind: 'continue', slug: 'ACME' });
+    expect(callsTrue).toEqual(['/api/organizations/current']);
+  });
+
   it('persisted slug not in auth response organizations skips /current and does not route to continuation', async () => {
     const { authFetch, calls } = makeAuthFetch({ needsSetup: { stale: true } });
     const d = await resolvePostAuthDestination(authFetch, {
@@ -135,12 +153,29 @@ describe('post-auth continuation routing resolves from trusted server state', ()
     expect(calls).toEqual([]);
   });
 
-  it('old-server fallback: organizations without mayNeedSetup still checks /api/organizations/current', async () => {
-    const { authFetch, calls } = makeAuthFetch({ needsSetup: { acme: true } });
+  it('empty auth response organizations with a persisted slug skips /organizations and /current', async () => {
+    const { authFetch, calls } = makeAuthFetch({ needsSetup: { stale: true } });
     const d = await resolvePostAuthDestination(authFetch, {
+      persistedSlug: 'stale',
+      organizations: [],
+    });
+    expect(d).toEqual({ kind: 'dashboard', slug: 'stale' });
+    expect(calls).toEqual([]);
+  });
+
+  it('old-server fallback: organizations with mayNeedSetup omitted or null still checks /api/organizations/current', async () => {
+    const { authFetch: fetchUndefined, calls: callsUndefined } = makeAuthFetch({ needsSetup: { acme: true } });
+    const dUndefined = await resolvePostAuthDestination(fetchUndefined, {
       organizations: [{ slug: 'acme' }],
     });
-    expect(d).toEqual({ kind: 'continue', slug: 'acme' });
-    expect(calls).toEqual(['/api/organizations/current']);
+    expect(dUndefined).toEqual({ kind: 'continue', slug: 'acme' });
+    expect(callsUndefined).toEqual(['/api/organizations/current']);
+
+    const { authFetch: fetchNull, calls: callsNull } = makeAuthFetch({ needsSetup: { acme: true } });
+    const dNull = await resolvePostAuthDestination(fetchNull, {
+      organizations: [{ slug: 'acme', mayNeedSetup: null }],
+    });
+    expect(dNull).toEqual({ kind: 'continue', slug: 'acme' });
+    expect(callsNull).toEqual(['/api/organizations/current']);
   });
 });

@@ -10,6 +10,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Api.Data;
+using Core.Domain;
 using Core.Domain.Auditing;
 using Microsoft.EntityFrameworkCore;
 
@@ -68,6 +69,14 @@ namespace Api.Service
             });
         }
 
+        private static IQueryable<AuditLog> PendingContinuationMarkers(ApiDbContext db, string ownerUserId) =>
+            db.AuditLogs
+                .IgnoreQueryFilters()
+                .AsNoTracking()
+                .Where(a => a.TableName == AuditTableName
+                            && a.UserName == ownerUserId
+                            && a.OriginalValue == EventPending);
+
         /// <summary>
         /// True when the workspace carries a pending-signup-continuation marker bound to
         /// <paramref name="ownerUserId"/>. Read under the coordination lock as part of the continuation
@@ -75,20 +84,16 @@ namespace Api.Service
         /// </summary>
         public static bool IsPendingContinuation(ApiDbContext db, int companyId, string ownerUserId)
         {
-            return db.AuditLogs
-                .IgnoreQueryFilters()
-                .AsNoTracking()
-                .Any(a => a.CompanyId == companyId
-                          && a.TableName == AuditTableName
-                          && a.RecordId == companyId.ToString(CultureInfo.InvariantCulture)
-                          && a.UserName == ownerUserId
-                          && a.OriginalValue == EventPending);
+            var recordId = companyId.ToString(CultureInfo.InvariantCulture);
+            return PendingContinuationMarkers(db, ownerUserId)
+                .Any(a => a.CompanyId == companyId && a.RecordId == recordId);
         }
 
         /// <summary>
         /// Batched async lookup of which company ids in <paramref name="companyIds"/> carry a
-        /// pending-signup-continuation marker bound to <paramref name="ownerUserId"/>. Used as a routing
-        /// hint on sign-in; <c>/api/organizations/current</c> remains authoritative.
+        /// pending-signup-continuation marker bound to <paramref name="ownerUserId"/> and still have
+        /// uninitialized <see cref="WorkspaceCollaborationState.LegacyUnclassified"/> operating settings.
+        /// Used as a routing hint on sign-in; <c>/api/organizations/current</c> remains authoritative.
         /// </summary>
         public static async Task<HashSet<int>> GetPendingContinuationCompanyIdsAsync(
             ApiDbContext db,
@@ -99,13 +104,16 @@ namespace Api.Service
             if (companyIds.Count == 0 || string.IsNullOrEmpty(ownerUserId))
                 return new HashSet<int>();
 
-            var matches = await db.AuditLogs
-                .IgnoreQueryFilters()
-                .AsNoTracking()
+            // RecordId is stored as a string; comparing a.CompanyId.ToString() in SQL does not translate
+            // consistently across SQLite and Postgres, so we filter by CompanyId, marker fields, and
+            // uninitialized operating settings in SQL and verify exact RecordId equality in memory.
+            var matches = await PendingContinuationMarkers(db, ownerUserId)
                 .Where(a => companyIds.Contains(a.CompanyId)
-                            && a.TableName == AuditTableName
-                            && a.UserName == ownerUserId
-                            && a.OriginalValue == EventPending)
+                            && db.WorkspaceOperatingSettings
+                                .IgnoreQueryFilters()
+                                .Any(s => s.CompanyId == a.CompanyId
+                                          && s.CollaborationState == WorkspaceCollaborationState.LegacyUnclassified
+                                          && s.InitializedAtUtc == null))
                 .Select(a => new { a.CompanyId, a.RecordId })
                 .ToListAsync(cancellationToken);
 

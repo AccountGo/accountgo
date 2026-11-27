@@ -10,6 +10,7 @@ using System.IO;
 using System.Linq;
 using System.Net.Http.Json;
 using System.Security.Claims;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Api.Data;
@@ -68,7 +69,9 @@ public sealed class SessionPerformanceTests : IDisposable
         bool withWorkspace = true,
         bool isSysAdmin = false,
         bool pendingSignup = false,
-        bool addDeletedCompany = false)
+        bool initializedSignup = false,
+        bool addDeletedCompany = false,
+        string[]? extraIdentityRoles = null)
     {
         using var scope = _factory.Services.CreateScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
@@ -85,13 +88,20 @@ public sealed class SessionPerformanceTests : IDisposable
         var createResult = await userManager.CreateAsync(user);
         Assert.True(createResult.Succeeded, string.Join(", ", createResult.Errors.Select(e => e.Description)));
 
-        if (!await roleManager.RoleExistsAsync("Member"))
-            await roleManager.CreateAsync(new IdentityRole("Member"));
-        await userManager.AddToRoleAsync(user, "Member");
+        var identityRolesToAdd = new List<string> { "Member" };
+        if (extraIdentityRoles != null)
+            identityRolesToAdd.AddRange(extraIdentityRoles);
+
+        foreach (var roleNameToEnsure in identityRolesToAdd.Distinct(StringComparer.Ordinal))
+        {
+            if (!await roleManager.RoleExistsAsync(roleNameToEnsure))
+                await roleManager.CreateAsync(new IdentityRole(roleNameToEnsure));
+            await userManager.AddToRoleAsync(user, roleNameToEnsure);
+        }
 
         securityService.EnsureDefaultPermissionsAndRoles();
-        var roleName = isSysAdmin ? "SystemAdministrators" : "Accountant";
-        var role = await apiDb.SecurityRoles.SingleAsync(r => r.Name == roleName);
+        var domainRoleName = isSysAdmin ? "SystemAdministrators" : "Accountant";
+        var role = await apiDb.SecurityRoles.SingleAsync(r => r.Name == domainRoleName);
         securityService.AddUser(email, email, "Pat", "Perf", new[] { role.Id });
 
         Company? company = null;
@@ -114,11 +124,20 @@ public sealed class SessionPerformanceTests : IDisposable
                 Status = CompanyMemberStatus.Active
             });
 
-            if (pendingSignup)
+            if (pendingSignup || initializedSignup)
             {
-                var tenantContext = scope.ServiceProvider.GetRequiredService<ITenantContext>() as TenantContext;
-                tenantContext!.SetTenant(company.Id, company.Slug!, CompanyMemberRole.Owner, Array.Empty<string>(), user.Id);
+                var tenantContext = (TenantContext)scope.ServiceProvider.GetRequiredService<ITenantContext>();
+                tenantContext.SetTenant(company.Id, company.Slug!, CompanyMemberRole.Owner, Array.Empty<string>(), user.Id);
                 WorkspaceSignupContinuationEvidence.Record(apiDb, company.Id, user.Id);
+                apiDb.WorkspaceOperatingSettings.Add(new WorkspaceOperatingSettings
+                {
+                    CompanyId = company.Id,
+                    CollaborationState = initializedSignup
+                        ? WorkspaceCollaborationState.SoloActive
+                        : WorkspaceCollaborationState.LegacyUnclassified,
+                    InitializedAtUtc = initializedSignup ? DateTime.UtcNow.AddMinutes(-5) : null,
+                    PolicySchemaVersion = WorkspaceOperatingPolicySchema.CurrentVersion
+                });
             }
         }
 
@@ -167,6 +186,22 @@ public sealed class SessionPerformanceTests : IDisposable
     }
 
     [Fact]
+    public void OrganizationDto_WithoutMayNeedSetup_SerializesAsNull()
+    {
+        var dto = new OrganizationDto { Slug = "acme", Name = "Acme", Role = "Owner" };
+        Assert.Null(dto.MayNeedSetup);
+
+        var json = JsonSerializer.Serialize(dto, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+        using var doc = JsonDocument.Parse(json);
+        Assert.True(
+            !doc.RootElement.TryGetProperty("mayNeedSetup", out var prop) || prop.ValueKind == JsonValueKind.Null,
+            $"Expected mayNeedSetup to be null or absent when omitted, got: {json}");
+    }
+
+    [Fact]
     public async Task CreateSessionAsync_ReducesDbCommands_AndPopulatesOrganizationsWithMayNeedSetup()
     {
         var (regularUser, regularCompany) = await SeedUserAsync(
@@ -177,6 +212,13 @@ public sealed class SessionPerformanceTests : IDisposable
             $"perf-pend-{Guid.NewGuid():N}@example.com",
             withWorkspace: true,
             pendingSignup: true);
+        var (initializedUser, initializedCompany) = await SeedUserAsync(
+            $"perf-init-{Guid.NewGuid():N}@example.com",
+            withWorkspace: true,
+            initializedSignup: true);
+        var (nonOwnerMember, _) = await SeedUserAsync(
+            $"perf-nonowner-{Guid.NewGuid():N}@example.com",
+            withWorkspace: false);
         var (noOrgUser, _) = await SeedUserAsync(
             $"perf-noorg-{Guid.NewGuid():N}@example.com",
             withWorkspace: false);
@@ -184,6 +226,20 @@ public sealed class SessionPerformanceTests : IDisposable
             $"perf-admin-{Guid.NewGuid():N}@example.com",
             withWorkspace: true,
             isSysAdmin: true);
+
+        // Add nonOwnerMember as an active non-owner on the pending uninitialized signup workspace.
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var apiDb = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
+            apiDb.CompanyMembers.Add(new CompanyMember
+            {
+                CompanyId = pendingCompany!.Id,
+                UserId = nonOwnerMember.Id,
+                Role = CompanyMemberRole.Member,
+                Status = CompanyMemberStatus.Active
+            });
+            await apiDb.SaveChangesAsync();
+        }
 
         async Task<(int Queries, AuthResponse Response)> MeasureAsync(ApplicationUser u)
         {
@@ -214,11 +270,13 @@ public sealed class SessionPerformanceTests : IDisposable
 
         var (regQueries, regResp) = await MeasureAsync(regularUser);
         var (pendingQueries, pendingResp) = await MeasureAsync(pendingUser);
+        var (initializedQueries, initializedResp) = await MeasureAsync(initializedUser);
+        var (_, nonOwnerResp) = await MeasureAsync(nonOwnerMember);
         var (noOrgQueries, noOrgResp) = await MeasureAsync(noOrgUser);
         var (adminQueries, _) = await MeasureAsync(sysAdminUser);
 
         _output.WriteLine(
-            $"CreateSessionAsync DB commands: regular={regQueries}, pending={pendingQueries}, noOrg={noOrgQueries}, sysadmin={adminQueries}");
+            $"CreateSessionAsync DB commands: regular={regQueries}, pending={pendingQueries}, initialized={initializedQueries}, noOrg={noOrgQueries}, sysadmin={adminQueries}");
 
         // Baseline on untouched main was: regular=6 (without Organizations/mayNeedSetup), sysadmin=7.
         Assert.True(regQueries <= 5, $"Expected regular CreateSessionAsync <= 5 DB commands, got {regQueries}");
@@ -230,29 +288,63 @@ public sealed class SessionPerformanceTests : IDisposable
         Assert.Single(regOrgs);
         Assert.Equal(regularCompany!.Slug, regOrgs[0].Slug);
         Assert.Equal("Owner", regOrgs[0].Role);
-        Assert.False(regOrgs[0].MayNeedSetup);
+        Assert.Equal(false, regOrgs[0].MayNeedSetup);
 
-        // Pending signup workspace carries MayNeedSetup=true.
+        // Pending + uninitialized signup workspace carries MayNeedSetup=true for its original owner.
         var pendingOrgs = pendingResp.Organizations.ToList();
         Assert.Single(pendingOrgs);
         Assert.Equal(pendingCompany!.Slug, pendingOrgs[0].Slug);
-        Assert.True(pendingOrgs[0].MayNeedSetup);
+        Assert.Equal(true, pendingOrgs[0].MayNeedSetup);
+
+        // Initialized signup workspace carries MayNeedSetup=false even though the immutable marker exists.
+        var initOrgs = initializedResp.Organizations.ToList();
+        Assert.Single(initOrgs);
+        Assert.Equal(initializedCompany!.Slug, initOrgs[0].Slug);
+        Assert.Equal(false, initOrgs[0].MayNeedSetup);
+
+        // Non-owner active member of a pending uninitialized workspace gets MayNeedSetup=false.
+        var nonOwnerOrgs = nonOwnerResp.Organizations.ToList();
+        Assert.Single(nonOwnerOrgs);
+        Assert.Equal(pendingCompany.Slug, nonOwnerOrgs[0].Slug);
+        Assert.Equal(false, nonOwnerOrgs[0].MayNeedSetup);
 
         Assert.Empty(noOrgResp.Organizations);
     }
 
     [Fact]
-    public async Task CreateSessionAsync_TokenClaimsAndUserDto_MatchStandardAuthLoad()
+    public async Task CreateSessionAsync_TokenClaimsAndUserDto_MatchIndependentDbExpectations()
     {
-        foreach (var isSysAdmin in new[] { false, true })
+        var cases = new[]
+        {
+            // Regular user whose Identity role ("Accountant") overlaps with Domain role ("Accountant") to cover dedupe.
+            (Label: "regular-overlap", IsSysAdmin: false, ExtraIdentityRoles: new[] { "Accountant" }),
+            (Label: "sysadmin", IsSysAdmin: true, ExtraIdentityRoles: Array.Empty<string>())
+        };
+
+        var dynamicClaimTypes = new HashSet<string>(StringComparer.Ordinal)
+        {
+            JwtRegisteredClaimNames.Jti,
+            JwtRegisteredClaimNames.Iat,
+            JwtRegisteredClaimNames.Nbf,
+            JwtRegisteredClaimNames.Exp,
+            JwtRegisteredClaimNames.AuthTime,
+            JwtRegisteredClaimNames.Iss,
+            JwtRegisteredClaimNames.Aud,
+            "mfa_ts"
+        };
+
+        foreach (var tc in cases)
         {
             var (user, _) = await SeedUserAsync(
-                $"perf-parity-{(isSysAdmin ? "admin" : "reg")}-{Guid.NewGuid():N}@example.com",
-                isSysAdmin: isSysAdmin);
+                $"perf-parity-{tc.Label}-{Guid.NewGuid():N}@example.com",
+                isSysAdmin: tc.IsSysAdmin,
+                extraIdentityRoles: tc.ExtraIdentityRoles);
 
+            var beforeUtc = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             using var scope = _factory.Services.CreateScope();
             var sessionService = CreateDirectSessionService(scope.ServiceProvider);
-            var authService = scope.ServiceProvider.GetRequiredService<IAuthenticationService>();
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var apiDb = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
 
             var sessionResult = await sessionService.CreateSessionAsync(
                 user,
@@ -261,62 +353,87 @@ public sealed class SessionPerformanceTests : IDisposable
                 mfaMethod: "totp",
                 amr: new[] { "otp" },
                 mfaSatisfied: true);
+            var afterUtc = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
             Assert.True(sessionResult.Success);
-            var sessionResponse = sessionResult.Response!;
+            var response = sessionResult.Response!;
 
-            var directToken = await authService.CreateToken(
-                user,
-                purpose: "access",
-                lifetime: null,
-                amr: new[] { "otp", "mfa", "totp" },
-                mfa: true,
-                mfaTimestamp: DateTimeOffset.UtcNow);
-            var directUserDto = await sessionService.BuildUserDtoAsync(user);
+            // Compute expected roles, profile, and permissions independently from Identity + ApiDbContext.
+            var expectedIdentityRoles = await userManager.GetRolesAsync(user);
+            var dbUser = await apiDb.Users
+                .AsNoTracking()
+                .Include(u => u.Roles)
+                .ThenInclude(ur => ur.SecurityRole)
+                .ThenInclude(r => r.Permissions)
+                .ThenInclude(rp => rp.SecurityPermission)
+                .SingleAsync(u => u.UserName == user.UserName);
 
-            var handler = new JwtSecurityTokenHandler();
-            var sessionJwt = handler.ReadJwtToken(sessionResponse.AccessToken);
-            var directJwt = handler.ReadJwtToken(directToken.AccessToken);
-
-            var sessionRoles = sessionJwt.Claims
-                .Where(c => c.Type == ClaimTypes.Role)
-                .Select(c => c.Value)
-                .OrderBy(v => v, StringComparer.Ordinal)
-                .ToList();
-            var directRoles = directJwt.Claims
-                .Where(c => c.Type == ClaimTypes.Role)
-                .Select(c => c.Value)
-                .OrderBy(v => v, StringComparer.Ordinal)
+            var expectedRoles = expectedIdentityRoles
+                .Concat(dbUser.Roles.Select(r => r.SecurityRole!.Name!))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(r => r, StringComparer.Ordinal)
                 .ToList();
 
-            Assert.Equal(directRoles, sessionRoles);
-            Assert.Contains("Member", sessionRoles);
-            Assert.Contains(isSysAdmin ? "SystemAdministrators" : "Accountant", sessionRoles);
+            var expectedPermissions = tc.IsSysAdmin
+                ? (await apiDb.SecurityPermissions
+                    .AsNoTracking()
+                    .Where(p => p.Name != null)
+                    .Select(p => p.Name!)
+                    .ToListAsync())
+                    .OrderBy(p => p, StringComparer.Ordinal)
+                    .ToList()
+                : dbUser.Roles
+                    .SelectMany(r => r.SecurityRole!.Permissions)
+                    .Select(rp => rp.SecurityPermission!.Name!)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(p => p, StringComparer.Ordinal)
+                    .ToList();
 
-            Assert.Equal(
-                directJwt.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value,
-                sessionJwt.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value);
-            Assert.Equal(
-                directJwt.Claims.First(c => c.Type == ClaimTypes.Email).Value,
-                sessionJwt.Claims.First(c => c.Type == ClaimTypes.Email).Value);
-            Assert.Equal(
-                directJwt.Claims.First(c => c.Type == "purpose").Value,
-                sessionJwt.Claims.First(c => c.Type == "purpose").Value);
-            Assert.Equal(
-                directJwt.Claims.First(c => c.Type == "mfa").Value,
-                sessionJwt.Claims.First(c => c.Type == "mfa").Value);
+            // Verify full JWT claim set (all non-dynamic claims) + valid mfa_ts.
+            var jwt = new JwtSecurityTokenHandler().ReadJwtToken(response.AccessToken);
+            var mfaTsClaim = jwt.Claims.Single(c => c.Type == "mfa_ts");
+            var mfaTs = long.Parse(mfaTsClaim.Value, CultureInfo.InvariantCulture);
+            Assert.InRange(mfaTs, beforeUtc, afterUtc);
 
-            Assert.Equal(directUserDto.Id, sessionResponse.User.Id);
-            Assert.Equal(directUserDto.Email, sessionResponse.User.Email);
-            Assert.Equal(directUserDto.FirstName, sessionResponse.User.FirstName);
-            Assert.Equal(directUserDto.LastName, sessionResponse.User.LastName);
-            Assert.Equal(directUserDto.HasPassword, sessionResponse.User.HasPassword);
-            Assert.Equal(directUserDto.MfaReEnrollRequired, sessionResponse.User.MfaReEnrollRequired);
+            var actualClaims = jwt.Claims
+                .Where(c => !dynamicClaimTypes.Contains(c.Type))
+                .Select(c => (c.Type, c.Value))
+                .OrderBy(c => c.Type, StringComparer.Ordinal)
+                .ThenBy(c => c.Value, StringComparer.Ordinal)
+                .ToList();
+
+            var expectedClaims = new List<(string Type, string Value)>
+            {
+                (ClaimTypes.NameIdentifier, user.Id),
+                (ClaimTypes.Name, user.UserName!),
+                (ClaimTypes.Email, user.Email!),
+                ("purpose", "access"),
+                ("amr", "otp mfa totp"),
+                ("mfa", "true")
+            };
+            expectedClaims.AddRange(expectedRoles.Select(r => (ClaimTypes.Role, r)));
+            expectedClaims = expectedClaims
+                .OrderBy(c => c.Type, StringComparer.Ordinal)
+                .ThenBy(c => c.Value, StringComparer.Ordinal)
+                .ToList();
+
+            Assert.Equal(expectedClaims, actualClaims);
+
+            // Verify no duplicate role claims when an Identity role and Domain role share a name.
+            var actualRoleClaims = jwt.Claims.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToList();
+            Assert.Equal(actualRoleClaims.Distinct(StringComparer.Ordinal).Count(), actualRoleClaims.Count);
+
+            // Verify UserDto fields against independent DB expectations.
+            Assert.Equal(user.Id, response.User.Id);
+            Assert.Equal(user.Email, response.User.Email);
+            Assert.Equal(dbUser.Firstname, response.User.FirstName);
+            Assert.Equal(dbUser.Lastname, response.User.LastName);
+            Assert.Equal(!string.IsNullOrEmpty(user.PasswordHash), response.User.HasPassword);
+            Assert.Equal(user.MfaReEnrollRequired, response.User.MfaReEnrollRequired);
+            Assert.Equal(expectedRoles, response.User.Roles.OrderBy(r => r, StringComparer.Ordinal).ToList());
             Assert.Equal(
-                directUserDto.Roles.OrderBy(r => r, StringComparer.Ordinal),
-                sessionResponse.User.Roles.OrderBy(r => r, StringComparer.Ordinal));
-            Assert.Equal(
-                (directUserDto.Permissions ?? Array.Empty<string>()).OrderBy(p => p, StringComparer.Ordinal),
-                (sessionResponse.User.Permissions ?? Array.Empty<string>()).OrderBy(p => p, StringComparer.Ordinal));
+                expectedPermissions,
+                (response.User.Permissions ?? Array.Empty<string>()).OrderBy(p => p, StringComparer.Ordinal).ToList());
         }
     }
 
@@ -348,6 +465,6 @@ public sealed class SessionPerformanceTests : IDisposable
         var orgs = auth!.Organizations.ToList();
         Assert.Single(orgs);
         Assert.Equal(company!.Slug, orgs[0].Slug);
-        Assert.True(orgs[0].MayNeedSetup);
+        Assert.Equal(true, orgs[0].MayNeedSetup);
     }
 }

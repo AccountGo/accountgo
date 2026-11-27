@@ -75,10 +75,7 @@ namespace Services.Security
 
         public Task<User?> GetUserAsync(string username, CancellationToken cancellationToken = default)
         {
-            if (_securityRepository is IAsyncSecurityRepository asyncRepo)
-                return asyncRepo.GetUserAsync(username, cancellationToken);
-
-            return Task.FromResult<User?>(_securityRepository.GetUser(username));
+            return _securityRepository.GetUserAsync(username, cancellationToken);
         }
 
         public SecurityRole? GetRole(string rolename)
@@ -154,9 +151,7 @@ namespace Services.Security
 
             if (IsSysAdminUser(user))
             {
-                IReadOnlyList<string> permissionsSysAdmin = _securityRepository is IAsyncSecurityRepository asyncRepo
-                    ? await asyncRepo.GetAllPermissionNamesAsync(cancellationToken)
-                    : _securityPermissionRepo.Table.Select(p => p.Name).Where(n => n != null).Select(n => n!).ToList();
+                var permissionsSysAdmin = await _securityRepository.GetAllPermissionNamesAsync(cancellationToken);
 
                 if (permissionsSysAdmin.Count == 0)
                 {

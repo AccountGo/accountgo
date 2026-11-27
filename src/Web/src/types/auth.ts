@@ -42,7 +42,7 @@ export interface OrganizationDto {
   slug: string;
   name: string;
   role: string;
-  mayNeedSetup?: boolean;
+  mayNeedSetup?: boolean | null;
 }
 
 export interface AuthResponse {

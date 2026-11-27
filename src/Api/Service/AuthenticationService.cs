@@ -48,7 +48,7 @@ namespace Api.Service
             return await CreateTokenCoreAsync(user, purpose, lifetime, amr, mfa, mfaTimestamp, extraClaims, audience, preloadedRoles: null);
         }
 
-        internal Task<Token> CreateTokenWithRolesAsync(
+        public Task<Token> CreateTokenWithRolesAsync(
             ApplicationUser user,
             string? purpose,
             IReadOnlyCollection<string> preloadedRoles,
@@ -60,6 +60,34 @@ namespace Api.Service
             string? audience = null)
         {
             return CreateTokenCoreAsync(user, purpose, lifetime, amr, mfa, mfaTimestamp, extraClaims, audience, preloadedRoles);
+        }
+
+        internal static async Task<(IReadOnlyList<string> Roles, Core.Domain.Security.User? DomainUser)> LoadRolesAndDomainUserAsync(
+            UserManager<ApplicationUser> userManager,
+            Services.Security.ISecurityService securityService,
+            ApplicationUser user)
+        {
+            var identityRoles = await userManager.GetRolesAsync(user);
+            var roles = new List<string>(identityRoles.Count);
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var role in identityRoles)
+            {
+                if (!string.IsNullOrEmpty(role) && seen.Add(role))
+                    roles.Add(role);
+            }
+
+            var domainUser = await securityService.GetUserAsync(user.UserName ?? user.Email ?? string.Empty);
+            if (domainUser?.Roles != null)
+            {
+                foreach (var r in domainUser.Roles)
+                {
+                    var name = r?.SecurityRole?.Name;
+                    if (!string.IsNullOrEmpty(name) && seen.Add(name))
+                        roles.Add(name);
+                }
+            }
+
+            return (roles, domainUser);
         }
 
         private async Task<Token> CreateTokenCoreAsync(
@@ -145,36 +173,13 @@ namespace Api.Service
             // Only attach full roles to normal access tokens, not partial tokens (mfa_pending, mfa_enroll)
             if (string.IsNullOrEmpty(purpose) || purpose == "access")
             {
-                if (preloadedRoles != null)
+                var roles = preloadedRoles
+                    ?? (await LoadRolesAndDomainUserAsync(_userManager, _securityService, user)).Roles;
+                foreach (var role in roles)
                 {
-                    foreach (var role in preloadedRoles)
-                    {
-                        if (!string.IsNullOrEmpty(role) && !claims.Any(c => c.Type == ClaimTypes.Role && c.Value == role))
-                        {
-                            claims.Add(new Claim(ClaimTypes.Role, role));
-                        }
-                    }
-                }
-                else
-                {
-                    // 1. ASP.NET Identity roles
-                    var identityRoles = await _userManager.GetRolesAsync(user);
-                    foreach (var role in identityRoles)
+                    if (!string.IsNullOrEmpty(role) && !claims.Any(c => c.Type == ClaimTypes.Role && c.Value == role))
                     {
                         claims.Add(new Claim(ClaimTypes.Role, role));
-                    }
-
-                    // 2. Domain Security roles
-                    var domainUser = await _securityService.GetUserAsync(user.UserName ?? user.Email ?? string.Empty);
-                    if (domainUser != null && domainUser.Roles != null)
-                    {
-                        foreach (var role in domainUser.Roles)
-                        {
-                            if (role?.SecurityRole != null && !claims.Any(c => c.Type == ClaimTypes.Role && c.Value == role.SecurityRole.Name))
-                            {
-                                claims.Add(new Claim(ClaimTypes.Role, role.SecurityRole.Name!));
-                            }
-                        }
                     }
                 }
             }

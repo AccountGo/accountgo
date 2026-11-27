@@ -20,5 +20,16 @@ namespace Api.Service
             DateTimeOffset? mfaTimestamp = null,
             IEnumerable<Claim>? extraClaims = null,
             string? audience = null);
+
+        Task<Token> CreateTokenWithRolesAsync(
+            ApplicationUser user,
+            string? purpose,
+            IReadOnlyCollection<string> preloadedRoles,
+            TimeSpan? lifetime = null,
+            IEnumerable<string>? amr = null,
+            bool? mfa = null,
+            DateTimeOffset? mfaTimestamp = null,
+            IEnumerable<Claim>? extraClaims = null,
+            string? audience = null);
     }
 }

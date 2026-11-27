@@ -115,6 +115,7 @@ export const MfaChallenge: React.FC<MfaChallengeProps> = ({
 
     void runSubmission(
       async (report) => {
+        let optionsObtained = Boolean(immediateAssertionPromise);
         try {
           let assertion: any;
           if (immediateAssertionPromise) {
@@ -123,6 +124,7 @@ export const MfaChallenge: React.FC<MfaChallengeProps> = ({
             const options = prefetcher
               ? await prefetcher.resolveOptions()
               : await fetchPasskeyOptions();
+            optionsObtained = true;
             assertion = await getPasskeyAssertion(options);
           }
 
@@ -147,10 +149,13 @@ export const MfaChallenge: React.FC<MfaChallengeProps> = ({
           }
           return data as AuthResponse;
         } catch (err) {
-          // The server consumes/replaces the challenge on complete or cancellation;
-          // drop any cached options and prefetch fresh ones for the next click.
-          prefetcher?.invalidate();
-          prefetcher?.prefetch();
+          // Only re-prefetch after a ceremony or complete failure (where the challenge was
+          // consumed or replaced). If fetching options itself failed (e.g. 401 expired MFA token),
+          // stop and show the error without issuing another doomed request.
+          if (optionsObtained) {
+            prefetcher?.invalidate();
+            prefetcher?.prefetch();
+          }
           throw err;
         }
       },

@@ -21,11 +21,9 @@ namespace Services.Security
         IEnumerable<string> GetPermissionsForUser(string username);
         /// <summary>Same as <see cref="GetPermissionsForUser(string)"/> for a user the caller already loaded.</summary>
         IEnumerable<string> GetPermissionsForUser(User user);
-        Task<IEnumerable<string>> GetPermissionsForUserAsync(User user, CancellationToken cancellationToken = default) =>
-            Task.FromResult(GetPermissionsForUser(user));
+        Task<IEnumerable<string>> GetPermissionsForUserAsync(User user, CancellationToken cancellationToken = default);
         User? GetUser(string username);
-        Task<User?> GetUserAsync(string username, CancellationToken cancellationToken = default) =>
-            Task.FromResult(GetUser(username));
+        Task<User?> GetUserAsync(string username, CancellationToken cancellationToken = default);
         User GetUserById(int id);
         SecurityRole? GetRole(string rolename);
         SecurityRole? GetSecurityRole(int securityRoleId);

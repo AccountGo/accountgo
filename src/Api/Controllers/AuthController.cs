@@ -678,19 +678,14 @@ namespace Api.Controllers
                 });
             }
 
+            var authResponse = result.Response;
             if (!string.IsNullOrEmpty(result.RawRefreshToken))
             {
-                SetRefreshTokenCookie(result.RawRefreshToken, result.Response?.SessionExpiresAt);
+                SetRefreshTokenCookie(result.RawRefreshToken, authResponse.SessionExpiresAt);
             }
 
-            var verifiedUserId = result.Response?.User?.Id;
-            if (string.IsNullOrEmpty(verifiedUserId))
-            {
-                await AuditSignInFailureAsync("otp", "user_not_found");
-                return Unauthorized();
-            }
-            await AuditAsync("auth.signin.success", "success", verifiedUserId, new { method = "otp" });
-            return Ok(result.Response);
+            await AuditAsync("auth.signin.success", "success", authResponse.User.Id, new { method = "otp" });
+            return Ok(authResponse);
         }
 
         private static string ClassifyOtpFailure(string? error)
