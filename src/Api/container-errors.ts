@@ -120,11 +120,30 @@ export function startupCode({
   return "SERVICE_STARTING";
 }
 
+/**
+ * Internal response header set by a Durable Object ONLY when a 503 was generated before the
+ * request was dispatched to the container app (e.g. cold-start readiness or build-check failure).
+ * Allows the Worker to safely replay non-idempotent auth requests on V1.
+ */
+export const NOT_DISPATCHED_HEADER = "x-accountgo-not-dispatched";
+
+export function isNotDispatchedUnavailable(res: Response): boolean {
+  return res.status === 503 && res.headers.get(NOT_DISPATCHED_HEADER) === "1";
+}
+
 export function serviceUnavailable(
   code: ServiceUnavailableCode,
   detail: string,
-  retryAfterSec = 5
+  retryAfterSec = 5,
+  options?: { notDispatched?: boolean }
 ): Response {
+  const headers: Record<string, string> = {
+    "content-type": "application/problem+json",
+    "Retry-After": String(retryAfterSec),
+  };
+  if (options?.notDispatched && code !== "SERVICE_MISCONFIGURED") {
+    headers[NOT_DISPATCHED_HEADER] = "1";
+  }
   return new Response(
     JSON.stringify({
       title: "Service Unavailable",
@@ -135,10 +154,7 @@ export function serviceUnavailable(
     }),
     {
       status: 503,
-      headers: {
-        "content-type": "application/problem+json",
-        "Retry-After": String(retryAfterSec),
-      },
+      headers,
     }
   );
 }

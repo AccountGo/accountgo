@@ -1,8 +1,10 @@
 import {
   BuildMismatchError,
+  NOT_DISPATCHED_HEADER,
   ServiceUnavailableCode,
   StartupInterruptedError,
   errorText,
+  isNotDispatchedUnavailable,
   isStartupTransient,
   isTransientContainerError,
   serviceUnavailable,
@@ -30,9 +32,11 @@ export {
 
 export {
   BuildMismatchError,
+  NOT_DISPATCHED_HEADER,
   ServiceUnavailableCode,
   StartupInterruptedError,
   errorText,
+  isNotDispatchedUnavailable,
   isStartupTransient,
   isTransientContainerError,
   serviceUnavailable,

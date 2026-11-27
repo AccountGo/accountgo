@@ -130,14 +130,16 @@ export function unavailableResponse(
   err: ContainerUnavailableError,
   versionTimestamp?: string
 ): Response {
+  const notReached = err.reach === "not-reached";
   return serviceUnavailable(
-    err.reach === "not-reached"
+    notReached
       ? startupCode({ versionTimestamp })
       : "SERVICE_INTERRUPTED",
-    err.reach === "not-reached"
+    notReached
       ? "Service is starting up, please retry in a few seconds"
       : "The service restarted while handling this request, please retry",
-    5
+    5,
+    { notDispatched: notReached }
   );
 }
 

@@ -44,6 +44,7 @@ import {
   type ContainerHost,
 } from "./container-proxy";
 import { constantTimeEqual } from "./constant-time";
+import { routePublicAuthRequest } from "./auth-pool-fallback";
 import { RuntimeFlags, TIERED_CAPACITY_FLAG_KEY, AUTH_CAPACITY_FLAG_KEY } from "./runtime-flags";
 import {
   isServerTimingEnabled,
@@ -434,6 +435,8 @@ const runtimeFlags = new RuntimeFlags();
 const capacityRouter = new CapacityRouter();
 /** Per-isolate throttle (60 s) for non-blocking paid-pool warm-up pings from capabilities requests. */
 const captureWarmupThrottle = new WarmupThrottle(60_000);
+/** Per-isolate throttle (60 s) for non-blocking paid-pool warm-up pings from auth start requests. */
+const authWarmupThrottle = new WarmupThrottle(60_000);
 let loggedContainerName = false;
 
 interface TurnstileVerifyResponse {
@@ -649,12 +652,18 @@ export default {
     // Only pre-workspace authentication uses this independent V2 switch; workspace routing is unchanged.
     if (!isAdminRequest && isPublicAuthRequest(url.pathname) && env.CONTAINER_V2 &&
         await runtimeFlags.isEnabled(env.FLAGS, AUTH_CAPACITY_FLAG_KEY, isTieredCapacityEnabled(env.AUTH_CAPACITY_ENABLED))) {
-      const headers = new Headers(request.headers);
-      headers.set(CAPACITY_POOL_HEADER, "paid");
       const versionId = env.CF_VERSION_METADATA?.id || "dev";
-      const name = resolvePoolContainerName("paid", versionId);
-      const stub = env.CONTAINER_V2.get(env.CONTAINER_V2.idFromName(name), { locationHint: "enam" });
-      return stub.fetch(new Request(request, { headers }));
+      const v2Name = resolvePoolContainerName("paid", versionId);
+      const containerV2 = env.CONTAINER_V2;
+      return routePublicAuthRequest({
+        request,
+        url,
+        v2Enabled: true,
+        getV2Stub: () => containerV2.get(containerV2.idFromName(v2Name), { locationHint: "enam" }),
+        getV1Stub: () => env.CONTAINER.get(env.CONTAINER.idFromName(containerName), { locationHint: "enam" }),
+        waitUntil: (promise) => ctx.waitUntil(promise),
+        warmupThrottle: authWarmupThrottle,
+      });
     }
 
     // The FLAGS KV value (runtime switch, no deploy) wins over the deployed TIERED_CAPACITY_ENABLED var.

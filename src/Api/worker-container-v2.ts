@@ -387,7 +387,8 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
           serviceUnavailable(
             startupCode({ versionTimestamp: this.env.CF_VERSION_METADATA?.timestamp }),
             "Service is starting up, please retry in a few seconds",
-            5
+            5,
+            { notDispatched: true }
           )
         );
       }
@@ -398,7 +399,7 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
         await this.ensureInitialized(readyTiming);
       } catch (prepErr: unknown) {
         if (prepErr instanceof BuildMismatchError) {
-          return finish(serviceUnavailable("SERVICE_UPDATING", prepErr.message, 5));
+          return finish(serviceUnavailable("SERVICE_UPDATING", prepErr.message, 5, { notDispatched: true }));
         }
 
         if (prepErr instanceof ContainerConfigError) {
@@ -417,7 +418,8 @@ export class AccountGoApiContainerV2 extends DurableObject<Env> {
           serviceUnavailable(
             startupCode({ versionTimestamp: this.env.CF_VERSION_METADATA?.timestamp }),
             "Service is starting up, please retry in a few seconds",
-            5
+            5,
+            { notDispatched: true }
           )
         );
       }
