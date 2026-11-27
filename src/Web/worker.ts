@@ -136,6 +136,8 @@ export default {
           "# Marketing and search indexing live on https://accountgo.dev.",
           "# The app shell is intentionally not indexed so brand SERPs are not split.",
           "User-agent: *",
+          "# Allow the root so search engines can see its noindex header.",
+          "Allow: /$",
           "Disallow: /",
           "",
         ].join("\n"),

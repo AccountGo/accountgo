@@ -43,6 +43,8 @@ Changes collect under `[Unreleased]` as they ship to production and get a versio
 
 ### Fixed
 
+- Search engines can read the app homepage's existing instruction to keep it out of search results.
+
 - The assistant now reads attached screenshots and PDFs in column order, keeps code and JSON intact, and answers questions about any document instead of treating every attachment as a bill.
 
 - Diagonal stamps and watermarks such as "PAID" no longer mix into amounts when scanning bills and invoices.

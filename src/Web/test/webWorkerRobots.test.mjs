@@ -4,13 +4,15 @@ import worker from '../worker.ts';
 
 const appRequest = (path) => new Request(`https://app.accountgo.dev${path}`);
 
-test('app robots response blocks crawling without using the SPA asset fallback', async () => {
+test('app robots permits the root for noindex discovery while blocking other paths', async () => {
   const response = await worker.fetch(appRequest('/robots.txt'), {
     ASSETS: { fetch() { throw new Error('robots must not serve the SPA shell'); } },
   }, {});
   assert.equal(response.status, 200);
   assert.match(response.headers.get('content-type'), /^text\/plain/);
-  assert.match(await response.text(), /User-agent: \*\nDisallow: \/\n/);
+  const robots = await response.text();
+  assert.match(robots, /^Allow: \/\$$/m);
+  assert.match(robots, /^Disallow: \/$/m);
 });
 
 test('SPA routes preserve the asset response and prohibit indexing', async () => {
@@ -23,6 +25,14 @@ test('SPA routes preserve the asset response and prohibit indexing', async () =>
   assert.equal(response.headers.get('X-Robots-Tag'), 'noindex, nofollow');
   assert.equal(response.headers.get('ETag'), 'asset-version');
   assert.equal(await response.text(), '<html>workspace</html>');
+});
+
+test('app root serves the noindex directive to crawlers', async () => {
+  const response = await worker.fetch(appRequest('/'), {
+    ASSETS: { fetch: async () => new Response('<html>app</html>') },
+  }, {});
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('X-Robots-Tag'), /noindex/);
 });
 
 test('API proxy preserves backend indexing policy and response body', async () => {
